@@ -1,0 +1,25 @@
+{
+  "name": "ddia-companion",
+  "type": "module",
+  "version": "0.1.0",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build && pagefind --site dist",
+    "preview": "astro preview",
+    "check": "astro check",
+    "search:dev": "astro build && pagefind --site dist --output-path public/pagefind",
+    "astro": "astro"
+  },
+  "dependencies": {
+    "@astrojs/mdx": "^6.0.3",
+    "@astrojs/sitemap": "^3.7.3",
+    "astro": "^6.4.6"
+  },
+  "devDependencies": {
+    "@fontsource-variable/source-serif-4": "^5.2.9",
+    "pagefind": "^1.5.2"
+  }
+}
