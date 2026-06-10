@@ -1,0 +1,130 @@
+<dialog id="search-dialog" class="ui">
+  <div class="frame">
+    <form class="bar" role="search">
+      <svg
+        width="16"
+        height="16"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        aria-hidden="true"
+      >
+        <circle cx="11" cy="11" r="7"></circle>
+        <path d="m20.5 20.5-4.5-4.5"></path>
+      </svg>
+      <input
+        id="search-input"
+        type="search"
+        placeholder="Search chapters and glossary…"
+        autocomplete="off"
+        aria-label="Search"
+      />
+      <button type="button" id="search-close" aria-label="Close search">esc</button>
+    </form>
+    <div id="search-results" aria-live="polite"></div>
+  </div>
+</dialog>
+
+<style>
+  dialog {
+    width: min(38rem, calc(100vw - 2rem));
+    margin: 10vh auto auto;
+    padding: 0;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-lg);
+    background: var(--surface);
+    color: var(--text);
+    box-shadow: 0 12px 40px rgb(0 0 0 / 0.18);
+  }
+
+  dialog::backdrop {
+    background: rgb(0 0 0 / 0.35);
+  }
+
+  .bar {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-4);
+    border-bottom: 1px solid var(--border);
+    color: var(--text-muted);
+  }
+
+  input {
+    flex: 1;
+    border: none;
+    background: none;
+    outline: none;
+    font-size: var(--text-base);
+    color: var(--text);
+  }
+
+  input::-webkit-search-cancel-button {
+    display: none;
+  }
+
+  #search-close {
+    font-size: var(--text-xs);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 2px var(--space-2);
+    color: var(--text-faint);
+  }
+
+  #search-results {
+    max-height: 55vh;
+    overflow-y: auto;
+    padding: var(--space-2);
+  }
+
+  #search-results :global(.hit) {
+    display: block;
+    padding: var(--space-3);
+    border-radius: var(--radius-md);
+    text-decoration: none;
+    color: var(--text);
+  }
+
+  #search-results :global(.hit:hover),
+  #search-results :global(.hit:focus-visible) {
+    background: var(--accent-subtle);
+  }
+
+  #search-results :global(.hit .where) {
+    font-size: var(--text-xs);
+    color: var(--accent-text);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  #search-results :global(.hit .title) {
+    font-weight: 600;
+    margin-top: 2px;
+  }
+
+  #search-results :global(.hit .excerpt) {
+    font-size: var(--text-sm);
+    color: var(--text-muted);
+    margin-top: 2px;
+  }
+
+  #search-results :global(.hit mark) {
+    background: var(--selection);
+    color: inherit;
+    border-radius: 2px;
+  }
+
+  #search-results :global(.empty) {
+    padding: var(--space-5);
+    text-align: center;
+    color: var(--text-faint);
+    font-size: var(--text-sm);
+  }
+</style>
+
+<script>
+  import { initSearch } from '../scripts/search';
+  initSearch();
+</script>

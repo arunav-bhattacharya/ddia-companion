@@ -1,0 +1,144 @@
+---
+import ThemeToggle from './ThemeToggle.astro';
+import SearchModal from './SearchModal.astro';
+---
+
+<header class="ui">
+  <div class="inner">
+    <a class="wordmark" href="/">
+      <span class="mark" aria-hidden="true">D²</span>
+      <span class="name">DDIA Companion</span>
+    </a>
+    <nav aria-label="Primary">
+      <a href="/#chapters">Chapters</a>
+      <a href="/glossary/">Glossary</a>
+    </nav>
+    <div class="actions">
+      <button id="search-open" type="button" aria-label="Search (Cmd+K)">
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          aria-hidden="true"
+        >
+          <circle cx="11" cy="11" r="7"></circle>
+          <path d="m20.5 20.5-4.5-4.5"></path>
+        </svg>
+        <span class="search-hint">Search</span>
+        <kbd>⌘K</kbd>
+      </button>
+      <ThemeToggle />
+    </div>
+  </div>
+</header>
+
+<SearchModal />
+
+<style>
+  header {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    height: var(--header-height);
+    background: color-mix(in srgb, var(--bg) 88%, transparent);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .inner {
+    max-width: 76rem;
+    margin-inline: auto;
+    height: 100%;
+    padding-inline: var(--space-4);
+    display: flex;
+    align-items: center;
+    gap: var(--space-5);
+  }
+
+  .wordmark {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    text-decoration: none;
+    color: var(--text);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+
+  .mark {
+    font-family: var(--font-serif);
+    font-weight: 700;
+    color: var(--accent);
+    font-size: 1.2rem;
+  }
+
+  nav {
+    display: flex;
+    gap: var(--space-4);
+    margin-left: auto;
+  }
+
+  nav a {
+    color: var(--text-muted);
+    text-decoration: none;
+    font-size: var(--text-sm);
+  }
+
+  nav a:hover {
+    color: var(--text);
+  }
+
+  .actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  #search-open {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    height: 2.25rem;
+    padding-inline: var(--space-3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    color: var(--text-muted);
+    font-size: var(--text-sm);
+    transition: color 120ms, border-color 120ms;
+  }
+
+  #search-open:hover {
+    color: var(--text);
+    border-color: var(--border-strong);
+  }
+
+  kbd {
+    font-size: var(--text-xs);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 0 var(--space-1);
+    color: var(--text-faint);
+  }
+
+  @media (max-width: 640px) {
+    .name,
+    .search-hint,
+    kbd {
+      display: none;
+    }
+
+    .inner {
+      gap: var(--space-3);
+    }
+
+    #search-open {
+      width: 2.25rem;
+      padding-inline: 0;
+      justify-content: center;
+    }
+  }
+</style>

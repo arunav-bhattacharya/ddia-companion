@@ -1,0 +1,53 @@
+---
+import '@fontsource-variable/source-serif-4';
+import '../styles/tokens.css';
+import '../styles/base.css';
+import sourceSerifWoff2 from '@fontsource-variable/source-serif-4/files/source-serif-4-latin-wght-normal.woff2?url';
+
+interface Props {
+  title: string;
+  description: string;
+}
+
+const { title, description } = Astro.props;
+const canonical = new URL(Astro.url.pathname, Astro.site);
+---
+
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+
+{/* Theme must resolve before first paint — keep this above all stylesheets. */}
+<script is:inline>
+  (() => {
+    let theme;
+    try {
+      const stored = localStorage.getItem('ddia2:theme');
+      theme =
+        stored === 'light' || stored === 'dark'
+          ? stored
+          : matchMedia('(prefers-color-scheme: dark)').matches
+            ? 'dark'
+            : 'light';
+    } catch {
+      theme = 'light';
+    }
+    document.documentElement.dataset.theme = theme;
+  })();
+</script>
+
+<title>{title}</title>
+<meta name="description" content={description} />
+<link rel="canonical" href={canonical} />
+<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+<link rel="sitemap" href="/sitemap-index.xml" />
+<link rel="preload" href={sourceSerifWoff2} as="font" type="font/woff2" crossorigin />
+
+<meta name="theme-color" media="(prefers-color-scheme: light)" content="#faf7f2" />
+<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#14171c" />
+
+<meta property="og:type" content="article" />
+<meta property="og:title" content={title} />
+<meta property="og:description" content={description} />
+<meta property="og:url" content={canonical} />
+<meta property="og:site_name" content="DDIA Companion" />
+<meta name="twitter:card" content="summary" />

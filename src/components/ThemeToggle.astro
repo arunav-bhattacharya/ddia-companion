@@ -1,0 +1,97 @@
+<button id="theme-toggle" class="ui" type="button" aria-label="Switch to dark theme">
+  <svg
+    class="icon-sun"
+    width="18"
+    height="18"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="2"
+    stroke-linecap="round"
+    aria-hidden="true"
+  >
+    <circle cx="12" cy="12" r="4.5"></circle>
+    <path
+      d="M12 2.5v2.5M12 19v2.5M2.5 12H5M19 12h2.5M5.3 5.3l1.8 1.8M16.9 16.9l1.8 1.8M5.3 18.7l1.8-1.8M16.9 7.1l1.8-1.8"
+    ></path>
+  </svg>
+  <svg
+    class="icon-moon"
+    width="18"
+    height="18"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    aria-hidden="true"
+  >
+    <path d="M20.5 14.5A8.5 8.5 0 0 1 9.5 3.5a8.5 8.5 0 1 0 11 11Z"></path>
+  </svg>
+</button>
+
+<style>
+  button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    background: transparent;
+    transition: color 120ms, border-color 120ms;
+  }
+
+  button:hover {
+    color: var(--text);
+    border-color: var(--border-strong);
+  }
+
+  :global(:root[data-theme='light']) .icon-moon {
+    display: none;
+  }
+
+  :global(:root[data-theme='dark']) .icon-sun {
+    display: none;
+  }
+</style>
+
+<script>
+  const btn = document.getElementById('theme-toggle')!;
+  const mql = matchMedia('(prefers-color-scheme: dark)');
+
+  function syncLabel() {
+    const dark = document.documentElement.dataset.theme === 'dark';
+    btn.setAttribute('aria-label', dark ? 'Switch to light theme' : 'Switch to dark theme');
+  }
+
+  btn.addEventListener('click', () => {
+    const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+    document.documentElement.dataset.theme = next;
+    try {
+      localStorage.setItem('ddia2:theme', next);
+    } catch {
+      /* private mode — theme just won't persist */
+    }
+    syncLabel();
+  });
+
+  // Until the user makes an explicit choice, follow the OS live.
+  mql.addEventListener('change', (e) => {
+    let stored = null;
+    try {
+      stored = localStorage.getItem('ddia2:theme');
+    } catch {
+      /* ignore */
+    }
+    if (stored !== 'light' && stored !== 'dark') {
+      document.documentElement.dataset.theme = e.matches ? 'dark' : 'light';
+      syncLabel();
+    }
+  });
+
+  syncLabel();
+</script>

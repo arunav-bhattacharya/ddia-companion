@@ -1,0 +1,109 @@
+/* Long-form article styling. Apply .prose to the chapter article body. */
+
+.prose {
+  max-width: var(--measure);
+}
+
+.prose > * + * {
+  margin-top: var(--space-5);
+}
+
+.prose h2 {
+  font-size: var(--text-xl);
+  margin-top: var(--space-8);
+  padding-bottom: var(--space-3);
+  border-bottom: 2px solid var(--accent);
+  border-image: linear-gradient(to right, var(--accent) 0, var(--accent) 4rem, var(--border) 4rem) 1;
+}
+
+.prose h3 {
+  font-size: var(--text-lg);
+  margin-top: var(--space-7);
+}
+
+.prose h4 {
+  font-size: var(--text-md);
+  margin-top: var(--space-6);
+}
+
+.prose p {
+  text-wrap: pretty;
+}
+
+.prose ul,
+.prose ol {
+  padding-left: 1.4em;
+}
+
+.prose li + li {
+  margin-top: var(--space-2);
+}
+
+.prose li::marker {
+  color: var(--accent);
+}
+
+.prose strong {
+  font-weight: 650;
+}
+
+.prose blockquote {
+  border-left: 3px solid var(--accent);
+  padding-left: var(--space-4);
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.prose code:not(pre code) {
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.1em 0.35em;
+  font-size: 0.85em;
+}
+
+.prose pre {
+  background: var(--code-bg) !important;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-4) var(--space-5);
+  overflow-x: auto;
+  font-size: 0.85rem;
+  line-height: 1.6;
+}
+
+.prose table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.9375rem;
+  font-family: var(--font-sans);
+  display: block;
+  overflow-x: auto;
+}
+
+.prose th,
+.prose td {
+  border: 1px solid var(--border);
+  padding: var(--space-2) var(--space-3);
+  text-align: left;
+  vertical-align: top;
+}
+
+.prose th {
+  background: var(--code-bg);
+  font-weight: 600;
+}
+
+.prose hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin-block: var(--space-7);
+}
+
+/* Heading anchor offsets handled globally via scroll-padding-top */
+
+/* First paragraph after the title gets a gentle lead-in */
+.prose > p:first-child {
+  font-size: var(--text-md);
+  color: var(--text-muted);
+}
