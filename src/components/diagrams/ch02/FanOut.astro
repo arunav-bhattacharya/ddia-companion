@@ -1,0 +1,49 @@
+---
+import Diagram from '../Diagram.astro';
+---
+
+<Diagram caption="Fan-out: one new post is copied into the cached home timeline of every follower.">
+  <svg viewBox="0 0 720 300" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="fanout-title">
+    <title id="fanout-title">One post being delivered to many follower timelines</title>
+
+    <!-- Poster -->
+    <rect x="20" y="115" width="150" height="70" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="95" y="145" text-anchor="middle" font-size="14" font-weight="600" fill="var(--diagram-stroke)">Bob posts</text>
+    <text x="95" y="165" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">“just saw a heron!”</text>
+
+    <!-- Fan-out service -->
+    <rect x="270" y="115" width="160" height="70" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <text x="350" y="145" text-anchor="middle" font-size="14" font-weight="600" fill="var(--diagram-stroke)">Fan-out service</text>
+    <text x="350" y="165" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">look up Bob’s followers</text>
+
+    <!-- Arrow poster -> service -->
+    <line x1="170" y1="150" x2="262" y2="150" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <polygon points="262,145 272,150 262,155" fill="var(--diagram-stroke)"/>
+
+    <!-- Follower mailboxes -->
+    <g>
+      <rect x="530" y="30" width="170" height="56" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+      <text x="615" y="53" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-stroke)">Aaliyah’s timeline</text>
+      <text x="615" y="71" text-anchor="middle" font-size="12" fill="var(--diagram-accent)">+ Bob’s post</text>
+
+      <rect x="530" y="122" width="170" height="56" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+      <text x="615" y="145" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-stroke)">Caleb’s timeline</text>
+      <text x="615" y="163" text-anchor="middle" font-size="12" fill="var(--diagram-accent)">+ Bob’s post</text>
+
+      <rect x="530" y="214" width="170" height="56" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+      <text x="615" y="237" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-stroke)">Priya’s timeline</text>
+      <text x="615" y="255" text-anchor="middle" font-size="12" fill="var(--diagram-accent)">+ Bob’s post</text>
+    </g>
+
+    <!-- Fan-out arrows -->
+    <line x1="430" y1="135" x2="522" y2="62" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <polygon points="518,57 530,58 522,68" fill="var(--diagram-accent)"/>
+    <line x1="430" y1="150" x2="522" y2="150" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <polygon points="522,145 532,150 522,155" fill="var(--diagram-accent)"/>
+    <line x1="430" y1="165" x2="522" y2="238" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <polygon points="518,243 530,242 522,232" fill="var(--diagram-accent)"/>
+
+    <text x="476" y="110" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">×200 followers</text>
+    <text x="476" y="126" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">(the fan-out factor)</text>
+  </svg>
+</Diagram>

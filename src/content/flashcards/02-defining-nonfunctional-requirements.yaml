@@ -1,0 +1,55 @@
+cards:
+  - id: ch02-f01
+    front: "What is the difference between functional and nonfunctional requirements?"
+    back: "Functional requirements describe what the system does (screens, operations, behavior). Nonfunctional requirements describe how well it must do it: performance, reliability, scalability, maintainability, security, compliance."
+  - id: ch02-f02
+    front: "What is a materialized view, and what trade-off does it embody?"
+    back: "A precomputed, stored copy of a query's results, updated when underlying data changes. It makes reads cheap by making writes more expensive — work shifts from read time to write time."
+  - id: ch02-f03
+    front: "What is fan-out in the social network timeline design?"
+    back: "The multiplier by which one request becomes many downstream operations — e.g., one new post triggers a timeline-cache write for each of the poster's ~200 followers."
+  - id: ch02-f04
+    front: "Why do celebrity accounts break the timeline fan-out design, and what's the fix?"
+    back: "One post to 100M followers means 100M cache inserts that can't be dropped. The hybrid fix: store celebrity posts separately and merge them in at read time, keeping write-time fan-out for ordinary users."
+  - id: ch02-f05
+    front: "Response time vs. service time vs. latency — what's the distinction?"
+    back: "Response time is everything the client experiences end to end. Service time is when the request is actively being processed. Latency is time spent latent — waiting, not being worked on (queueing, network travel)."
+  - id: ch02-f06
+    front: "Why is the mean a poor measure of 'typical' response time?"
+    back: "It is skewed by outliers and doesn't say how many users experienced any given delay. One 3-hour outlier ruins the average even when 99% of requests were fast."
+  - id: ch02-f07
+    front: "Your median response time is 200 ms. What exactly does that mean?"
+    back: "Half of all requests completed faster than 200 ms and half took longer. The median (p50) describes the typical user's wait."
+  - id: ch02-f08
+    front: "What is tail latency amplification?"
+    back: "When serving one user request requires many backend calls, the slowest call sets the total time — so even rare backend slowness affects a much larger share of user requests."
+  - id: ch02-f09
+    front: "Why did Amazon set internal latency requirements at p999 rather than the average?"
+    back: "The slowest requests usually belong to customers with the most account data — the heaviest, most valuable customers. Keeping the tail fast keeps exactly those customers happy."
+  - id: ch02-f10
+    front: "What is the difference between an SLO and an SLA?"
+    back: "An SLO is the performance/availability target (e.g., p99 < 1 s, 99.9% success). An SLA is the contract built on it — what happens (refunds, penalties) if the SLO is missed."
+  - id: ch02-f11
+    front: "Why is averaging percentiles from several machines wrong, and what should you do instead?"
+    back: "An average of p99s is mathematically meaningless — percentiles don't compose that way. Aggregate by adding the underlying histograms (HdrHistogram, t-digest, etc.), then read percentiles off the merged histogram."
+  - id: ch02-f12
+    front: "Define fault vs. failure."
+    back: "A fault is one component misbehaving (disk dies, dependency outage). A failure is the system as a whole no longer delivering required service — missing its SLO. Fault tolerance stops faults becoming failures."
+  - id: ch02-f13
+    front: "What is a metastable failure?"
+    back: "An overloaded system enters a self-reinforcing degraded state (e.g., timeouts cause retries that add load) and stays broken even after the original load drops, until reset. Defenses: backoff with jitter, circuit breakers, load shedding, backpressure."
+  - id: ch02-f14
+    front: "Why are software faults more dangerous to redundancy than hardware faults?"
+    back: "Hardware faults are mostly independent, so copies survive. Software faults are highly correlated — every node runs the same bug, so all replicas can fail at the same moment (e.g., the 2012 leap-second bug)."
+  - id: ch02-f15
+    front: "What is chaos engineering / fault injection, and why do it?"
+    back: "Deliberately triggering faults (e.g., randomly killing processes) in production-like conditions. Error-handling code is where critical bugs hide; constant exercise ensures recovery machinery actually works when real faults arrive."
+  - id: ch02-f16
+    front: "Shared-memory vs. shared-disk vs. shared-nothing — one-line summaries."
+    back: "Shared memory: one bigger machine (cost grows superlinearly). Shared disk: many machines, one storage array (locking limits scale). Shared nothing: independent nodes coordinating over the network (linear potential, distributed complexity)."
+  - id: ch02-f17
+    front: "What does 'linear scalability' mean?"
+    back: "Doubling computing resources lets you handle double the load at the same performance. It's the goal; in practice cost usually grows faster than linearly."
+  - id: ch02-f18
+    front: "What are the three pillars of maintainability in DDIA?"
+    back: "Operability (easy to keep running smoothly), simplicity (easy for new engineers to understand, via good abstractions), and evolvability (easy to change for new requirements)."

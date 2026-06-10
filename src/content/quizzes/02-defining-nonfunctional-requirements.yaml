@@ -1,0 +1,109 @@
+questions:
+  - id: ch02-q01
+    prompt: "In the social network case study, why was the polling-based timeline design unworkable?"
+    options:
+      - "SQL databases cannot perform three-way joins efficiently"
+      - "2 million queries/second, each merging ~200 users' posts, meant ~400 million lookups per second"
+      - "Polling every five seconds violates most browsers' connection limits"
+      - "The follows table would not fit on a single machine"
+    answerIndex: 1
+    explanation: "The query itself is fine; the problem is arithmetic. 10M online users polling every 5 s is 2M queries/s, and each query merges recent posts from ~200 followed accounts — roughly 400M lookups per second. The design is off by orders of magnitude, which is why the work moves to write time."
+  - id: ch02-q02
+    prompt: "Materializing home timelines reduced total work dramatically, but created a new worst case. Which one?"
+    options:
+      - "Users who follow nobody get empty timelines"
+      - "Posts can no longer be deleted once delivered"
+      - "A celebrity's post requires inserting into millions of follower timelines"
+      - "The timeline cache must be rebuilt on every login"
+    answerIndex: 2
+    explanation: "Write-time fan-out costs one cache insert per follower. At 100M+ followers, a single post becomes 100M+ writes that can't be dropped. The standard fix is a hybrid: keep celebrity posts separate and merge at read time."
+  - id: ch02-q03
+    prompt: "A dashboard shows your service's *average* response time is 180 ms. What can you safely conclude about the typical user's experience?"
+    options:
+      - "Half of users waited less than 180 ms"
+      - "Most users experienced roughly 180 ms"
+      - "95% of users waited under about 360 ms"
+      - "Very little — the mean doesn't say how many users experienced any given delay"
+    answerIndex: 3
+    explanation: "The mean is useful for throughput/capacity estimates but is skewed by outliers and says nothing about how delays were distributed across users. The median tells you the typical wait; high percentiles tell you about the tail."
+  - id: ch02-q04
+    prompt: "Your service's p95 is 1.5 s. A page load makes 10 parallel backend calls to it. Roughly what fraction of page loads are slower than 1.5 s?"
+    options:
+      - "About 5% — parallel calls don't change the math"
+      - "About 40% — the chance at least one of 10 calls is slow (1 − 0.95¹⁰)"
+      - "About 0.5% — parallelism dilutes the slow calls"
+      - "Exactly 50% — p95 applies per page, not per call"
+    answerIndex: 1
+    explanation: "The page waits for its slowest call. Each call beats 1.5 s with probability 0.95, so all ten do with probability 0.95¹⁰ ≈ 0.60. About 40% of pages hit at least one slow call — tail latency amplification in action."
+  - id: ch02-q05
+    prompt: "Why must response times be measured on the client side rather than trusting the server's own numbers?"
+    options:
+      - "Servers round response times down to the nearest millisecond"
+      - "Client clocks are more accurate than server clocks"
+      - "Server-side numbers exclude queueing delays the request suffered before and after processing"
+      - "Servers cannot measure time while processing a request"
+    answerIndex: 2
+    explanation: "Queueing delay is not part of service time. With head-of-line blocking, a request can have a fast service time yet a terrible response time because it sat in a queue — and only the client sees that full wait."
+  - id: ch02-q06
+    prompt: "During an incident, your service slows down, clients begin timing out and retrying, and load climbs even though user traffic is flat. After you fix the trigger, the system stays overloaded until rebooted. What is this phenomenon?"
+    options:
+      - "A cascading failure"
+      - "A metastable failure sustained by a retry storm"
+      - "Head-of-line blocking"
+      - "Tail latency amplification"
+    answerIndex: 1
+    explanation: "Retries amplified the load into a self-sustaining overloaded state — metastable because the system stays degraded even after the original cause is removed. Mitigations: exponential backoff with jitter, circuit breakers, load shedding, backpressure."
+  - id: ch02-q07
+    prompt: "A disk dies in a 3-replica storage cluster, which keeps serving all requests. In DDIA terminology, what happened?"
+    options:
+      - "A failure occurred but was tolerated"
+      - "A fault occurred; the system did not fail"
+      - "Both a fault and a failure occurred"
+      - "Neither — redundancy means nothing went wrong"
+    answerIndex: 1
+    explanation: "From the disk's perspective it failed, but for the system it is a fault — one component misbehaving. Because the cluster kept meeting its service obligations, there was no system failure. Fault tolerance is exactly this containment."
+  - id: ch02-q08
+    prompt: "Why do software faults undermine replication-based redundancy in a way hardware faults usually don't?"
+    options:
+      - "Software faults corrupt data; hardware faults only cause crashes"
+      - "Software faults are highly correlated — every node runs the same bug, so replicas fail together"
+      - "Hardware can be hot-swapped but software cannot"
+      - "Software faults are more frequent than hardware faults"
+    answerIndex: 1
+    explanation: "Redundancy works when faults are independent. The 2012 leap-second bug hung Java apps on many machines simultaneously — identical software means identical bugs, so all the copies you were counting on can fail at the same instant."
+  - id: ch02-q09
+    prompt: "A study found the leading cause of outages in large internet services was:"
+    options:
+      - "Hard drive failures"
+      - "Network partitions between datacenters"
+      - "Configuration changes made by operators"
+      - "Datacenter power loss"
+    answerIndex: 2
+    explanation: "Operator config changes topped the list; hardware was involved in only 10–25% of outages. The chapter's point: treat this as a property of the sociotechnical system to fix (rollback, gradual rollouts, blameless postmortems), not as 'human error' to punish."
+  - id: ch02-q10
+    prompt: "Which statement best reflects the chapter's advice on scalability for an early-stage product?"
+    options:
+      - "Design for 100× your current load — rearchitecting later is far more expensive"
+      - "Stay simple and flexible now; scale when real growth shows you the actual bottlenecks, expecting redesign at each order of magnitude"
+      - "Adopt shared-nothing from day one since migrations are irreversible"
+      - "Scalability is a property you either build in initially or never get"
+    answerIndex: 1
+    explanation: "Premature scaling effort is wasted at best and calcifying at worst. Real load reveals which dimension matters, and architectures rarely survive a 10× growth anyway — so don't design more than about one order of magnitude ahead."
+  - id: ch02-q11
+    prompt: "What limits the scalability of a classic shared-disk architecture?"
+    options:
+      - "The network between machines and storage is necessarily slow"
+      - "Contention and locking overhead between the machines sharing the disks"
+      - "It cannot store more data than one machine's RAM"
+      - "Each machine must keep a full copy of the dataset"
+    answerIndex: 1
+    explanation: "Several machines coordinate access to one storage array, and that coordination — locking and contention — caps throughput. Modern cloud designs that separate storage and compute avoid this by exposing a purpose-built storage API instead of a filesystem/block-device illusion."
+  - id: ch02-q12
+    prompt: "According to the chapter, what is our best general-purpose tool for managing complexity?"
+    options:
+      - "Comprehensive documentation of every component"
+      - "Microservices with strictly enforced team boundaries"
+      - "Good abstractions that hide implementation detail behind clean façades"
+      - "Rewriting legacy components on a regular schedule"
+    answerIndex: 2
+    explanation: "Abstractions like SQL or high-level languages hide enormous machinery behind simple interfaces, are reusable across applications, and concentrate quality improvements where everyone benefits. DDIA itself is a tour of data-system abstractions: transactions, indexes, replication, logs."

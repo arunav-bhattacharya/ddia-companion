@@ -1,0 +1,140 @@
+---
+/* Homepage island: shows reading progress across all chapters, and annotates
+   chapter cards with quiz/read state. Renders nothing until JS runs — and
+   stays invisible for first-time visitors with no progress. */
+---
+
+<progress-overview class="ui" hidden>
+  <div class="ring-wrap">
+    <svg viewBox="0 0 44 44" width="56" height="56" aria-hidden="true">
+      <circle class="track" cx="22" cy="22" r="19" fill="none" stroke-width="4"></circle>
+      <circle class="meter" cx="22" cy="22" r="19" fill="none" stroke-width="4" stroke-linecap="round"></circle>
+    </svg>
+    <span class="pct" aria-hidden="true"></span>
+  </div>
+  <div class="words">
+    <p class="headline"></p>
+    <p class="sub"></p>
+  </div>
+</progress-overview>
+
+<style>
+  progress-overview[hidden] {
+    display: none;
+  }
+
+  progress-overview {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: var(--surface);
+    padding: var(--space-4) var(--space-5);
+    margin-top: var(--space-6);
+  }
+
+  .ring-wrap {
+    position: relative;
+    flex-shrink: 0;
+    display: grid;
+    place-items: center;
+  }
+
+  .track {
+    stroke: var(--border);
+  }
+
+  .meter {
+    stroke: var(--accent);
+    transform: rotate(-90deg);
+    transform-origin: center;
+    transition: stroke-dashoffset 400ms ease;
+  }
+
+  .pct {
+    position: absolute;
+    font-size: var(--text-xs);
+    font-weight: 600;
+    color: var(--text-muted);
+  }
+
+  .headline {
+    font-weight: 600;
+  }
+
+  .sub {
+    font-size: var(--text-sm);
+    color: var(--text-muted);
+    margin-top: 2px;
+  }
+</style>
+
+<script>
+  import { getAll, PROGRESS_EVENT } from '../scripts/progress-store';
+  import { CHAPTERS } from '../lib/chapters';
+
+  class ProgressOverview extends HTMLElement {
+    connectedCallback() {
+      const sync = () => this.render();
+      window.addEventListener(PROGRESS_EVENT, sync);
+      this.render();
+    }
+
+    render() {
+      const all = getAll();
+      const read = CHAPTERS.filter((c) => all[c.slug]?.completed).length;
+      const quizzes = CHAPTERS.map((c) => all[c.slug]?.quiz).filter(Boolean) as {
+        best: number;
+        total: number;
+      }[];
+      const cardsKnown = CHAPTERS.reduce(
+        (sum, c) => sum + (all[c.slug]?.flashcards?.known.length ?? 0),
+        0
+      );
+
+      const anything = read > 0 || quizzes.length > 0 || cardsKnown > 0;
+      this.hidden = !anything;
+      if (!anything) return;
+
+      const total = CHAPTERS.length;
+      const pct = Math.round((read / total) * 100);
+      const r = 19;
+      const circumference = 2 * Math.PI * r;
+      const meter = this.querySelector<SVGCircleElement>('.meter')!;
+      meter.setAttribute('stroke-dasharray', String(circumference));
+      meter.setAttribute('stroke-dashoffset', String(circumference * (1 - read / total)));
+      this.querySelector('.pct')!.textContent = `${pct}%`;
+
+      this.querySelector('.headline')!.textContent =
+        read === total
+          ? 'All 14 chapters read — go forth and design data-intensive applications.'
+          : `${read} of ${total} chapters read`;
+
+      const quizBits =
+        quizzes.length > 0
+          ? `${quizzes.length} quiz${quizzes.length === 1 ? '' : 'zes'} taken`
+          : null;
+      const cardBits = cardsKnown > 0 ? `${cardsKnown} flashcards mastered` : null;
+      this.querySelector('.sub')!.textContent = [quizBits, cardBits]
+        .filter(Boolean)
+        .join(' · ');
+
+      // Annotate chapter cards
+      for (const c of CHAPTERS) {
+        const label = document.querySelector(
+          `[data-chapter-card="${c.slug}"] [data-progress-label]`
+        );
+        if (!label) continue;
+        const p = all[c.slug];
+        if (p?.completed) label.textContent = '✓ read';
+        else if (p?.quiz) label.textContent = `quiz ${p.quiz.best}/${p.quiz.total}`;
+        else label.textContent = '';
+      }
+    }
+  }
+
+  if (!customElements.get('progress-overview')) {
+    customElements.define('progress-overview', ProgressOverview);
+  }
+</script>

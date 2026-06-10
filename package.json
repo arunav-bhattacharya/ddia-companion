@@ -19,7 +19,9 @@
     "astro": "^6.4.6"
   },
   "devDependencies": {
+    "@astrojs/check": "^0.9.9",
     "@fontsource-variable/source-serif-4": "^5.2.9",
-    "pagefind": "^1.5.2"
+    "pagefind": "^1.5.2",
+    "typescript": "^6.0.3"
   }
 }

@@ -1,0 +1,269 @@
+---
+title: "Defining Nonfunctional Requirements"
+chapter: 2
+description: "How to talk precisely about a system being fast, reliable, scalable, and maintainable — percentiles, fault tolerance, scaling architectures, and why most outages are really people problems."
+readingMinutes: 32
+keyTakeaways:
+  - "Functional requirements say what a system does; nonfunctional requirements say how well it must do it. An app that is unbearably slow or unreliable might as well not exist."
+  - "Precomputing query results (materialization) trades cheap reads for expensive writes — the timeline cache turns 400 million lookups per second into 1 million writes per second, but celebrities break the math."
+  - "Response time is a distribution, not a number. The mean hides what users experience; the median (p50) tells you the typical wait, and p95/p99 tell you how bad the worst experiences are."
+  - "Tail latencies hurt disproportionately because of amplification: when one page load fans out to many backend calls, the slowest call sets the pace, so rare slowness becomes common slowness."
+  - "A fault is a part misbehaving; a failure is the system as a whole missing its SLO. Fault tolerance is the art of keeping faults from escalating into failures — and it is always limited to specific fault types and counts."
+  - "Hardware faults are mostly independent; software faults are highly correlated, because every node runs the same bugs. The leap-second outage took down many services at the same instant."
+  - "Blaming 'human error' for an incident is a dead end — config changes top the outage charts, and the fix is better sociotechnical systems (gradual rollouts, rollback, blameless postmortems), not more careful humans."
+  - "Scalability is not a label, it's a conversation: if load grows tenfold, what breaks first, and what are the options? Expect to rethink the architecture at every order of magnitude."
+  - "Shared-nothing (horizontal scaling) can grow linearly and survive datacenter loss, but you pay for it in sharding and distributed-systems complexity — don't buy that complexity before you need it."
+  - "Most software cost is maintenance, not initial development. Operability, simplicity (through good abstractions), and evolvability decide how much your system hurts to live with."
+references:
+  - title: "Timelines at Scale"
+    url: "https://www.infoq.com/presentations/Twitter-Timeline-Scalability/"
+    type: video
+    author: "Raffi Krikorian (QCon)"
+    note: "The real-world version of this chapter's case study, from the engineer who ran Twitter's timeline infrastructure."
+  - title: "The Tail at Scale"
+    url: "https://research.google/pubs/the-tail-at-scale/"
+    type: paper
+    author: "Jeffrey Dean & Luiz André Barroso"
+    note: "The classic Google paper on why tail latencies dominate at scale and the tricks (hedged requests, micro-partitions) that tame them."
+  - title: "How NOT to Measure Latency"
+    url: "https://www.youtube.com/watch?v=lJ8ydIuPFeU"
+    type: video
+    author: "Gil Tene (Strange Loop)"
+    note: "An entertaining demolition of common latency-measurement mistakes — coordinated omission will change how you read every dashboard."
+  - title: "Service Level Objectives"
+    url: "https://sre.google/sre-book/service-level-objectives/"
+    type: docs
+    author: "Google SRE Book"
+    note: "Free chapter on turning percentiles into SLOs and SLAs that engineering teams can actually operate against."
+  - title: "Exponential Backoff and Jitter"
+    url: "https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/"
+    type: article
+    author: "Marc Brooker (AWS)"
+    note: "Why naive retries cause retry storms and how jitter prevents synchronized stampedes — with simulations you can rerun."
+  - title: "Blameless PostMortems and a Just Culture"
+    url: "https://www.etsy.com/codeascraft/blameless-postmortems"
+    type: article
+    author: "John Allspaw (Etsy)"
+    note: "The essay that popularized blameless postmortems — the human side of the reliability story in this chapter."
+---
+
+import Callout from '../../components/mdx/Callout.astro';
+import FanOut from '../../components/diagrams/ch02/FanOut.astro';
+import PercentileBars from '../../components/diagrams/ch02/PercentileBars.astro';
+import TailAmplification from '../../components/diagrams/ch02/TailAmplification.astro';
+import ScalingArchitectures from '../../components/diagrams/ch02/ScalingArchitectures.astro';
+
+When you sketch out an application, the first list you write is what it should *do*: these screens, those buttons, this workflow. Those are functional requirements. The second list usually stays in people's heads: it should be fast, it shouldn't fall over, it shouldn't collapse the day you get popular, and future engineers shouldn't curse your name. Those are the **nonfunctional requirements**, and this chapter is about turning that vague wishlist into things you can define, measure, and design for: performance, reliability, scalability, and maintainability.
+
+The trouble with words like "fast" and "reliable" is that everyone nods along while meaning different things. So the chapter builds a vocabulary — percentiles, fault tolerance, fan-out, SLOs — that the rest of the book leans on constantly. And because abstract definitions are dry, it starts with a concrete problem you can hold in your head.
+
+## Case Study: Social Network Home Timelines
+
+Suppose you're asked to build a social network in the style of X (formerly Twitter): users post messages and follow each other. The numbers are intimidating from the start — say 500 million posts per day, which averages out to 5,800 posts per second but spikes to 150,000 per second during big events. An average user follows about 200 people and has about 200 followers, though the spread is enormous: most people have a handful, and a celebrity can have over 100 million.
+
+### Representing users, posts, and follows
+
+The natural first design is a relational database with three tables: `users`, `posts`, and `follows`. The product's most important read is the **home timeline**: recent posts from everyone you follow. As a query, that's a couple of joins:
+
+```sql
+SELECT posts.*, users.* FROM posts
+  JOIN follows ON posts.sender_id = follows.followee_id
+  JOIN users   ON posts.sender_id = users.id
+  WHERE follows.follower_id = current_user
+  ORDER BY posts.timestamp DESC
+  LIMIT 1000
+```
+
+Now ask: how often does this run? Posts should appear to followers within about five seconds, so the obvious approach is **polling** — each client re-runs the query every five seconds. With 10 million users online, that's 2 million timeline queries per second. Worse, each query is itself expensive: following 200 people means fetching and merging 200 lists of recent posts. Multiply it out and you get around 400 million lookups per second. The straightforward design isn't slightly too slow; it's off by orders of magnitude.
+
+### Materializing and updating timelines
+
+The fix is to flip the work from read time to write time. Instead of computing your timeline when you ask for it, the system maintains a precomputed copy of it at all times — like a mailbox. When someone posts, the system looks up their followers and *delivers* the post into each follower's cached timeline. Loading your timeline becomes a single cheap read, and instead of polling, your client just subscribes to new arrivals.
+
+<FanOut />
+
+This precompute-and-cache trick is called **materialization**, and the cached timeline is a **materialized view** — a concept that returns again and again in this book. The price is paid on the write path: one post triggers one timeline write per follower. The multiplier (here, ×200 on average) is the **fan-out factor**. At 5,800 posts per second, that's a bit over 1 million timeline writes per second. A big number — but a four-hundredfold improvement over the polling design.
+
+There's a bonus: when posting rates spike, deliveries can be queued and processed a little late. Timelines stay fast to load (they're just cache reads); posts merely take a few extra seconds to arrive. The system degrades gracefully instead of falling over.
+
+Two extreme cases keep this design honest:
+
+- **Users who follow enormous numbers of accounts** receive a torrent of timeline writes — but they can't possibly read it all, so the system can quietly drop some deliveries and show a sample. Imperfect, and fine.
+- **Celebrities** are the opposite problem: one Obama post means 100+ million timeline inserts. Dropping those is *not* fine. A common solution is a hybrid: store celebrity posts separately and merge them into timelines at read time, keeping fan-out for everyone else. Even with such tricks, celebrities cost social networks real infrastructure.
+
+<Callout type="insight">
+This case study quietly introduces the book's biggest recurring trade-off: **do the work on write, or do the work on read?** Materialized timelines, database indexes, caches, and derived data systems are all answers to the same question, and the right answer always depends on the read/write ratio. Here, timelines are read far more often than they change, so paying on write wins.
+</Callout>
+
+## Describing Performance
+
+Two families of metrics dominate performance discussions:
+
+- **Response time** — how long from making a request to receiving the answer. Measured in (milli)seconds. This is what users feel.
+- **Throughput** — how many requests (or how much data) per second the system handles. This is what determines how many servers you need, and therefore what the workload costs.
+
+In the case study, "posts per second" is throughput; "time to load my timeline" is response time. The two are linked through queueing: at low load a service answers quickly, but as throughput approaches the hardware's limit, requests increasingly arrive while the CPUs are busy with earlier ones and have to wait in line. The closer you push to capacity, the more violently response times grow. That's why "just run it hotter" stops working long before utilization hits 100%.
+
+<Callout type="warning" title="When an overloaded system won't recover">
+Push a system close to its limit and it can enter a vicious cycle: responses slow down, clients time out and retry, retries add more load, things get slower still — a **retry storm**. Eerily, such a system may stay broken *even after the original load subsides*, until somebody reboots it. This is called a **metastable failure**. The defenses are worth memorizing: clients should use exponential backoff with randomness (jitter) between retries and a circuit breaker or token bucket to stop hammering a struggling service; servers can shed load proactively or push back on clients (backpressure). The cure for an overload is never "retry harder."
+</Callout>
+
+### Latency and response time
+
+People use "latency" and "response time" interchangeably; this book doesn't, and the distinction is genuinely useful:
+
+- **Response time** is everything the client experiences, end to end.
+- **Service time** is the slice during which the service is actively doing the work.
+- **Queueing delays** happen at multiple points — waiting for a free CPU, waiting to get bytes onto a busy network interface.
+- **Latency** is the catchall for time a request spends *latent* — waiting around, not being worked on. Network latency is the travel time through the network.
+
+Even identical requests, repeated back to back, show wildly different response times. The causes are mundane and unavoidable: a context switch to a background process, a lost packet and TCP retransmission, a garbage-collection pause, a page fault, even mechanical vibration in the rack. And because a server can only work on a few things at once, one slow request can hold up the requests behind it — **head-of-line blocking**. The victims had fast service times, but the user still waited. This is why you must measure response times on the client side: the server's own numbers don't include the queue the client sat in.
+
+### Average, median, and percentiles
+
+Suppose you run a pizza shop and 100 customers order today. Most get their pizza in 10 minutes, but one unlucky order takes 3 hours because the oven broke. The *average* delivery time now looks terrible — yet 99 customers had a great experience. One number hid the real story.
+
+Response times work the same way. A service never has *one* response time; it has a **distribution** — every request takes a different amount of time, and the variation (also called **jitter** when it comes from the network) is part of the system's character. So the question isn't "what's the response time?" but "what does the spread look like?"
+
+<PercentileBars />
+
+The **mean** (sum ÷ count) is useful for estimating throughput limits, but it can't tell you what a typical user experienced — one three-hour pizza skews it. The **median** fixes this: sort all response times and take the middle one. If your median is 200 ms, half your users got an answer faster than that. That's a fact about real users, not an arithmetic artifact. The median is also called the **50th percentile**, or **p50**.
+
+To see how bad your outliers are, look further out into the **tail**: the 95th, 99th, and 99.9th percentiles (**p95**, **p99**, **p999**). A p95 of 1.5 seconds means 5 in every 100 requests were slower than that. These **tail latencies** matter more than they look. Amazon famously sets internal response-time requirements at p999 — affecting just 1 in 1,000 requests — because the slowest requests often belong to the customers with the most data on their accounts: the heaviest, most valuable customers. (p9999 they skipped — beyond a point, random events outside your control dominate, and the cost of chasing them outruns the benefit.)
+
+<Callout type="note" title="Does speed really pay?">
+The folklore statistics here are shakier than people admit. Google's famous 2006 result (400→900 ms slowdown, 20% traffic drop) sits awkwardly next to its own 2009 study, where 400 ms of extra latency cost only 0.6% of searches; Bing put two seconds of delay at 4.3% of ad revenue. A widely-cited Akamai study even found *fast* pages converting worse — because the fastest-loading pages were 404s. The cleanest result is Yahoo's: controlling for result quality, fast searches got 20–30% more clicks when the speed gap exceeded 1.25 seconds. Speed matters; just be suspicious of any one headline number.
+</Callout>
+
+### Use of response time metrics
+
+Tails get amplified in service-oriented architectures. Serving one user request often means calling several backend services — even in parallel, the page isn't done until the *slowest* call finishes. The more backend calls per page, the higher the chance of hitting at least one slow one, so a small percentage of slow backend calls becomes a much larger percentage of slow pages. This effect is **tail latency amplification**, and it's the reason backend teams obsess over p999s that no single user would seem to notice.
+
+<TailAmplification />
+
+Percentiles are also the working vocabulary of **service level objectives (SLOs)** and **service level agreements (SLAs)**. An SLO is a target — say, median under 200 ms, p99 under 1 second, and 99.9% of valid requests succeed. An SLA is the contract attached to it: miss the SLO and customers get refunds. (In practice, defining availability metrics that are both meaningful and measurable is its own dark art.)
+
+<Callout type="example" title="Computing percentiles without melting your monitoring">
+The naive way to compute a rolling p99 — keep every response time from the last 10 minutes, sort the list each minute — works fine until traffic grows. Efficient approximation algorithms exist, with open source implementations: HdrHistogram, t-digest, OpenHistogram, DDSketch. One trap to engrave somewhere visible: **never average percentiles** across machines or time windows. An average of p99s is mathematically meaningless. Aggregate by adding the underlying histograms instead.
+</Callout>
+
+## Reliability and Fault Tolerance
+
+Intuitively, reliable software performs the function users expect, tolerates user mistakes, is fast enough for the use case, and prevents unauthorized access. If all of that together is "working correctly," then **reliability** is *continuing to work correctly, even when things go wrong*.
+
+To say that precisely, the book distinguishes two words that casual conversation blurs:
+
+- A **fault** is one part of the system misbehaving — a disk dies, a machine crashes, a dependency has an outage.
+- A **failure** is the system as a whole no longer delivering the service users need — in other words, missing its SLO.
+
+The distinction is relative to where you draw the box. A dead hard drive *is* a failure of the hard drive; from the perspective of a storage cluster holding copies on other drives, it's merely a fault, and hopefully a tolerated one.
+
+### Fault tolerance
+
+A system is **fault-tolerant** if it keeps providing service despite certain faults. If a single part's fault brings the whole system down, that part is a **single point of failure (SPOF)**. In the timeline case study: if a machine doing fan-out deliveries crashes mid-job, fault tolerance means another machine takes over *without missing any posts and without delivering any twice* — what later chapters call exactly-once semantics.
+
+Note the word *certain*. Fault tolerance is always a budget: two simultaneous disk failures, one node out of three, the loss of one datacenter. Tolerating unlimited faults is impossible — if every server on Earth is swallowed by a black hole, your only mitigation is web hosting in space, and good luck getting that budget item approved.
+
+<Callout type="insight" title="Break it on purpose">
+Counterintuitively, fault-tolerant systems benefit from *deliberately increasing* the fault rate — randomly killing processes without warning, a practice called fault injection, expanded into a discipline by **chaos engineering**. The logic: many critical bugs hide in error-handling code that never runs. Triggering faults continuously means your recovery machinery is exercised and tested all the time, instead of being discovered broken during a real incident.
+</Callout>
+
+One caveat: this whole approach assumes faults can be cured. Some can't — once an attacker has exfiltrated your data, no failover undoes it. For security, prevention beats cure; this book mostly deals with the curable kind.
+
+### Hardware and software faults
+
+The hardware numbers are worth internalizing, because at scale "rare" becomes "daily":
+
+- **Magnetic disks** fail at roughly 2–5% per year — in a 10,000-disk cluster, expect about one funeral per day.
+- **SSDs** fail outright less often (0.5–1% per year), but uncorrectable bit errors hit roughly once per drive per year, even on young drives — a higher error rate than spinning disks.
+- About **1 in 1,000 machines** has a CPU core that occasionally computes the wrong answer — not crashes, just silently wrong results — usually from manufacturing defects.
+- **RAM corrupts**: cosmic rays, physical defects, and pathological access patterns that flip neighboring bits. Even with error-correcting (ECC) memory, over 1% of machines per year hit an uncorrectable error.
+- **Whole datacenters** go dark — power outages, network misconfigurations, fires, floods, earthquakes. A large solar storm could damage power grids and undersea cables at once.
+
+The first response is **redundancy** at the component level: RAID across disks, dual power supplies, batteries and diesel generators. That keeps a single machine alive for years — *if* faults are independent. They're often not: correlated failures take out whole racks and datacenters more often than anyone would like. So cloud-era systems shift strategy — worry less about any individual machine and instead tolerate node loss in software, spreading the system across **availability zones** (the provider's labels for "these resources share a physical fate"). A side benefit: a multi-node system can be patched by restarting one node at a time — a **rolling upgrade** — with zero planned downtime.
+
+**Software faults are nastier**, for one structural reason: every node runs the same code, so every node has the same bugs. Where hardware faults are mostly independent, software faults are highly correlated — and correlated faults defeat redundancy. The greatest hits:
+
+- A bug that fires everywhere simultaneously: the 2012 **leap second** hung Java applications across the internet via a Linux kernel bug; a firmware bug made certain SSD models all die at exactly 32,768 hours of operation, taking their data with them.
+- A runaway process devouring a shared resource — CPU, memory, disk, bandwidth, threads.
+- A dependency that slows down, stops responding, or starts returning garbage.
+- Emergent misbehavior from interactions between systems that each passed their tests in isolation.
+- **Cascading failures**, where one overloaded component topples the next, dominoes-style.
+
+These bugs often lie dormant for years until an unusual circumstance falsifies some assumption the software was silently making. There's no quick fix — only an accumulation of small disciplines: questioning assumptions, thorough testing, process isolation, letting processes crash and restart, avoiding feedback loops like retry storms, and measuring production behavior relentlessly.
+
+### Humans and reliability
+
+The systems are built, configured, and operated by people — and one study of large internet services found **operator configuration changes were the leading cause of outages**, with hardware contributing only 10–25%. The tempting conclusion is "humans are unreliable; add stricter procedures." The book argues the opposite: calling something "human error" mistakes a symptom for a cause. People were doing their best inside a **sociotechnical system**; the system is what set them up to fail.
+
+What actually helps is engineering for human fallibility: thorough testing (including property tests on random inputs), fast rollback for config changes, gradual rollouts of new code, rich monitoring and observability, and interfaces that make the right thing easy and the wrong thing awkward. All of that costs money that organizations often prefer to spend on features — which is a choice, and when the preventable incident arrives, blaming the engineer who tripped over it is blaming the wrong thing.
+
+Hence **blameless postmortems**: after an incident, the people involved share every detail without fear of punishment, so the organization actually learns — sometimes that a business priority, incentive, or neglected investment is the real root cause. And when reviewing an incident, distrust simplistic answers in both directions: "Bob should have been more careful" is useless, and so is "we must rewrite the backend in Haskell."
+
+<Callout type="note" title="How important is reliability, really?">
+This isn't just for nuclear plants. Outages of mundane apps cost revenue and reputation, and data loss can be catastrophic where downtime is merely annoying — imagine a parent's only photos of their children, gone. The darkest example is Britain's **Post Office Horizon scandal**: between 1999 and 2019, hundreds of postmasters were criminally convicted of theft because buggy accounting software showed shortfalls — English law *presumed* computers operate correctly. Lives were ruined; some of the convicted went bankrupt or died before their names were cleared. It is reasonable to trade reliability for development speed on a prototype — but make that trade with open eyes.
+</Callout>
+
+## Scalability
+
+A system that works reliably today can still fall over next year for the dullest of reasons: more load. **Scalability** is a system's ability to cope with increased load — but it is not a one-word verdict. "X is scalable" and "Y doesn't scale" are meaningless on their own. The real questions are: *if the system grows in a particular way, what are our options? How do we add computing resources? When does the current architecture hit its ceiling?*
+
+There's also a time to *not* care. If you're at a startup whose product might pivot next quarter, the overriding goal is staying simple and flexible; engineering for hypothetical future scale is premature optimization at best and, at worst, an inflexible design that makes the pivot harder. The famous put-down — "you're not Google, just use a relational database" — applies until it suddenly doesn't, and when growth arrives, *that's* when the bottlenecks reveal themselves and tell you which dimension needs scaling.
+
+### Understanding load
+
+Before discussing growth you need to describe current load, usually as throughput: requests per second, gigabytes arriving per day, checkouts per hour — or a peak figure, like simultaneous online users. The texture matters as much as the volume: read/write ratio, cache hit rate, followers per user. Sometimes the average drives your costs; sometimes a handful of extreme cases (those celebrities again) dominate everything.
+
+Then growth questions split usefully in two:
+
+1. Increase the load and *hold resources fixed* — how does performance degrade?
+2. Increase the load — *how many more resources* do you need to keep performance inside the SLA?
+
+If doubling resources handles double the load, that's **linear scalability**, and it's the good outcome. Occasionally you do better (economies of scale); far more often you do worse — with ten times the data, each write may simply cost more than it used to.
+
+### Shared-memory, shared-disk, and shared-nothing architectures
+
+When you need more horsepower, there are three broad shapes it can take:
+
+<ScalingArchitectures />
+
+- **Shared memory** (vertical scaling, scaling up): buy a bigger machine — more cores, more RAM, more disk, all threads sharing memory. Simple, but the price curve is cruel: a machine with twice the specs costs well over twice as much, and bottlenecks mean it delivers less than twice the throughput.
+- **Shared disk**: several machines with independent CPUs and RAM, all attached to one storage array (NAS or SAN) over a fast network. Traditional for on-prem data warehouses, but locking contention between the machines caps how far it scales.
+- **Shared nothing** (horizontal scaling, scaling out): independent nodes, each with its own CPUs, RAM, and disks, coordinating purely over the network. The potential is linear scaling on cheap commodity hardware, elastic resizing, and fault tolerance across datacenters and regions. The price is **sharding** (Chapter 7) and the full complexity of distributed systems (Chapter 9).
+
+A modern wrinkle: cloud-native databases increasingly separate storage from compute — many compute nodes sharing one storage *service*. It rhymes with shared-disk, but instead of pretending to be a filesystem or block device, the storage layer exposes an API purpose-built for the database, sidestepping the old contention problems.
+
+### Principles for scalability
+
+There is no one-size-fits-all scalable architecture — no *magic scaling sauce*. A system serving 100,000 requests per second at 1 kB each is a completely different animal from one serving 3 requests per minute at 2 GB each, despite identical data throughput. And an architecture sized for today's load will probably not survive ten times that load: on a fast-growing service, expect to rethink the architecture **at every order of magnitude** — which also means it's rarely worth designing more than one order of magnitude ahead.
+
+Two principles travel well, and they pull in opposite directions:
+
+1. **Break the system into smaller parts that operate independently.** This is the shared idea beneath microservices, sharding, stream processing, and shared-nothing architectures; the hard judgment call is where to draw the lines.
+2. **Don't make it more complicated than necessary.** A single-machine database that does the job beats a clever distributed setup. Predictable load may be better served by manual scaling than a fancy autoscaler. Five services are simpler than fifty. Good architectures are pragmatic mixtures.
+
+## Maintainability
+
+Software doesn't rust or fatigue, yet it still decays — requirements drift, platforms and dependencies change underneath it, bugs surface. The majority of software cost comes **after** initial development: fixing bugs, keeping operations running, investigating failures, adapting to new platforms, repaying technical debt, adding features. And maintenance is hardest exactly where it matters most: long-lived legacy systems built on technologies few people still know (mainframes and COBOL keep much of the world's money moving), whose design rationale left the building with the people who had it. Every system you build today, *if it succeeds*, becomes someone's legacy system. Design mercifully. The book distills that into three properties:
+
+### Operability: making life easy for operations
+
+Good operations can often work around bad software, but good software cannot run reliably under bad operations. At scale, automation is essential — and double-edged: the edge cases automation can't handle are exactly the complex ones, demanding a *more* skilled operations team, and a misbehaving automated system is harder to debug than a manual one. The sweet spot is application-specific.
+
+Operable systems make routine work easy so humans can focus on judgment calls: expose key metrics to monitoring and observability tools, avoid dependence on any individual machine (so machines can be taken down for maintenance), provide documentation and a predictable operational model ("if I do X, Y happens"), give good defaults that administrators can override, self-heal where appropriate while leaving manual control available, and above all minimize surprises.
+
+### Simplicity: managing complexity
+
+Projects start delightfully simple and grow into what the literature affectionately calls a **big ball of mud**. Complexity slows every engineer who touches the system, and it breeds bugs: where there are hidden assumptions and unexpected interactions, changes go wrong. One classic framing splits complexity into **essential** (inherent in the problem) and **accidental** (imposed by our tools) — imperfect, since the boundary moves as tools improve, but a useful question to ask of any complicated thing: *did it have to be this way?*
+
+The best weapon we have is **abstraction**. A good abstraction hides implementation detail behind a clean façade and gets reused across many applications — and quality improvements behind the façade benefit everyone in front of it. High-level languages abstract machine code; SQL abstracts on-disk data structures, concurrency, and crash recovery. You're still using machine code when you write Python — you've just been spared from thinking about it. This book is about exactly those general-purpose abstractions for data systems: transactions, indexes, replication, event logs.
+
+### Evolvability: making change easy
+
+Requirements will change — new use cases, shifting priorities, new regulations, growth forcing architectural shifts. Agile techniques like test-driven development and refactoring address change at the codebase level; **evolvability** is the same agility at the level of a whole data system. Simplicity and good abstractions are most of the battle: loosely coupled, simple systems are easier to rewire than tightly coupled, complex ones.
+
+One factor deserves special respect: **irreversibility**. Migrating to a new database is a different proposition when you can fall back to the old one than when you can't. The stakes of any change are set largely by how hard it is to undo — so minimize irreversibility, and treat the truly irreversible steps with the caution they deserve.
+
+<Callout type="insight" title="Where this chapter points">
+Everything later in the book is a response to the requirements defined here. Replication (Chapter 6) and consensus (Chapter 10) serve reliability; sharding (Chapter 7) serves scalability; encodings and schemas (Chapter 5) serve evolvability; and percentiles, SLOs, faults, and fan-out are the vocabulary the whole book speaks. If a later chapter ever feels abstract, come back here and ask: which requirement is this machinery buying?
+</Callout>

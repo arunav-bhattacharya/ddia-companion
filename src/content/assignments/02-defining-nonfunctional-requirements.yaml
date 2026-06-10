@@ -1,0 +1,52 @@
+assignments:
+  - id: ch02-a01
+    title: "Set SLOs for a food-delivery startup"
+    scenario: |
+      You've joined HotPlate, a food-delivery app with 50,000 daily orders. The CEO wants to promise restaurants "a fast, reliable platform" in next month's sales pitch and asks you to put numbers behind it. Today you have one dashboard showing a single metric: average API response time, currently 210 ms. Orders flow through three backend services in sequence (menu lookup, payment, dispatch), and the mobile app calls four more services in parallel to render the order-tracking screen. Checkout traffic triples during Friday and Saturday dinner peaks.
+    tasks:
+      - "Explain to the CEO why the 210 ms average is not a trustworthy basis for any promise, using the distinction between mean, median, and tail percentiles."
+      - "Propose a concrete SLO (latency percentiles + availability target) for the checkout flow and a separate one for the order-tracking screen, and justify why they differ."
+      - "Identify which of the two flows is more exposed to tail latency amplification and what that means for the per-service latency budgets."
+    hints:
+      - "Sequential calls add latencies; parallel calls are gated by the slowest one."
+      - "Think about what happens to queueing delays during the Friday dinner spike."
+    modelAnswer: |
+      The 210 ms average mixes thousands of fast requests with a few very slow ones, so it describes nobody's actual experience: a handful of multi-second outliers can move the mean while the typical user sees 150 ms, or the mean can look fine while 5% of users suffer. The first step is to report the distribution — median (typical experience) plus p95/p99 (worst experiences) — measured on the client side, since server-side numbers exclude the queueing delays users actually sit through, especially during the weekend peaks.
+
+      A reasonable starting SLO for checkout: median under 400 ms, p99 under 2 s, and 99.9% of valid checkout requests succeed, measured over a rolling 28 days. Checkout is sequential across three services, so the end-to-end latency is the *sum* of three service times: each service needs an individual budget well under a third of the total (e.g., p99 of ~500 ms each), because their slow moments compound. For order tracking — four parallel calls — the screen renders when the slowest call returns. A tracking SLO of median 300 ms / p99 1.5 s implies each of the four services needs a p99 considerably better than 1.5 s, because the chance that at least one call is slow is roughly 4× a single service's tail probability (1 − 0.99⁴ ≈ 3.9%).
+
+      Order tracking is more exposed to tail latency amplification: with four parallel dependencies, a 1-in-100 slow response per service becomes roughly a 1-in-25 slow screen. Per-service budgets must therefore be set from the tail backwards, and the weekend traffic spike makes queueing the dominant risk — capacity planning (or load shedding and backpressure) for the Friday peak is part of meeting the SLO, not an afterthought.
+  - id: ch02-a02
+    title: "Postmortem without blame"
+    scenario: |
+      At 14:02 on a Tuesday, a database engineer named Maya ran a routine configuration change to increase a connection-pool limit on the orders database. A typo set the limit to 5 instead of 500. Within four minutes, request queues backed up, clients began timing out and retrying, and the order service went down — including for users whose requests never touched the database. The on-call engineer rolled back the config at 14:31, but the service remained overloaded with retry traffic and didn't recover until instances were restarted at 15:10. Your VP's first question in the review meeting is: "How do we make sure Maya is more careful next time?"
+    tasks:
+      - "Rewrite the VP's question into the question a blameless postmortem would actually ask, and explain why the original framing is counterproductive."
+      - "Identify at least three systemic weaknesses this incident exposed, and a concrete mitigation for each."
+      - "Explain why the outage outlasted the rollback by 39 minutes, naming the phenomenon involved."
+    hints:
+      - "What did the deployment tooling allow a single typo to do?"
+      - "Why did load stay high after the bad config was gone?"
+    modelAnswer: |
+      The blameless framing is: "What about our system made it possible for one typo to take down orders for an hour, and why did our safeguards not catch it?" Blaming Maya treats a symptom as the cause — she was doing her job inside a sociotechnical system that allowed a single-character error to reach production unreviewed and unvalidated. People will always make typos; systems decide whether typos become outages. Punishing individuals also teaches the team to hide details, which destroys the organization's ability to learn.
+
+      Systemic weaknesses: (1) No validation or sanity bounds on config values — a pool limit of 5 should fail a lint or be rejected as outside safe range; mitigation: schema-validated configs with guardrails and required review. (2) No gradual rollout — the change hit the whole fleet at once; mitigation: canary the config on a small slice and auto-halt on error-rate regression. (3) Slow detection and rollback (29 minutes to revert); mitigation: alerts tied to queue depth and timeout rates, plus one-command rollback. (4) Clients lacked overload protection; mitigation: exponential backoff with jitter and circuit breakers so retries don't amplify incidents.
+
+      The outage outlasted the rollback because of a metastable failure sustained by a retry storm: timeouts caused clients to retry, retries multiplied the load, and that self-generated load kept the service saturated even after the config was fixed — until a restart cleared the queues. This is why the fix for overload is back-pressure and shedding, never "retry harder."
+  - id: ch02-a03
+    title: "Scaling a hit product, one order of magnitude at a time"
+    scenario: |
+      Your two-person startup's recipe-sharing app runs on a single PostgreSQL instance behind one application server and just got featured by a popular creator. Daily active users went from 8,000 to 60,000 in a week and growth shows no sign of stopping. Reads outnumber writes about 50:1; the heaviest query is the personalized "what's cooking" feed, recomputed on every page load. The database server is at 70% CPU at dinnertime. An advisor tells you to migrate immediately to a sharded, shared-nothing, multi-region architecture "so you never have to think about scale again."
+    tasks:
+      - "Critique the advisor's recommendation using the chapter's principles about scalability and complexity."
+      - "Propose what you would actually do for the next order of magnitude (≈600k DAU), and name which load characteristics you'd measure to know when the next redesign is due."
+      - "Explain how the 50:1 read/write ratio shapes the cheapest effective fix for the feed query."
+    hints:
+      - "There is no magic scaling sauce — and complexity has a daily carrying cost."
+      - "Where have you seen 'precompute on write' before in this chapter?"
+    modelAnswer: |
+      The advisor is selling magic scaling sauce, which the chapter says doesn't exist. A sharded multi-region system would saddle a two-person team with distributed-systems complexity — rebalancing, cross-shard queries, operational overhead — to solve a load level a single beefier machine handles comfortably. Architectures rarely survive 10× growth anyway, so building for 1000× today means paying carrying costs now for a design you'll replace twice before reaching it. The chapter's principle: don't make things more complicated than necessary, and expect to rethink at each order of magnitude rather than skip several in advance.
+
+      For the next order of magnitude: first scale up (vertical scaling) — a larger instance buys headroom cheaply with zero added complexity. Second, exploit the 50:1 read ratio with read replicas and caching, keeping the single writer. Third, attack the feed query (below). Meanwhile, measure: requests/second and its dinnertime peak, read/write ratio over time, cache hit rate, p95/p99 of the feed endpoint, replication lag, and database CPU at peak. The signal for the next redesign is the write path saturating the primary — that's when sharding enters the conversation, with actual data about which dimension (writes, storage, geography) needs to scale.
+
+      The feed is recomputed on every page load despite reads outnumbering writes 50:1 — exactly backwards. Materialize it: precompute each user's feed when a relevant write happens (new recipe from someone they follow) and serve page loads from that cache. With 50 reads per write, paying fan-out cost once per write to make 50 reads nearly free is a bargain — the same logic as the social-network timeline cache, at a friendlier scale.

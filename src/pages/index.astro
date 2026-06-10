@@ -1,13 +1,135 @@
 ---
+import { getCollection } from 'astro:content';
 import BaseLayout from '../layouts/BaseLayout.astro';
+import ChapterCard from '../components/ChapterCard.astro';
+import ProgressOverview from '../components/ProgressOverview.astro';
+import { CHAPTERS, GROUPS } from '../lib/chapters';
+
+const entries = await getCollection('chapters', ({ data }) => !data.draft);
+const bySlug = new Map(entries.map((e) => [e.id, e.data]));
+
+const groups = GROUPS.map((group) => ({
+  group,
+  chapters: CHAPTERS.filter((c) => c.group === group),
+}));
+
+const availableCount = entries.length;
 ---
 
 <BaseLayout
   title="DDIA Companion — study notes for Designing Data-Intensive Applications"
-  description="Chapter-by-chapter study notes, flashcards, and quizzes for Designing Data-Intensive Applications, 2nd edition."
+  description="Plain-language chapter summaries, flashcards, quizzes, and design exercises for Designing Data-Intensive Applications, 2nd edition — every section of every chapter, explained for humans."
 >
-  <section style="max-width: 76rem; margin-inline: auto; padding: var(--space-8) var(--space-4);">
-    <h1>DDIA Companion</h1>
-    <p>Placeholder — chapter grid lands here.</p>
-  </section>
+  <div class="wrap">
+    <section class="hero">
+      <p class="kicker ui">A study companion to the 2nd edition</p>
+      <h1>Designing Data&#8209;Intensive Applications, <em>explained for humans</em></h1>
+      <p class="lede">
+        Kleppmann &amp; Riccomini's book is the closest thing our field has to a canon — and at
+        600&nbsp;pages, it deserves better than skimming. Each chapter here is retold in plain
+        language with analogies and diagrams, covering <strong>every section of the original</strong>,
+        then capped with key takeaways, hand-picked further reading, flashcards, a quiz, and
+        design scenarios to make it stick.
+      </p>
+      <ProgressOverview />
+    </section>
+
+    <section id="chapters" class="chapters">
+      {
+        groups.map(({ group, chapters }) => (
+          <div class="group">
+            <h2 class="ui">{group}</h2>
+            <div class="grid">
+              {chapters.map((c) => {
+                const data = bySlug.get(c.slug);
+                return (
+                  <ChapterCard
+                    chapter={c.chapter}
+                    slug={c.slug}
+                    title={c.title}
+                    description={data?.description}
+                    readingMinutes={data?.readingMinutes}
+                    available={Boolean(data)}
+                  />
+                );
+              })}
+            </div>
+          </div>
+        ))
+      }
+    </section>
+
+    {
+      availableCount < CHAPTERS.length && (
+        <p class="note ui">
+          {availableCount} of {CHAPTERS.length} chapters are live — the rest are being written.
+        </p>
+      )
+    }
+  </div>
 </BaseLayout>
+
+<style>
+  .wrap {
+    max-width: 76rem;
+    margin-inline: auto;
+    padding: var(--space-8) var(--space-4) 0;
+  }
+
+  .hero {
+    max-width: 46rem;
+    margin-bottom: var(--space-8);
+  }
+
+  .kicker {
+    font-size: var(--text-sm);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--accent-text);
+  }
+
+  h1 {
+    font-size: clamp(var(--text-2xl), 6vw, var(--text-3xl));
+    margin-top: var(--space-3);
+  }
+
+  h1 em {
+    font-style: italic;
+    color: var(--accent-text);
+  }
+
+  .lede {
+    margin-top: var(--space-5);
+    font-size: var(--text-md);
+    color: var(--text-muted);
+    text-wrap: pretty;
+  }
+
+  .group {
+    margin-bottom: var(--space-7);
+  }
+
+  .group h2 {
+    font-size: var(--text-sm);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--text-faint);
+    margin-bottom: var(--space-4);
+    padding-bottom: var(--space-2);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(19rem, 1fr));
+    gap: var(--space-4);
+  }
+
+  .note {
+    color: var(--text-faint);
+    font-size: var(--text-sm);
+    margin-top: var(--space-2);
+  }
+</style>

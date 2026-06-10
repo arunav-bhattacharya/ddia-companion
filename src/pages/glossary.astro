@@ -1,0 +1,124 @@
+---
+import { getCollection } from 'astro:content';
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { chapterByNumber } from '../lib/chapters';
+
+const terms = (await getCollection('glossary')).sort((a, b) =>
+  a.data.term.localeCompare(b.data.term)
+);
+---
+
+<BaseLayout
+  title="Glossary · DDIA Companion"
+  description="Plain-language definitions of the distributed systems and database vocabulary used throughout Designing Data-Intensive Applications — from atomic to unbounded."
+>
+  <div class="wrap" data-pagefind-body>
+    <header>
+      <h1>Glossary</h1>
+      <p class="lede">
+        The book's working vocabulary, in plain words. Definitions aim for the core idea — follow
+        the chapter links for the full subtleties.
+      </p>
+    </header>
+
+    <dl>
+      {
+        terms.map((t) => (
+          <div class="entry" id={t.data.id}>
+            <dt>
+              <a class="anchor" href={`#${t.data.id}`} aria-label={`Link to ${t.data.term}`}>
+                {t.data.term}
+              </a>
+            </dt>
+            <dd>
+              {t.data.definition}
+              {t.data.chapters && t.data.chapters.length > 0 && (
+                <span class="chapters ui">
+                  {t.data.chapters.map((n) => {
+                    const meta = chapterByNumber(n);
+                    return meta ? (
+                      <a href={`/chapters/${meta.slug}/`}>Ch&nbsp;{n}</a>
+                    ) : null;
+                  })}
+                </span>
+              )}
+            </dd>
+          </div>
+        ))
+      }
+    </dl>
+  </div>
+</BaseLayout>
+
+<style>
+  .wrap {
+    max-width: var(--measure);
+    margin-inline: auto;
+    padding: var(--space-8) var(--space-4) 0;
+  }
+
+  h1 {
+    font-size: var(--text-2xl);
+  }
+
+  .lede {
+    margin-top: var(--space-3);
+    color: var(--text-muted);
+  }
+
+  dl {
+    margin-top: var(--space-7);
+    display: grid;
+    gap: var(--space-5);
+  }
+
+  .entry {
+    scroll-margin-top: calc(var(--header-height) + var(--space-4));
+    padding-bottom: var(--space-5);
+    border-bottom: 1px solid var(--border);
+  }
+
+  dt {
+    font-weight: 650;
+    font-size: var(--text-md);
+  }
+
+  .anchor {
+    color: var(--text);
+    text-decoration: none;
+  }
+
+  .anchor:hover {
+    color: var(--accent-text);
+  }
+
+  .entry:target dt .anchor {
+    color: var(--accent-text);
+  }
+
+  dd {
+    margin: var(--space-2) 0 0;
+    color: var(--text-muted);
+  }
+
+  .chapters {
+    display: inline-flex;
+    gap: var(--space-2);
+    margin-left: var(--space-2);
+  }
+
+  .chapters a {
+    font-size: var(--text-xs);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 1px var(--space-2);
+    text-decoration: none;
+    color: var(--text-faint);
+    white-space: nowrap;
+  }
+
+  .chapters a:hover {
+    border-color: var(--accent);
+    color: var(--accent-text);
+  }
+</style>

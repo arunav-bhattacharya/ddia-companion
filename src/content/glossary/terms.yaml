@@ -1,0 +1,244 @@
+- id: asynchronous
+  term: "asynchronous"
+  definition: "Proceeding without waiting for an operation to finish, and without assuming how long it will take — e.g., firing data off to another node and carrying on. The opposite of synchronous."
+  chapters: [6, 9]
+- id: atomic
+  term: "atomic"
+  definition: "In concurrency: an operation that appears to happen at a single instant, so nobody can observe it half-done. In transactions: a group of writes that either all commit or all roll back, even when faults strike partway through."
+  chapters: [8]
+- id: backpressure
+  term: "backpressure"
+  definition: "Making a sender slow down because the receiver can't keep up, instead of letting queues grow without bound. Also called flow control."
+  chapters: [2, 12]
+- id: batch-process
+  term: "batch process"
+  definition: "A computation that reads a fixed (usually large) input dataset and produces an output dataset, leaving the input unmodified. Runs to completion, then stops."
+  chapters: [11]
+- id: bounded
+  term: "bounded"
+  definition: "Having a known upper limit — of size, duration, or delay. A bounded dataset has an end; a bounded network delay has a guaranteed maximum. Contrast with unbounded."
+  chapters: [9, 12]
+- id: byzantine-fault
+  term: "Byzantine fault"
+  definition: "A node misbehaving in arbitrary ways — sending contradictory messages to different peers, lying, or acting maliciously — rather than simply crashing. The hardest fault class to tolerate."
+  chapters: [9]
+- id: cache
+  term: "cache"
+  definition: "A component that keeps recently used data close at hand to make repeat reads fast. Usually incomplete: misses fall through to the slower system that holds the full copy."
+  chapters: [2, 4]
+- id: cap-theorem
+  term: "CAP theorem"
+  definition: "A famous and widely misunderstood theoretical result about consistency, availability, and partitions. The book's blunt verdict: not useful for practical system design."
+  chapters: [10]
+- id: causality
+  term: "causality"
+  definition: "The happens-before dependency between events: one event responds to, builds on, or must be understood in light of another. Systems that respect causality never show you an answer before its question."
+  chapters: [6, 10]
+- id: consensus
+  term: "consensus"
+  definition: "Getting several nodes to agree on something — such as who the leader is — despite faults. A foundational distributed-computing problem that is far harder than it looks."
+  chapters: [10]
+- id: data-warehouse
+  term: "data warehouse"
+  definition: "A database that aggregates data from many operational (OLTP) systems and reshapes it for analytical queries, so analysts can scan and aggregate without touching production systems."
+  chapters: [1, 4]
+- id: declarative
+  term: "declarative"
+  definition: "Describing the result you want rather than the steps to compute it. SQL is the classic example: a query optimizer picks the execution strategy for you."
+  chapters: [3]
+- id: denormalize
+  term: "denormalize"
+  definition: "Deliberately introducing duplication into normalized data — caches, indexes, precomputed values — to make reads faster, at the cost of keeping the copies consistent on writes."
+  chapters: [3]
+- id: derived-data
+  term: "derived data"
+  definition: "Data produced from other data by a repeatable process you could rerun at any time — indexes, caches, materialized views. Lose it, and you can rebuild it from the source."
+  chapters: [1, 13]
+- id: deterministic
+  term: "deterministic"
+  definition: "Always producing identical output for identical input — no randomness, no clocks, no network calls. Determinism is what makes computations safely repeatable."
+  chapters: [9, 11]
+- id: distributed
+  term: "distributed"
+  definition: "Running across several nodes connected by a network. The defining hazard is partial failure: part of the system breaks while the rest keeps going, and you often can't tell what exactly is broken."
+  chapters: [9]
+- id: durable
+  term: "durable"
+  definition: "Stored such that you believe the data will survive faults — crashes, power loss, disk failures. The D in ACID."
+  chapters: [8]
+- id: etl
+  term: "ETL"
+  definition: "Extract–transform–load: pulling data out of a source system, reshaping it for analytics, and loading it into a data warehouse or batch pipeline."
+  chapters: [1, 11]
+- id: failover
+  term: "failover"
+  definition: "In single-leader systems, promoting another node to leader when the current leader dies or becomes unreachable. Simple in concept, full of traps in practice."
+  chapters: [6]
+- id: fault-tolerant
+  term: "fault-tolerant"
+  definition: "Able to keep providing service automatically when certain things go wrong — a machine crashes, a link fails. Always limited to specific types and numbers of faults."
+  chapters: [2]
+- id: flow-control
+  term: "flow control"
+  definition: "Another name for backpressure: making a fast sender slow down so a slower receiver isn't overwhelmed."
+  chapters: [2, 12]
+- id: follower
+  term: "follower"
+  definition: "A replica that accepts no direct client writes; it only applies changes streamed from the leader. Also called a secondary, read replica, or hot standby."
+  chapters: [6]
+- id: full-text-search
+  term: "full-text search"
+  definition: "Searching text by arbitrary keywords, often tolerating misspellings and synonyms. Backed by a full-text index, a specialized kind of secondary index."
+  chapters: [4]
+- id: graph
+  term: "graph"
+  definition: "A data structure of vertices (things) and edges (connections between things). The natural model when relationships are the interesting part of the data."
+  chapters: [3]
+- id: hash
+  term: "hash"
+  definition: "A function turning any input into a fixed-size, random-looking number, with identical inputs always producing identical outputs. Different inputs occasionally collide on the same output."
+  chapters: [7]
+- id: idempotent
+  term: "idempotent"
+  definition: "Safe to retry: running the operation several times has exactly the same effect as running it once. The key property for exactly-once semantics built on at-least-once delivery."
+  chapters: [12]
+- id: index
+  term: "index"
+  definition: "A data structure maintained alongside your data that makes it fast to find all records with a particular value in a particular field — the difference between scanning everything and jumping straight to matches."
+  chapters: [4]
+- id: isolation
+  term: "isolation"
+  definition: "How much concurrently running transactions can interfere with each other. Serializable isolation means no interference at all; weaker levels trade safety for speed."
+  chapters: [8]
+- id: join
+  term: "join"
+  definition: "Bringing together records that share something — typically following a reference (foreign key, document ID, graph edge) from one record to the record it points at."
+  chapters: [3, 11]
+- id: leader
+  term: "leader"
+  definition: "The one replica allowed to make changes when data is replicated. Also called the primary or source. May be elected by protocol or appointed by an administrator."
+  chapters: [6]
+- id: linearizable
+  term: "linearizable"
+  definition: "Behaving as if there were only a single copy of the data, modified by atomic operations — the strongest, most intuitive consistency model, and one of the most expensive."
+  chapters: [10]
+- id: locality
+  term: "locality"
+  definition: "Putting pieces of data physically together because they're usually needed together — one seek instead of many."
+  chapters: [3]
+- id: lock
+  term: "lock"
+  definition: "A mechanism granting one thread, node, or transaction exclusive access to something; everyone else waits until it's released."
+  chapters: [8, 9]
+- id: log
+  term: "log"
+  definition: "An append-only file of records. Wears many hats: write-ahead logs make storage crash-safe, log-structured engines use logs as primary storage, replication logs ship writes to followers, event logs carry streams."
+  chapters: [4, 6, 12]
+- id: materialize
+  term: "materialize"
+  definition: "Computing a result eagerly and storing it, rather than computing on demand. A materialized view is a precomputed query result kept up to date as inputs change."
+  chapters: [2, 3, 12]
+- id: node
+  term: "node"
+  definition: "One running instance of software on a computer, cooperating with other nodes over a network."
+  chapters: [9]
+- id: normalized
+  term: "normalized"
+  definition: "Structured with zero redundancy: every fact lives in exactly one place, so updating it means changing one record, not hunting down copies."
+  chapters: [3]
+- id: olap
+  term: "OLAP"
+  definition: "Online analytical processing: queries that scan huge numbers of records to compute aggregates (counts, sums, averages), typically for business intelligence."
+  chapters: [1, 4]
+- id: oltp
+  term: "OLTP"
+  definition: "Online transaction processing: fast queries that read or write small numbers of records by key — the access pattern of interactive applications."
+  chapters: [1, 4]
+- id: percentile
+  term: "percentile"
+  definition: "A point in a distribution: the 95th percentile response time is the threshold that 95% of requests beat and 5% exceed. The honest way to describe performance."
+  chapters: [2]
+- id: primary-key
+  term: "primary key"
+  definition: "The value that uniquely identifies a record, usually generated by the system (sequentially or randomly) rather than chosen by users."
+  chapters: [3, 4]
+- id: quorum
+  term: "quorum"
+  definition: "The minimum number of nodes that must confirm an operation before it counts as successful — typically a majority, so any two quorums overlap."
+  chapters: [6, 10]
+- id: rebalance
+  term: "rebalance"
+  definition: "Moving data or services between nodes to even out load — for example, after adding machines to a cluster or when one shard runs hot."
+  chapters: [7]
+- id: replication
+  term: "replication"
+  definition: "Keeping copies of the same data on several nodes so it stays available when some of them are unreachable."
+  chapters: [6]
+- id: schema
+  term: "schema"
+  definition: "A description of data's structure — fields and types. Can be enforced when data is written, checked when it's read, and evolved over time."
+  chapters: [3, 5]
+- id: secondary-index
+  term: "secondary index"
+  definition: "An extra data structure maintained beside the primary storage so you can efficiently find records by something other than their primary key."
+  chapters: [4, 7]
+- id: serializable
+  term: "serializable"
+  definition: "The strongest transaction isolation guarantee: concurrent transactions behave exactly as if they had run one at a time, in some serial order."
+  chapters: [8]
+- id: sharding
+  term: "sharding"
+  definition: "Splitting a dataset or computation too big for one machine into pieces (shards) spread across many machines. Also known as partitioning."
+  chapters: [7]
+- id: shared-nothing
+  term: "shared-nothing"
+  definition: "An architecture of independent nodes — each with its own CPUs, memory, and disks — cooperating only over the network. Contrast with shared-memory (one big machine) and shared-disk."
+  chapters: [2]
+- id: skew
+  term: "skew"
+  definition: "Two unrelated meanings: (1) imbalanced load where some shards get far more data or traffic than others (hot spots); (2) timing anomalies where events appear out of order — read skew, write skew, clock skew."
+  chapters: [7, 8, 9]
+- id: split-brain
+  term: "split brain"
+  definition: "Two nodes both believing they are the leader at the same time — a dangerous state that can violate a system's guarantees, typically after a botched failover."
+  chapters: [6, 10]
+- id: stored-procedure
+  term: "stored procedure"
+  definition: "Transaction logic packaged to run entirely inside the database server, with no back-and-forth with a client mid-transaction."
+  chapters: [8]
+- id: stream-process
+  term: "stream process"
+  definition: "A continually running computation that consumes an endless stream of events and produces derived output as it goes — batch processing's never-ending sibling."
+  chapters: [12]
+- id: synchronous
+  term: "synchronous"
+  definition: "Waiting for an operation to complete before proceeding. The opposite of asynchronous."
+  chapters: [6, 9]
+- id: system-of-record
+  term: "system of record"
+  definition: "The authoritative home of a piece of data — the source of truth where changes land first, from which all derived copies flow."
+  chapters: [1, 13]
+- id: timeout
+  term: "timeout"
+  definition: "Declaring a fault after waiting some duration without a response. Simple and universal, but inherently ambiguous: you can't tell a dead node from a slow network."
+  chapters: [9]
+- id: total-order
+  term: "total order"
+  definition: "An ordering in which any two things can be compared — one is always greater. When some pairs are incomparable, it's only a partial order."
+  chapters: [10]
+- id: transaction
+  term: "transaction"
+  definition: "Several reads and writes grouped into one logical unit, so error handling and concurrency become tractable: it either happens or it doesn't."
+  chapters: [8]
+- id: two-phase-commit
+  term: "two-phase commit (2PC)"
+  definition: "A protocol ensuring several nodes either all commit or all abort a transaction: first everyone prepares and promises, then a coordinator gives the verdict."
+  chapters: [8]
+- id: two-phase-locking
+  term: "two-phase locking (2PL)"
+  definition: "A serializability technique: transactions lock everything they read or write and hold all locks until they finish — readers block writers and writers block readers."
+  chapters: [8]
+- id: unbounded
+  term: "unbounded"
+  definition: "Having no known upper limit — like the delay of a network message or the length of an event stream. The opposite of bounded."
+  chapters: [9, 12]
