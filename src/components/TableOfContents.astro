@@ -1,0 +1,125 @@
+---
+/* On-this-page navigation from rendered MDX headings (depth 2 only, plus the
+   fixed end-of-chapter sections). Sticky sidebar on wide screens; collapsible
+   disclosure on mobile (handled by ChapterLayout's grid). */
+
+interface Heading {
+  depth: number;
+  slug: string;
+  text: string;
+}
+
+interface Props {
+  headings: Heading[];
+}
+
+const { headings } = Astro.props;
+const h2s = headings.filter((h) => h.depth === 2);
+---
+
+<nav class="toc ui" aria-label="On this page">
+  <details open>
+    <summary>On this page</summary>
+    <ol>
+      {
+        h2s.map((h) => (
+          <li>
+            <a href={`#${h.slug}`}>{h.text}</a>
+          </li>
+        ))
+      }
+      <li class="extra"><a href="#takeaways-h">Key takeaways</a></li>
+      <li class="extra"><a href="#refs-h">Go deeper</a></li>
+      <li class="extra"><a href="#practice-h">Test yourself</a></li>
+    </ol>
+  </details>
+</nav>
+
+<style>
+  .toc {
+    font-size: var(--text-sm);
+  }
+
+  summary {
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-size: var(--text-xs);
+    color: var(--text-faint);
+    cursor: pointer;
+    list-style: none;
+    margin-bottom: var(--space-3);
+  }
+
+  summary::-webkit-details-marker {
+    display: none;
+  }
+
+  ol {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    gap: var(--space-2);
+    border-left: 1px solid var(--border);
+  }
+
+  li a {
+    display: block;
+    padding-left: var(--space-3);
+    color: var(--text-muted);
+    text-decoration: none;
+    border-left: 2px solid transparent;
+    margin-left: -1px;
+  }
+
+  li a:hover {
+    color: var(--text);
+    border-left-color: var(--accent);
+  }
+
+  .extra a {
+    color: var(--text-faint);
+    font-style: italic;
+  }
+
+  /* Wide screens: always expanded, summary becomes a plain label */
+  @media (min-width: 1100px) {
+    details > summary {
+      pointer-events: none;
+    }
+  }
+
+  @media (max-width: 1099px) {
+    .toc {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: var(--space-3) var(--space-4);
+      background: var(--surface);
+    }
+
+    summary {
+      margin-bottom: 0;
+    }
+
+    details[open] summary {
+      margin-bottom: var(--space-3);
+    }
+
+    summary::after {
+      content: ' +';
+    }
+
+    details[open] summary::after {
+      content: ' −';
+    }
+  }
+</style>
+
+<script>
+  // Start collapsed on narrow screens; <details open> keeps it expanded on desktop.
+  const toc = document.querySelector<HTMLDetailsElement>('.toc details');
+  if (toc && matchMedia('(max-width: 1099px)').matches) {
+    toc.open = false;
+  }
+</script>

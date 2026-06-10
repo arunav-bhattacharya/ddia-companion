@@ -1,0 +1,189 @@
+---
+interface Assignment {
+  id: string;
+  title: string;
+  scenario: string;
+  tasks: string[];
+  hints?: string[];
+  modelAnswer: string;
+}
+
+interface Props {
+  chapterSlug: string;
+  assignments: Assignment[];
+}
+
+const { chapterSlug, assignments } = Astro.props;
+
+/* Multi-paragraph fields are authored as plain text with blank-line breaks. */
+const paragraphs = (s: string) => s.split(/\n\s*\n/).filter(Boolean);
+---
+
+<scenario-list class="ui" data-chapter={chapterSlug}>
+  {
+    assignments.map((a, i) => (
+      <article class="assignment" data-assignment-id={a.id}>
+        <h3 class="a-title">
+          <span class="a-num">Scenario {i + 1}</span>
+          {a.title}
+        </h3>
+        <div class="scenario">
+          {paragraphs(a.scenario).map((p) => (
+            <p>{p}</p>
+          ))}
+        </div>
+        <ol class="tasks">
+          {a.tasks.map((t) => (
+            <li>{t}</li>
+          ))}
+        </ol>
+        {a.hints && a.hints.length > 0 && (
+          <details class="hints">
+            <summary>Need a nudge?</summary>
+            <ul>
+              {a.hints.map((h) => (
+                <li>{h}</li>
+              ))}
+            </ul>
+          </details>
+        )}
+        <textarea
+          class="draft"
+          rows="5"
+          placeholder="Sketch your answer here before revealing — writing it out is half the learning. (Not saved.)"
+        />
+        <button type="button" class="reveal" data-action="reveal">
+          Reveal model answer
+        </button>
+        <div class="model" hidden>
+          <p class="model-label">Model answer</p>
+          {paragraphs(a.modelAnswer).map((p) => (
+            <p>{p}</p>
+          ))}
+        </div>
+      </article>
+    ))
+  }
+</scenario-list>
+
+<style>
+  scenario-list {
+    display: grid;
+    gap: var(--space-7);
+  }
+
+  .a-title {
+    font-size: var(--text-md);
+    display: grid;
+    gap: var(--space-1);
+  }
+
+  .a-num {
+    font-size: var(--text-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--accent-text);
+    font-weight: 600;
+  }
+
+  .scenario {
+    margin-top: var(--space-3);
+    font-family: var(--font-serif);
+  }
+
+  .scenario p + p {
+    margin-top: var(--space-3);
+  }
+
+  .tasks {
+    margin-top: var(--space-4);
+    padding-left: 1.4em;
+    display: grid;
+    gap: var(--space-2);
+  }
+
+  .tasks li::marker {
+    color: var(--accent);
+    font-weight: 600;
+  }
+
+  .hints {
+    margin-top: var(--space-4);
+    border: 1px dashed var(--border-strong);
+    border-radius: var(--radius-md);
+    padding: var(--space-3) var(--space-4);
+    font-size: var(--text-sm);
+  }
+
+  .hints summary {
+    cursor: pointer;
+    color: var(--text-muted);
+    font-weight: 600;
+  }
+
+  .hints ul {
+    margin-top: var(--space-3);
+    padding-left: 1.4em;
+    display: grid;
+    gap: var(--space-2);
+  }
+
+  .draft {
+    width: 100%;
+    margin-top: var(--space-4);
+    padding: var(--space-3) var(--space-4);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface);
+    resize: vertical;
+    font-size: var(--text-sm);
+    line-height: 1.6;
+  }
+
+  .draft:focus {
+    outline: 2px solid var(--accent);
+    outline-offset: 0;
+    border-color: transparent;
+  }
+
+  .reveal {
+    margin-top: var(--space-3);
+    padding: var(--space-2) var(--space-4);
+    border: 1px solid var(--accent);
+    border-radius: var(--radius-md);
+    color: var(--accent-text);
+    font-weight: 600;
+    font-size: var(--text-sm);
+  }
+
+  .reveal:hover {
+    background: var(--accent-subtle);
+  }
+
+  .model {
+    margin-top: var(--space-4);
+    padding: var(--space-4) var(--space-5);
+    border: 1px solid var(--ok);
+    border-radius: var(--radius-md);
+    background: var(--ok-subtle);
+    font-family: var(--font-serif);
+  }
+
+  .model-label {
+    font-family: var(--font-sans);
+    font-size: var(--text-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--ok);
+    font-weight: 600;
+    margin-bottom: var(--space-2);
+  }
+
+  .model p + p {
+    margin-top: var(--space-3);
+  }
+</style>
+
+<script>
+  import '../../scripts/assignments';
+</script>

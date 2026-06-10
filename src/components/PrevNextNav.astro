@@ -1,0 +1,89 @@
+---
+import { CHAPTERS } from '../lib/chapters';
+
+interface Props {
+  current: number;
+}
+
+const { current } = Astro.props;
+const prev = CHAPTERS.find((c) => c.chapter === current - 1);
+const next = CHAPTERS.find((c) => c.chapter === current + 1);
+---
+
+<nav class="prevnext ui" aria-label="Chapter navigation">
+  {
+    prev ? (
+      <a class="card prev" href={`/chapters/${prev.slug}/`}>
+        <span class="dir">← Previous</span>
+        <span class="t">
+          {prev.chapter}. {prev.title}
+        </span>
+      </a>
+    ) : (
+      <span />
+    )
+  }
+  {
+    next ? (
+      <a class="card next" href={`/chapters/${next.slug}/`}>
+        <span class="dir">Next →</span>
+        <span class="t">
+          {next.chapter}. {next.title}
+        </span>
+      </a>
+    ) : (
+      <span />
+    )
+  }
+</nav>
+
+<style>
+  .prevnext {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-4);
+    margin-top: var(--space-8);
+  }
+
+  .card {
+    display: grid;
+    gap: var(--space-1);
+    padding: var(--space-4);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    text-decoration: none;
+    color: var(--text);
+    background: var(--surface);
+    transition: border-color 120ms;
+  }
+
+  .card:hover {
+    border-color: var(--accent);
+  }
+
+  .next {
+    text-align: right;
+  }
+
+  .dir {
+    font-size: var(--text-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-faint);
+  }
+
+  .t {
+    font-weight: 600;
+    font-size: var(--text-sm);
+  }
+
+  @media (max-width: 640px) {
+    .prevnext {
+      grid-template-columns: 1fr;
+    }
+
+    .next {
+      text-align: left;
+    }
+  }
+</style>

@@ -1,0 +1,40 @@
+---
+interface Props {
+  takeaways: string[];
+}
+
+const { takeaways } = Astro.props;
+---
+
+<section class="takeaways" aria-labelledby="takeaways-h">
+  <h2 id="takeaways-h">Key takeaways</h2>
+  <ol>
+    {takeaways.map((t) => <li>{t}</li>)}
+  </ol>
+</section>
+
+<style>
+  .takeaways {
+    margin-top: var(--space-8);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: var(--accent-subtle);
+    padding: var(--space-5) var(--space-6);
+  }
+
+  h2 {
+    font-size: var(--text-lg);
+    margin-bottom: var(--space-4);
+  }
+
+  ol {
+    padding-left: 1.4em;
+    display: grid;
+    gap: var(--space-3);
+  }
+
+  li::marker {
+    color: var(--accent);
+    font-weight: 600;
+  }
+</style>

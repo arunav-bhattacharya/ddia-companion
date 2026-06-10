@@ -1,0 +1,51 @@
+---
+/* Shared frame for all chapter diagrams. Diagram components render their SVG
+   into the default slot and MUST paint only with currentColor or the
+   --diagram-* custom properties so both themes work. */
+
+interface Props {
+  caption: string;
+  wide?: boolean;
+}
+
+const { caption, wide = false } = Astro.props;
+---
+
+<figure class:list={['diagram', { wide }]}>
+  <div class="canvas">
+    <slot />
+  </div>
+  <figcaption class="ui">{caption}</figcaption>
+</figure>
+
+<style>
+  .diagram {
+    margin-block: var(--space-6);
+  }
+
+  .canvas {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface);
+    padding: var(--space-5);
+    color: var(--diagram-stroke);
+  }
+
+  .canvas :global(svg) {
+    width: 100%;
+    height: auto;
+    font-family: var(--font-sans);
+  }
+
+  figcaption {
+    margin-top: var(--space-3);
+    font-size: var(--text-sm);
+    color: var(--text-muted);
+    text-align: center;
+  }
+
+  .wide {
+    /* Allow breakout beyond the 70ch measure on large screens */
+    width: min(56rem, 100%);
+  }
+</style>

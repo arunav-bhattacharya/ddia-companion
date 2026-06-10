@@ -1,0 +1,96 @@
+---
+interface Props {
+  chapterSlug: string;
+}
+
+const { chapterSlug } = Astro.props;
+---
+
+<mark-complete class="ui" data-chapter={chapterSlug}>
+  <button type="button">
+    <span class="box" aria-hidden="true"></span>
+    <span class="label">Mark chapter as read</span>
+  </button>
+</mark-complete>
+
+<style>
+  mark-complete {
+    display: block;
+  }
+
+  button {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    font-size: var(--text-sm);
+    color: var(--text-muted);
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface);
+    transition: border-color 120ms;
+  }
+
+  button:hover {
+    border-color: var(--border-strong);
+    color: var(--text);
+  }
+
+  .box {
+    width: 1rem;
+    height: 1rem;
+    border: 1.5px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  mark-complete.done .box {
+    background: var(--ok);
+    border-color: var(--ok);
+  }
+
+  mark-complete.done .box::after {
+    content: '✓';
+    color: var(--surface);
+    font-size: 0.7rem;
+    font-weight: 700;
+  }
+
+  mark-complete.done button {
+    border-color: var(--ok);
+    color: var(--ok);
+  }
+</style>
+
+<script>
+  import { getChapter, patchChapter, PROGRESS_EVENT } from '../scripts/progress-store';
+
+  class MarkComplete extends HTMLElement {
+    connectedCallback() {
+      const slug = this.dataset.chapter ?? '';
+      const btn = this.querySelector('button')!;
+      const label = this.querySelector('.label')!;
+
+      const sync = () => {
+        const done = Boolean(getChapter(slug).completed);
+        this.classList.toggle('done', done);
+        label.textContent = done ? 'Chapter read' : 'Mark chapter as read';
+      };
+
+      btn.addEventListener('click', () => {
+        const done = Boolean(getChapter(slug).completed);
+        patchChapter(slug, { completed: done ? undefined : new Date().toISOString() });
+      });
+
+      window.addEventListener(PROGRESS_EVENT, sync);
+      sync();
+    }
+  }
+
+  if (!customElements.get('mark-complete')) {
+    customElements.define('mark-complete', MarkComplete);
+  }
+</script>

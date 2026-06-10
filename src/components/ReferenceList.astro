@@ -1,0 +1,153 @@
+---
+interface Reference {
+  title: string;
+  url: string;
+  type: 'article' | 'video' | 'course' | 'paper' | 'docs';
+  author?: string;
+  note: string;
+}
+
+interface Props {
+  references: Reference[];
+}
+
+const { references } = Astro.props;
+
+const typeLabels: Record<string, string> = {
+  article: 'Article',
+  video: 'Video',
+  course: 'Course',
+  paper: 'Paper',
+  docs: 'Docs',
+};
+---
+
+<section class="refs" aria-labelledby="refs-h">
+  <h2 id="refs-h">Go deeper</h2>
+  <p class="lede">Hand-picked follow-up material — each adds something the chapter summary can't.</p>
+  <ul>
+    {
+      references.map((r) => (
+        <li>
+          <a href={r.url} rel="noopener" target="_blank">
+            <span class={`badge ui badge-${r.type}`}>{typeLabels[r.type]}</span>
+            <span class="ref-title">{r.title}</span>
+            {r.author && <span class="ref-author ui">{r.author}</span>}
+            <span class="ref-note">{r.note}</span>
+          </a>
+        </li>
+      ))
+    }
+  </ul>
+</section>
+
+<style>
+  .refs {
+    margin-top: var(--space-8);
+  }
+
+  h2 {
+    font-size: var(--text-lg);
+  }
+
+  .lede {
+    color: var(--text-muted);
+    margin-top: var(--space-2);
+  }
+
+  ul {
+    list-style: none;
+    padding: 0;
+    margin-top: var(--space-5);
+    display: grid;
+    gap: var(--space-3);
+  }
+
+  li a {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    grid-template-areas:
+      'badge title'
+      'badge author'
+      'badge note';
+    column-gap: var(--space-4);
+    row-gap: 2px;
+    align-items: start;
+    padding: var(--space-4);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface);
+    text-decoration: none;
+    color: var(--text);
+    transition: border-color 120ms;
+  }
+
+  li a:hover {
+    border-color: var(--accent);
+  }
+
+  .badge {
+    grid-area: badge;
+    align-self: start;
+    font-size: var(--text-xs);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 2px var(--space-2);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-strong);
+    color: var(--text-muted);
+    min-width: 4.2rem;
+    text-align: center;
+    margin-top: 3px;
+  }
+
+  .badge-video {
+    border-color: var(--err);
+    color: var(--err);
+  }
+
+  .badge-course {
+    border-color: var(--ok);
+    color: var(--ok);
+  }
+
+  .badge-paper,
+  .badge-docs {
+    border-color: var(--accent);
+    color: var(--accent-text);
+  }
+
+  .ref-title {
+    grid-area: title;
+    font-weight: 600;
+  }
+
+  li a:hover .ref-title {
+    color: var(--accent-text);
+  }
+
+  .ref-author {
+    grid-area: author;
+    font-size: var(--text-sm);
+    color: var(--text-faint);
+  }
+
+  .ref-note {
+    grid-area: note;
+    font-size: var(--text-sm);
+    color: var(--text-muted);
+    margin-top: var(--space-1);
+  }
+
+  @media (max-width: 640px) {
+    li a {
+      grid-template-columns: 1fr;
+      grid-template-areas: 'badge' 'title' 'author' 'note';
+    }
+
+    .badge {
+      justify-self: start;
+    }
+  }
+</style>

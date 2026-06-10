@@ -1,0 +1,132 @@
+---
+import Flashcards from './Flashcards.astro';
+import Quiz from './Quiz.astro';
+import Assignments from './Assignments.astro';
+
+interface Props {
+  chapterSlug: string;
+  cards: { id: string; front: string; back: string }[];
+  questions: {
+    id: string;
+    prompt: string;
+    options: string[];
+    answerIndex: number;
+    explanation: string;
+  }[];
+  assignments: {
+    id: string;
+    title: string;
+    scenario: string;
+    tasks: string[];
+    hints?: string[];
+    modelAnswer: string;
+  }[];
+}
+
+const { chapterSlug, cards, questions, assignments } = Astro.props;
+---
+
+<section class="practice" aria-labelledby="practice-h" data-pagefind-ignore>
+  <h2 id="practice-h">Test yourself</h2>
+  <p class="lede ui">
+    Reading feels like learning; retrieval <em>is</em> learning. Flip the cards before the quiz —
+    and try the scenarios with the page scrolled away.
+  </p>
+
+  <practice-tabs class="ui">
+    <div class="tablist" role="tablist" aria-label="Practice modes">
+      <button role="tab" id="tab-cards" aria-controls="panel-cards" aria-selected="true">
+        Flashcards <span class="count">{cards.length}</span>
+      </button>
+      <button role="tab" id="tab-quiz" aria-controls="panel-quiz" aria-selected="false">
+        Quiz <span class="count">{questions.length}</span>
+      </button>
+      <button role="tab" id="tab-scenarios" aria-controls="panel-scenarios" aria-selected="false">
+        Scenarios <span class="count">{assignments.length}</span>
+      </button>
+    </div>
+
+    <div id="panel-cards" role="tabpanel" aria-labelledby="tab-cards">
+      <Flashcards chapterSlug={chapterSlug} cards={cards} />
+    </div>
+    <div id="panel-quiz" role="tabpanel" aria-labelledby="tab-quiz" hidden>
+      <Quiz chapterSlug={chapterSlug} questions={questions} />
+    </div>
+    <div id="panel-scenarios" role="tabpanel" aria-labelledby="tab-scenarios" hidden>
+      <Assignments chapterSlug={chapterSlug} assignments={assignments} />
+    </div>
+  </practice-tabs>
+</section>
+
+<style>
+  .practice {
+    margin-top: var(--space-8);
+    border-top: 1px solid var(--border);
+    padding-top: var(--space-7);
+  }
+
+  h2 {
+    font-size: var(--text-lg);
+  }
+
+  .lede {
+    color: var(--text-muted);
+    margin-top: var(--space-2);
+    font-size: var(--text-sm);
+  }
+
+  .tablist {
+    display: flex;
+    gap: var(--space-2);
+    margin-block: var(--space-5);
+    border-bottom: 1px solid var(--border);
+    overflow-x: auto;
+  }
+
+  [role='tab'] {
+    padding: var(--space-2) var(--space-4);
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--text-muted);
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    white-space: nowrap;
+  }
+
+  [role='tab']:hover {
+    color: var(--text);
+  }
+
+  [role='tab'][aria-selected='true'] {
+    color: var(--accent-text);
+    border-bottom-color: var(--accent);
+  }
+
+  .count {
+    font-size: var(--text-xs);
+    color: var(--text-faint);
+    font-weight: 400;
+  }
+</style>
+
+<script>
+  class PracticeTabs extends HTMLElement {
+    connectedCallback() {
+      const tabs = [...this.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
+      tabs.forEach((tab) => {
+        tab.addEventListener('click', () => {
+          tabs.forEach((t) => {
+            const selected = t === tab;
+            t.setAttribute('aria-selected', String(selected));
+            const panel = document.getElementById(t.getAttribute('aria-controls')!);
+            if (panel) panel.hidden = !selected;
+          });
+        });
+      });
+    }
+  }
+
+  if (!customElements.get('practice-tabs')) {
+    customElements.define('practice-tabs', PracticeTabs);
+  }
+</script>

@@ -1,0 +1,205 @@
+---
+import '../styles/prose.css';
+import BaseLayout from './BaseLayout.astro';
+import TableOfContents from '../components/TableOfContents.astro';
+import KeyTakeaways from '../components/KeyTakeaways.astro';
+import ReferenceList from '../components/ReferenceList.astro';
+import PrevNextNav from '../components/PrevNextNav.astro';
+import MarkComplete from '../components/MarkComplete.astro';
+import PracticeSection from '../components/practice/PracticeSection.astro';
+
+interface Props {
+  chapter: number;
+  slug: string;
+  title: string;
+  description: string;
+  readingMinutes: number;
+  keyTakeaways: string[];
+  references: {
+    title: string;
+    url: string;
+    type: 'article' | 'video' | 'course' | 'paper' | 'docs';
+    author?: string;
+    note: string;
+  }[];
+  headings: { depth: number; slug: string; text: string }[];
+  cards: { id: string; front: string; back: string }[];
+  questions: {
+    id: string;
+    prompt: string;
+    options: string[];
+    answerIndex: number;
+    explanation: string;
+  }[];
+  assignments: {
+    id: string;
+    title: string;
+    scenario: string;
+    tasks: string[];
+    hints?: string[];
+    modelAnswer: string;
+  }[];
+}
+
+const {
+  chapter,
+  slug,
+  title,
+  description,
+  readingMinutes,
+  keyTakeaways,
+  references,
+  headings,
+  cards,
+  questions,
+  assignments,
+} = Astro.props;
+---
+
+<BaseLayout title={`${title} · DDIA Companion`} description={description}>
+  <div class="page">
+    <article data-pagefind-body data-pagefind-meta={`chapter:Chapter ${chapter}`}>
+      <header class="hero">
+        <p class="eyebrow ui">Chapter {chapter}</p>
+        <h1>{title}</h1>
+        <p class="desc">{description}</p>
+        <div class="meta ui">
+          <span>{readingMinutes} min read</span>
+          <span aria-hidden="true">·</span>
+          <span>{cards.length} flashcards</span>
+          <span aria-hidden="true">·</span>
+          <span>{questions.length} quiz questions</span>
+        </div>
+      </header>
+
+      <div class="prose">
+        <slot />
+      </div>
+
+      <KeyTakeaways takeaways={keyTakeaways} />
+      <ReferenceList references={references} />
+      <PracticeSection
+        chapterSlug={slug}
+        cards={cards}
+        questions={questions}
+        assignments={assignments}
+      />
+      <div class="complete-row">
+        <MarkComplete chapterSlug={slug} />
+      </div>
+      <PrevNextNav current={chapter} />
+    </article>
+
+    <aside class="rail">
+      <div class="rail-sticky">
+        <span class="big-num" aria-hidden="true">{chapter}</span>
+        <TableOfContents headings={headings} />
+      </div>
+    </aside>
+  </div>
+</BaseLayout>
+
+<style>
+  .page {
+    max-width: 76rem;
+    margin-inline: auto;
+    padding: var(--space-7) var(--space-4) 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-7);
+  }
+
+  article {
+    max-width: var(--measure);
+    margin-inline: auto;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .hero {
+    margin-bottom: var(--space-7);
+  }
+
+  .eyebrow {
+    font-size: var(--text-sm);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--accent-text);
+  }
+
+  h1 {
+    font-size: clamp(var(--text-2xl), 5vw, var(--text-3xl));
+    margin-top: var(--space-2);
+  }
+
+  .desc {
+    margin-top: var(--space-4);
+    font-size: var(--text-md);
+    color: var(--text-muted);
+    text-wrap: pretty;
+  }
+
+  .meta {
+    margin-top: var(--space-4);
+    display: flex;
+    gap: var(--space-2);
+    font-size: var(--text-sm);
+    color: var(--text-faint);
+    flex-wrap: wrap;
+  }
+
+  .rail {
+    display: none;
+  }
+
+  .complete-row {
+    margin-top: var(--space-6);
+  }
+
+  @media (min-width: 1100px) {
+    .page {
+      grid-template-columns: minmax(0, 1fr) 15rem;
+    }
+
+    .rail {
+      display: block;
+    }
+
+    .rail-sticky {
+      position: sticky;
+      top: calc(var(--header-height) + var(--space-5));
+    }
+
+    .big-num {
+      display: block;
+      font-family: var(--font-serif);
+      font-size: 5.5rem;
+      font-weight: 700;
+      line-height: 1;
+      color: var(--border);
+      margin-bottom: var(--space-4);
+      user-select: none;
+    }
+  }
+
+  /* On mobile the TOC renders above the article via source order — move it */
+  @media (max-width: 1099px) {
+    .page {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .rail {
+      display: block;
+      order: -1;
+      max-width: var(--measure);
+      margin-inline: auto;
+      width: 100%;
+    }
+
+    .big-num {
+      display: none;
+    }
+  }
+</style>

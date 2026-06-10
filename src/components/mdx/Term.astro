@@ -1,0 +1,23 @@
+---
+/* Links a term to its glossary entry: <Term id="lsm-tree">LSM-tree</Term> */
+
+interface Props {
+  id: string;
+}
+
+const { id } = Astro.props;
+---
+
+<a class="term" href={`/glossary/#${id}`}><slot /></a>
+
+<style>
+  .term {
+    color: inherit;
+    text-decoration-style: dotted;
+    text-decoration-color: var(--accent);
+  }
+
+  .term:hover {
+    color: var(--accent-text);
+  }
+</style>
