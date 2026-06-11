@@ -16,20 +16,24 @@ type Pagefind = {
 };
 
 let pagefind: Pagefind | null = null;
-let loaded = false;
+let loadPromise: Promise<void> | null = null;
 
-async function loadPagefind(): Promise<void> {
-  if (loaded) return;
-  loaded = true;
-  try {
-    // A variable specifier (plus @vite-ignore) stops Rollup from trying to
-    // resolve this at build time — the module only exists in the built site.
-    const moduleUrl = '/pagefind/pagefind.js';
-    pagefind = await import(/* @vite-ignore */ moduleUrl);
-    await pagefind!.init();
-  } catch {
-    pagefind = null;
-  }
+function loadPagefind(): Promise<void> {
+  // Cache the promise (not a flag) so concurrent callers — open() warming the
+  // module and the first keystroke — all await the same in-flight load.
+  loadPromise ??= (async () => {
+    try {
+      // The module only exists in the built site (or public/ via search:dev),
+      // and Vite rewrites every import() it can see — in dev that rewrite
+      // 500s. new Function hides the import from Vite, in dev and build.
+      const nativeImport = new Function('url', 'return import(url)');
+      pagefind = await nativeImport('/pagefind/pagefind.js');
+      await pagefind!.init();
+    } catch {
+      pagefind = null;
+    }
+  })();
+  return loadPromise;
 }
 
 export function initSearch(): void {

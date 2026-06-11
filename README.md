@@ -1,43 +1,48 @@
-# Astro Starter Kit: Minimal
+# DDIA Companion
 
-```sh
-npm create astro@latest -- --template minimal
-```
+A study companion for *Designing Data-Intensive Applications, 2nd edition*
+(Martin Kleppmann & Chris Riccomini). Every chapter of the book retold as a
+comprehensive, beginner-friendly summary — every section covered, nothing
+skipped — plus key takeaways, hand-picked external references, and an
+interactive practice section (flashcards, quizzes, design scenarios) with
+progress saved in your browser.
 
-> 🧑‍🚀 **Seasoned astronaut?** Delete this file. Have fun!
+Independent study notes; not affiliated with the authors or O'Reilly.
+[Buy the book](https://www.oreilly.com/library/view/designing-data-intensive-applications/9781098119058/) —
+it's worth every page.
 
-## 🚀 Project Structure
+## Stack
 
-Inside of your Astro project, you'll see the following folders and files:
+- [Astro 6](https://astro.build) static site, MDX content collections with
+  zod-validated schemas (`src/content.config.ts`)
+- [Pagefind](https://pagefind.app) full-text search (⌘K), indexed at build time
+- Zero-framework interactivity: vanilla TypeScript custom elements
+  (`src/scripts/`) with `localStorage` progress
+- Light/dark theme via CSS custom properties (`src/styles/tokens.css`),
+  no flash of wrong theme
+- Custom inline-SVG diagrams that adapt to both themes
+  (`src/components/diagrams/`)
 
-```text
-/
-├── public/
-├── src/
-│   └── pages/
-│       └── index.astro
-└── package.json
-```
+## Commands
 
-Astro looks for `.astro` or `.md` files in the `src/pages/` directory. Each page is exposed as a route based on its file name.
+| Command | Action |
+|---|---|
+| `npm run dev` | Dev server at `localhost:4321` |
+| `npm run build` | Production build to `dist/` + Pagefind index |
+| `npm run preview` | Preview the production build |
+| `npm run check` | Type + content-schema validation |
+| `npm run search:dev` | Build a search index usable in `astro dev` |
 
-There's nothing special about `src/components/`, but that's where we like to put any Astro/React/Vue/Svelte/Preact components.
+## Deploying
 
-Any static assets, like images, can be placed in the `public/` directory.
+Static output — zero-config on Vercel (framework preset: Astro) and Netlify
+(`netlify.toml` included). The Pagefind indexing step rides inside
+`npm run build`, so no platform hooks are needed.
 
-## 🧞 Commands
+## Content pipeline
 
-All commands are run from the root of the project, from a terminal:
-
-| Command                   | Action                                           |
-| :------------------------ | :----------------------------------------------- |
-| `npm install`             | Installs dependencies                            |
-| `npm run dev`             | Starts local dev server at `localhost:4321`      |
-| `npm run build`           | Build your production site to `./dist/`          |
-| `npm run preview`         | Preview your build locally, before deploying     |
-| `npm run astro ...`       | Run CLI commands like `astro add`, `astro check` |
-| `npm run astro -- --help` | Get help using the Astro CLI                     |
-
-## 👀 Want to learn more?
-
-Feel free to check [our documentation](https://docs.astro.build) or jump into our [Discord server](https://astro.build/chat).
+Chapter content lives in `src/content/` (one MDX file + flashcards/quiz/
+assignments YAML per chapter, joined by filename). `CONTENT_GUIDE.md` is the
+authoring contract; schema violations fail the build. `tools/extract_chapter.py`
+extracts source text from a local PDF of the book for authoring reference
+(extracted text is gitignored and never committed).
