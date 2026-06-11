@@ -58,7 +58,11 @@ const {
 
 <BaseLayout title={`${title} · DDIA Companion`} description={description}>
   <div class="page">
-    <article data-pagefind-body data-pagefind-meta={`chapter:Chapter ${chapter}`}>
+    <article
+      data-pagefind-body
+      data-pagefind-meta={`chapter:Chapter ${chapter}`}
+      style={`--chapter-label: "${chapter}"`}
+    >
       <header class="hero">
         <p class="eyebrow ui">Chapter {chapter}</p>
         <h1>{title}</h1>
@@ -114,6 +118,8 @@ const {
     margin-inline: auto;
     width: 100%;
     min-width: 0;
+    /* Diagrams number themselves "Figure <chapter>.<n>" via this counter */
+    counter-reset: figure;
   }
 
   .hero {
