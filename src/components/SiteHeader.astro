@@ -3,6 +3,7 @@ import ThemeToggle from './ThemeToggle.astro';
 import SearchModal from './SearchModal.astro';
 import DisplaySettings from './DisplaySettings.astro';
 import ChapterSidebar from './ChapterSidebar.astro';
+import { withBase } from '../lib/url';
 ---
 
 <header class="ui">
@@ -12,13 +13,13 @@ import ChapterSidebar from './ChapterSidebar.astro';
         <path d="M3.5 6h17M3.5 12h17M3.5 18h17"></path>
       </svg>
     </button>
-    <a class="wordmark" href="/">
-      <img src="/favicon.svg" alt="" width="26" height="26" />
+    <a class="wordmark" href={withBase('/')}>
+      <img src={withBase('/favicon.svg')} alt="" width="26" height="26" />
       <span class="name">DDIA Companion</span>
     </a>
     <nav aria-label="Primary">
-      <a href="/#chapters">Chapters</a>
-      <a href="/glossary/">Glossary</a>
+      <a href={withBase('/#chapters')}>Chapters</a>
+      <a href={withBase('/glossary/')}>Glossary</a>
     </nav>
     <div class="actions">
       <button id="search-open" type="button" aria-label="Search (Cmd+K)">

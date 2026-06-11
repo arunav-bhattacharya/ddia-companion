@@ -27,7 +27,8 @@ function loadPagefind(): Promise<void> {
       // and Vite rewrites every import() it can see — in dev that rewrite
       // 500s. new Function hides the import from Vite, in dev and build.
       const nativeImport = new Function('url', 'return import(url)');
-      pagefind = await nativeImport('/pagefind/pagefind.js');
+      const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+      pagefind = await nativeImport(`${base}/pagefind/pagefind.js`);
       await pagefind!.init();
     } catch {
       pagefind = null;

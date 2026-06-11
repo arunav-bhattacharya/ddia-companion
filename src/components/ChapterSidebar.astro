@@ -1,5 +1,6 @@
 ---
 import { CHAPTERS, GROUPS } from '../lib/chapters';
+import { withBase } from '../lib/url';
 
 const path = Astro.url.pathname;
 const groups = GROUPS.map((group) => ({
@@ -21,7 +22,7 @@ const groups = GROUPS.map((group) => ({
           <p class="group-label">{group}</p>
           <ol>
             {chapters.map((c) => {
-              const href = `/chapters/${c.slug}/`;
+              const href = withBase(`/chapters/${c.slug}/`);
               const active = path.startsWith(href);
               return (
                 <li>
@@ -36,7 +37,7 @@ const groups = GROUPS.map((group) => ({
         </div>
       ))
     }
-    <a class="extra" href="/glossary/">Glossary</a>
+    <a class="extra" href={withBase('/glossary/')}>Glossary</a>
   </nav>
 </aside>
 

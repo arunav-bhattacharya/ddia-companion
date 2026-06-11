@@ -1,5 +1,6 @@
 ---
 /* Links a term to its glossary entry: <Term id="lsm-tree">LSM-tree</Term> */
+import { withBase } from '../../lib/url';
 
 interface Props {
   id: string;
@@ -8,7 +9,7 @@ interface Props {
 const { id } = Astro.props;
 ---
 
-<a class="term" href={`/glossary/#${id}`}><slot /></a>
+<a class="term" href={withBase(`/glossary/#${id}`)}><slot /></a>
 
 <style>
   .term {

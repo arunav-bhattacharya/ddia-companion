@@ -1,4 +1,6 @@
 ---
+import { withBase } from '../lib/url';
+
 interface Props {
   chapter: number;
   slug: string;
@@ -13,7 +15,7 @@ const { chapter, slug, title, description, readingMinutes, available } = Astro.p
 
 {
   available ? (
-    <a class="card" href={`/chapters/${slug}/`} data-chapter-card={slug}>
+    <a class="card" href={withBase(`/chapters/${slug}/`)} data-chapter-card={slug}>
       <span class="num" aria-hidden="true">
         {String(chapter).padStart(2, '0')}
       </span>
