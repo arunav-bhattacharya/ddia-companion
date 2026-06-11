@@ -1,0 +1,61 @@
+cards:
+  - id: ch01-f01
+    front: "What makes an application data-intensive rather than compute-intensive?"
+    back: "Data management is the primary challenge: storing and processing large volumes, handling changes, staying consistent through failures and concurrency, and remaining highly available. Raw CPU work is not the bottleneck."
+  - id: ch01-f02
+    front: "Name the standard building blocks that data-intensive applications are assembled from."
+    back: "Databases (store data to find it later), caches (remember expensive results), search indexes (keyword search and filtering), stream processing (react to events as they happen), and batch processing (periodically crunch accumulated data)."
+  - id: ch01-f03
+    front: "Operational vs analytical systems — who uses each, and what do they do with the data?"
+    back: "Operational systems are where data is created: backend services read and modify it as users act. Analytical systems hold a read-only copy for business analysts (BI reports) and data scientists (insights, ML features), optimized for analysis."
+  - id: ch01-f04
+    front: "What is a point query, and which kind of system is built around it?"
+    back: "Looking up a small number of records by key. It is the signature read pattern of OLTP (online transaction processing) systems, alongside inserting, updating, and deleting individual records based on user input."
+  - id: ch01-f05
+    front: "How does a typical OLAP query differ from an OLTP query?"
+    back: "It scans a huge number of records and computes aggregates (count, sum, average) instead of returning individual records — e.g., total revenue per store in January. Queries are ad hoc, few in number, and individually heavyweight."
+  - id: ch01-f06
+    front: "Give the four reasons analysts should not query OLTP systems directly."
+    back: "Data is scattered across many systems (data silos); OLTP schemas suit transactions, not analysis; expensive analytical queries would degrade performance for real users; and OLTP systems may sit on networks analysts cannot access."
+  - id: ch01-f07
+    front: "ETL vs ELT — what is the difference?"
+    back: "Both move data from OLTP systems into a warehouse. ETL extracts, transforms into an analysis-friendly schema, then loads. ELT swaps the last two steps: load raw data first, transform inside the warehouse afterward."
+  - id: ch01-f08
+    front: "Data warehouse vs data lake — core distinction?"
+    back: "A warehouse is a relational database with an imposed, analysis-friendly schema queried via SQL. A lake is a repository of raw files in any format (Parquet, text, images, feature vectors) on cheap object storage, with no imposed schema."
+  - id: ch01-f09
+    front: "What is the sushi principle?"
+    back: "Raw data is better. Keeping data in its raw form (as in a data lake) lets each consumer transform it into whatever shape suits their needs, instead of being stuck with one upfront warehouse schema."
+  - id: ch01-f10
+    front: "Why does HTAP not make data warehouses obsolete?"
+    back: "Many HTAP systems are internally two engines behind one interface, and the warehouse's real job is being the one place where data from hundreds of separate operational databases can be combined in a single query."
+  - id: ch01-f11
+    front: "What is reverse ETL?"
+    back: "Feeding outputs of analytical systems back into operational systems — classically, deploying an ML model trained on warehouse data into production (via TFX, Kubeflow, MLflow) to serve recommendations to live users."
+  - id: ch01-f12
+    front: "Define system of record vs derived data."
+    back: "A system of record (source of truth) holds the authoritative version; new data is written there first, each fact once. Derived data is transformed from data elsewhere — caches, indexes, materialized views, trained models — and can be rebuilt if lost."
+  - id: ch01-f13
+    front: "Is a given database inherently a system of record or a derived data store?"
+    back: "Neither — the distinction depends on how your application uses the tool, not on the tool itself. Labeling which data is authoritative and which is derived from what brings clarity to confusing architectures."
+  - id: ch01-f14
+    front: "When is self-hosting often cheaper than a cloud service?"
+    back: "When your team already knows how to operate the system and the load is predictable, so machines do not sit idle. Cloud elasticity pays off for bursty workloads (like interactive analytics) and for systems nobody on the team has run before."
+  - id: ch01-f15
+    front: "What is the biggest downside of relying on a cloud service?"
+    back: "Loss of control: you cannot add missing features, debug internals, or keep running an old version. If the vendor shuts down, raises prices, or changes the product, you must migrate — and missing standard APIs make that costly (vendor lock-in)."
+  - id: ch01-f16
+    front: "What distinguishes a cloud native system from a managed service?"
+    back: "A managed service is ordinary self-hostable software run by a vendor. A cloud native system is designed from the ground up on lower-level cloud services (e.g., Snowflake on S3), gaining better performance, faster recovery, quicker scaling, and larger datasets."
+  - id: ch01-f17
+    front: "Separation of storage and compute — what changes about local disks?"
+    back: "Cloud native systems treat an instance's local disk as an ephemeral cache, not durable storage, since instances fail or get replaced. Durable data lives in storage services (object stores plus a small-values service); compute runs elsewhere and reaches it over the network."
+  - id: ch01-f18
+    front: "How did the role of operations change in the cloud era?"
+    back: "Machine-level toil (disk capacity, provisioning, OS patches) became service-level work: choosing, integrating, and migrating between services. Capacity planning becomes financial planning; performance optimization becomes cost optimization. The need for operations did not shrink."
+  - id: ch01-f19
+    front: "A request to another service times out. What do you know, and why is retrying risky?"
+    back: "Nothing — the network may have failed, or the service may be overloaded or crashed. You cannot tell whether the request was processed before the reply was lost, so a blind retry might perform the action twice."
+  - id: ch01-f20
+    front: "In what sense are microservices a solution to a people problem?"
+    back: "Their main benefit is letting many teams make progress independently without coordinating — each service has one purpose, one API, one owning team. In a small company with few teams, that benefit vanishes and the overhead remains."

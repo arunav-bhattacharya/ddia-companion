@@ -1,0 +1,61 @@
+cards:
+  - id: ch06-f01
+    front: "What are the main reasons to replicate data?"
+    back: "Lower latency (data near users), higher availability (survive node/zone/region failures), durability (no data loss on permanent failure), disconnected operation, and read scalability (spread reads across replicas)."
+  - id: ch06-f02
+    front: "How does single-leader replication work, in one breath?"
+    back: "All writes go to one designated replica (the leader), which streams changes to follower replicas via a replication log; followers apply them in the leader's order. Reads can hit any replica; writes only the leader."
+  - id: ch06-f03
+    front: "Synchronous vs asynchronous follower — the core trade-off?"
+    back: "Synchronous: the leader waits for the follower's ack, guaranteeing an up-to-date copy but blocking all writes if that follower is down. Asynchronous: leader never waits, but confirmed writes can be lost if the leader dies."
+  - id: ch06-f04
+    front: "What is semi-synchronous replication?"
+    back: "One follower is synchronous, the rest asynchronous; if the sync follower becomes slow or unavailable, an async one is promoted. Guarantees the data on at least two nodes without being hostage to any single follower."
+  - id: ch06-f05
+    front: "What is a version vector, and what question does it answer?"
+    back: "One version counter per replica per key; each replica increments its own and tracks the others'. Comparing two vectors tells you whether one value supersedes the other (vector dominates) or they're concurrent (each ahead somewhere) — overwrite vs keep siblings."
+  - id: ch06-f06
+    front: "How do you set up a new follower without downtime?"
+    back: "Take a consistent snapshot of the leader (no lock needed), copy it to the new node, then request all changes since the snapshot's exact log position (e.g., Postgres LSN, MySQL binlog coordinates/GTIDs). Once the backlog is applied, it has caught up."
+  - id: ch06-f07
+    front: "What are the three steps of automatic failover, and the classic failure modes?"
+    back: "Detect leader death (timeout), choose a new leader (most up-to-date follower), reconfigure clients/followers. Failure modes: discarded confirmed writes, inconsistencies with external systems, split brain, and badly tuned timeouts causing needless failovers."
+  - id: ch06-f08
+    front: "What is split brain, and why is it dangerous?"
+    back: "Two nodes both believe they are the leader and both accept writes. Without conflict resolution, data is lost or corrupted. Fencing mechanisms shut one down — but must be designed carefully (one famous safety catch shut down both)."
+  - id: ch06-f09
+    front: "Statement-based vs WAL shipping vs logical (row-based) replication — key distinction?"
+    back: "Statement-based re-executes SQL (breaks on nondeterminism like NOW()/RAND()). WAL shipping streams exact disk-block bytes (couples replication to storage engine version). Logical logs ship row-level changes — version-independent, parseable by external systems (CDC)."
+  - id: ch06-f10
+    front: "What is eventual consistency?"
+    back: "If you stop writing and wait an unspecified amount of time, all replicas converge to the same value. The lag is usually subsecond but can grow to minutes under load or network trouble — there is no upper bound."
+  - id: ch06-f11
+    front: "Read-after-write, monotonic reads, consistent prefix reads — what does each guarantee?"
+    back: "Read-after-write: you always see your own updates. Monotonic reads: you never see data move backward in time across successive reads. Consistent prefix: writes are observed in the order they happened (no answer before its question)."
+  - id: ch06-f12
+    front: "Why is multi-leader replication attractive across regions?"
+    back: "Each region's leader accepts writes locally (inter-region latency leaves the critical path), regions keep operating through regional outages and flaky inter-region links, and replication catches up asynchronously."
+  - id: ch06-f13
+    front: "What can't multi-leader replication give you that single-leader can?"
+    back: "Strong constraints and serializable transactions — e.g., unique usernames or non-negative balances. Two leaders can each accept a write that is fine alone but violates the constraint together."
+  - id: ch06-f14
+    front: "What is a sync engine, and how does it relate to multi-leader replication?"
+    back: "A library that keeps a full local replica on each device, applies writes locally, and syncs changes in the background. Every device is a leader; offline-first and real-time collaboration apps (Google Docs, Figma) are multi-leader systems."
+  - id: ch06-f15
+    front: "When are two writes concurrent?"
+    back: "When neither knew about the other — neither happened in a state that included the other. Physical time is irrelevant: offline edits days apart are concurrent; writes microseconds apart are not if the second saw the first."
+  - id: ch06-f16
+    front: "What does last-write-wins (LWW) actually do with concurrent writes?"
+    back: "Picks one effectively at random (highest timestamp) and silently discards the rest — even though all were confirmed. Replicas converge, but at the cost of lost data, and clock skew can drop genuinely later writes."
+  - id: ch06-f17
+    front: "CRDTs vs operational transformation — how does each merge concurrent edits?"
+    back: "OT describes edits by index and transforms remote indexes to account for concurrent edits already applied (Google Docs). CRDTs give each element a unique immutable ID so positions stay valid without transformation (Riak, Automerge, Yjs)."
+  - id: ch06-f18
+    front: "In a leaderless store, what do read repair, hinted handoff, and anti-entropy do?"
+    back: "Read repair: a reader spots a stale replica and writes the newer value back. Hinted handoff: a node stores writes for an unreachable replica and delivers them later. Anti-entropy: a background process diffs replicas and copies missing data."
+  - id: ch06-f19
+    front: "Why does w + r > n make quorum reads see the latest write — and why isn't it absolute?"
+    back: "The write set and read set must overlap in at least one replica, so some read response has the newest value. But node restores from stale backups, rebalancing, concurrent writes, partial write failures, and clock-based LWW all soften the guarantee."
+  - id: ch06-f20
+    front: "What is a sloppy quorum with hinted handoff?"
+    back: "During a partition, writes are accepted by any reachable replicas — even ones that don't normally hold that key — and handed off to the proper replicas later. Higher write availability, but reads may miss the value until handoff completes."

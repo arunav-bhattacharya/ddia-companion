@@ -1,0 +1,321 @@
+---
+title: "Encoding and Evolution"
+chapter: 5
+description: "How data becomes bytes and survives change — JSON's sharp edges, Protocol Buffers and Avro, schema evolution rules, and the dataflows where compatibility makes or breaks rolling upgrades."
+readingMinutes: 24
+keyTakeaways:
+  - "Rolling upgrades and slow-updating clients mean old and new code always coexist, so data needs backward compatibility (new code reads old data) and forward compatibility (old code reads new data)."
+  - "Language built-in serialization (Java Serializable, Python pickle) locks you into one language, is a notorious remote-code-execution attack surface, and ignores versioning — transient use only."
+  - "JSON, XML, and CSV suit interorganizational exchange, but they are vague about numbers (integers above 2^53 get mangled by JavaScript) and need a size-inflating Base64 detour for binary data."
+  - "Protocol Buffers encodes fields as numeric tags instead of names: rename freely, but never change or reuse a tag number, and add new fields only with fresh tags so old code can skip them."
+  - "Avro encodes bare values with no field identifiers, so decoding needs the exact writer's schema; the reader reconciles it with its own schema by matching names, ignoring unknowns, and filling defaults."
+  - "Avro's symmetric evolution rule — only add or remove fields that have defaults — plus its tag-free schemas make it the friendlier format for schemas generated dynamically from a database."
+  - "Schemas pay for themselves: compact data, documentation that cannot go stale, registry-checked compatibility before deployment, and compile-time type checking via code generation."
+  - "In databases, data outlives code — rows written five years ago keep their original encoding, so storage engines fill in defaults at read time instead of rewriting everything."
+  - "RPC dresses network calls up as function calls, but networks add lost requests, timeouts that reveal nothing, retries that demand idempotence, and wild latency — REST is honest about the difference."
+  - "Durable execution frameworks like Temporal replay a logged history to get effectively-once workflows, so workflow code must stay deterministic and changes ship as new versions, not edits."
+  - "Message brokers buffer events, redeliver after crashes, and decouple senders from recipients — yet a new-version node may publish a message an old-version node consumes, so compatibility still applies."
+references:
+  - title: "Schema evolution in Avro, Protocol Buffers and Thrift"
+    url: "https://martin.kleppmann.com/2012/12/05/schema-evolution-in-avro-protocol-buffers-thrift.html"
+    type: article
+    author: "Martin Kleppmann"
+    note: "The DDIA author's byte-level walkthrough of how the same example record is encoded in Thrift, Protobuf, and Avro, and why each format's design dictates its schema evolution rules."
+  - title: "Language Guide (proto 3)"
+    url: "https://protobuf.dev/programming-guides/proto3/"
+    type: docs
+    author: "Protocol Buffers team, Google"
+    note: "The authoritative proto3 reference; its 'Updating A Message Type' section codifies which changes are wire-safe and why deleted field numbers must be reserved, never reused."
+  - title: "Apache Avro 1.11.1 Specification"
+    url: "https://avro.apache.org/docs/1.11.1/specification/"
+    type: docs
+    author: "Apache Avro project"
+    note: "The official spec whose 'Schema Resolution' section defines the exact matching rules for reconciling a writer's schema with a reader's schema, including default values and union handling."
+  - title: "Schema Evolution and Compatibility for Schema Registry"
+    url: "https://docs.confluent.io/platform/current/schema-registry/fundamentals/schema-evolution.html"
+    type: docs
+    author: "Confluent"
+    note: "Defines backward, forward, full, and transitive compatibility modes with per-format matrices for Avro, Protobuf, and JSON Schema, plus how each mode constrains producer/consumer upgrade order."
+  - title: "Introduction to gRPC"
+    url: "https://grpc.io/docs/what-is-grpc/introduction/"
+    type: docs
+    author: "gRPC project"
+    note: "Official primer on gRPC's service-definition model: clients call methods on a generated stub while Protocol Buffers serve as both the IDL and the wire format."
+  - title: "The definitive guide to Durable Execution"
+    url: "https://temporal.io/blog/what-is-durable-execution"
+    type: article
+    author: "Tom Wheeler (Temporal)"
+    note: "Explains durable execution as 'crash-proof' execution that virtualizes a workflow across processes and machines, so a crash mid-flow resumes from recorded history rather than losing state."
+  - title: "Deserialization Cheat Sheet"
+    url: "https://cheatsheetseries.owasp.org/cheatsheets/Deserialization_Cheat_Sheet.html"
+    type: docs
+    author: "OWASP"
+    note: "Security backdrop for the chapter's warning about language-built-in serialization: deserializing untrusted native formats (Java, Python pickle, etc.) can yield remote code execution."
+---
+
+import Callout from '../../components/mdx/Callout.astro';
+import Term from '../../components/mdx/Term.astro';
+import CompatibilityDirections from '../../components/diagrams/ch05/CompatibilityDirections.astro';
+import ProtobufBytes from '../../components/diagrams/ch05/ProtobufBytes.astro';
+import AvroResolution from '../../components/diagrams/ch05/AvroResolution.astro';
+import RollingUpgrade from '../../components/diagrams/ch05/RollingUpgrade.astro';
+import MessageBrokerFlow from '../../components/diagrams/ch05/MessageBrokerFlow.astro';
+
+Your application will change, and almost every code change drags a data change behind it: a new field here, a restructured record there. Chapter 2 called the ability to absorb this gracefully *evolvability*. This chapter is where evolvability gets concrete: the bytes. Relational databases enforce exactly one <Term id="schema">schema</Term> at a time (changeable via migrations); schema-on-read databases happily store a mixture of formats written over the years. Either way, data and the code that reads it are going to drift apart.
+
+The catch that makes this a hard problem: code can't change everywhere at once. Server-side, you deploy with a **rolling upgrade** (staged rollout) — the new version goes to a few nodes, you watch it, then a few more — which gives you zero-downtime releases, but also means old and new code run side by side for a while. Client-side it's worse: users install updates whenever they feel like it, possibly never. So old and new code, and old and new data formats, *will* coexist, and the system has to keep working anyway. That requires compatibility in both directions:
+
+- **Backward compatibility**: newer code can read data written by older code.
+- **Forward compatibility**: older code can read data written by newer code.
+
+<CompatibilityDirections />
+
+Backward compatibility is usually the easy one — you wrote the new code, you know exactly what the old format looked like, and worst case you keep the old parsing code around. Forward compatibility is trickier, because old code must gracefully ignore additions it has never heard of. There's a subtle trap beyond ignoring, too: suppose new code writes a record with a new field, then *old* code reads it, updates something, and writes it back. If the old code decoded the record into an object that dropped the unknown field, the new field just silently vanished. The desirable behavior is for old code to carry unknown fields through intact, even without understanding them.
+
+For APIs, the directions compose: an old client calling a new service needs backward compatibility on requests and forward compatibility on responses; a new client calling an old service needs the reverse.
+
+## Formats for Encoding Data
+
+Programs hold data in two quite different shapes. In memory it lives in objects, structs, lists, hash tables, trees — pointer-laced structures optimized for the CPU. To write it to a file or send it over a network, you need a self-contained sequence of bytes, because your pointers mean nothing to anyone else. Translating from in-memory structures to bytes is **encoding** (also serialization or marshaling); the reverse is **decoding** (parsing, deserialization, unmarshaling).
+
+<Callout type="note" title="A word about words">
+"Serialization" also means something entirely different in the context of transactions (Chapter 8), so this book sticks with *encoding*. Also worth knowing: some formats skip the translation step — zero-copy formats like Cap'n Proto and FlatBuffers are designed to be used as-is both in memory and on the wire, and some databases operate directly on compressed data from disk.
+</Callout>
+
+Most systems do the conversion constantly, and there's a bewildering menu of formats for it. Let's work through the menu from worst idea to best.
+
+### Language-Specific Formats
+
+Many languages ship built-in object serialization: Java's `java.io.Serializable`, Python's `pickle`, Ruby's `Marshal`, plus third-party variants like Kryo. They're seductive — save and restore objects with one line — and deeply flawed:
+
+- **Language lock-in.** The encoding is tied to one language. Persist data this way and you've quietly married your current language and ruled out clean integration with other organizations' systems.
+- **Security.** To reconstruct objects, the decoder must instantiate arbitrary classes. If an attacker can feed your application bytes to decode, they can often instantiate classes of their choosing — a well-trodden path to remote code execution.
+- **Versioning as an afterthought.** These libraries are built for convenience, not for forward and backward compatibility.
+- **Efficiency as an afterthought.** Java's built-in serialization is famous for slow performance and bloated output.
+
+<Callout type="warning" title="Deserialization is an attack surface">
+This isn't theoretical: whole families of exploits against Java application servers and Rails apps boil down to "the server deserialized untrusted bytes in its native format." If data crosses a trust boundary, never decode it with a language-native serializer.
+</Callout>
+
+The verdict: acceptable for very transient purposes, a bad idea for anything that touches disk, the network, or another team.
+
+### JSON, XML, and Binary Variants
+
+The obvious cross-language candidates are JSON and XML, with CSV as the tabular-only third option. All three are textual and roughly human-readable — genuinely useful — and all three have sharper edges than their popularity suggests:
+
+- **Numbers are ambiguous.** XML and CSV can't tell a number from a string of digits without an external schema. JSON separates strings from numbers but doesn't distinguish integers from floats and says nothing about precision. That bites with large integers: anything above 2⁵³ can't be represented exactly in an IEEE 754 double, so JavaScript-based parsers silently corrupt it. X (Twitter) identifies each post with a 64-bit number, and its API returns every post ID *twice* — once as a JSON number, once as a decimal string — purely to route around this.
+- **No binary strings.** JSON and XML handle Unicode text well but can't carry raw bytes. The workaround is Base64 plus a schema annotation — which works, feels like duct tape, and inflates the data by about a third.
+- **Schemas are optional and heavyweight.** XML Schema and JSON Schema are powerful and correspondingly hard to learn, implement, and evolve. Since interpreting numbers and binary strings correctly depends on the schema, applications that skip it hardcode the equivalent logic by hand.
+- **CSV is vague.** No schema, so each column's meaning lives in application code, and a new column is a manual coordination exercise. Its escaping rules (a value containing a comma, or a newline?) are formally specified but inconsistently implemented.
+
+Despite all this, JSON, XML, and CSV are good enough for many jobs and aren't going anywhere — especially for sending data *between organizations*, where getting two companies to agree on anything is the hard part. The format's elegance is a rounding error next to that.
+
+<Callout type="note" title="JSON Schema in the wild">
+JSON Schema shows up in OpenAPI service definitions, schema registries (Confluent, Apicurio), and database validators (PostgreSQL's `pg_jsonschema`, MongoDB's `$jsonSchema`). Beyond primitive types it layers on validation — a `port` field bounded between 1 and 65,535. A schema can have an **open content model** (undeclared fields allowed — the default) or a **closed** one (declared fields only); open models make a schema a definition of what *isn't* permitted, and enable contortions like a map with integer keys — JSON object keys are always strings, so you constrain keys to digit-only patterns via `patternProperties`. Add if/else logic and remote schema references, and you get a language that's impressively expressive and genuinely hard to evolve compatibly.
+</Callout>
+
+#### Binary encodings of JSON
+
+JSON is leaner than XML, but both look chubby next to binary formats — hence a pile of binary JSON variants (MessagePack, CBOR, BSON, Smile, and friends) and binary XML (WBXML, Fast Infoset). Some add datatypes — real integers, binary strings — but they keep the core data model, and with no schema, **every field name must be spelled out inside the encoded bytes**. Take this record:
+
+```json
+{
+  "userName": "Martin",
+  "favoriteNumber": 1337,
+  "interests": ["daydreaming", "hacking"]
+}
+```
+
+MessagePack shrinks it from 81 bytes of compact JSON to 66 — `userName`, `favoriteNumber`, and `interests` are all still in there, just with length prefixes instead of quotes and colons. One-sixth saved, human readability lost. A questionable trade. The schema-based formats below encode the same record in *half* the bytes.
+
+### Protocol Buffers
+
+**Protocol Buffers** (protobuf) is Google's binary encoding library; Apache Thrift, originally from Facebook, works on the same principles. Protobuf requires a schema for everything it encodes, written in its **interface definition language (IDL)**:
+
+```protobuf
+syntax = "proto3";
+
+message Person {
+  string user_name = 1;
+  int64 favorite_number = 2;
+  repeated string interests = 3;
+}
+```
+
+A code generation tool turns the schema into classes in your language of choice, and application code calls the generated code to encode and decode. The schema language is deliberately minimal — fields and types, none of JSON Schema's value-validation rules.
+
+The same record encodes to 33 bytes. Where did the other half go? The field *names* are gone. In their place, each encoded field starts with a **field tag** — the numbers 1, 2, 3 from the schema — packed into one byte together with a wire-type annotation (string, integer, …). Tags are compact aliases: the bytes say "field 1," and the schema on both sides knows field 1 means `user_name`.
+
+<ProtobufBytes />
+
+Two more space tricks show up in the bytes. Integers use a **variable-length encoding**: 1337 takes two bytes, the top bit of each byte signaling whether more follow, so small numbers fit in one byte and only big ones pay for more. And there's no list type — the `repeated` modifier means the same field tag simply appears once per element. A field with no value is omitted entirely.
+
+#### Field tags and schema evolution
+
+Schemas inevitably change over time — **schema evolution** — and protobuf's compatibility story hangs on those tags. Since encoded data refers to fields only by tag, you can *rename* a field freely; the wire format never knew its name. You can *never change a field's tag*: that would silently reinterpret every record ever written.
+
+Adding fields is safe as long as each gets a fresh tag number. Old code reading new data hits an unknown tag and skips it — the wire-type annotation says how many bytes to skip — preserving the unknown field instead of corrupting the record. That's forward compatibility. Backward compatibility comes almost free: tags keep their meaning forever, so new code reads old data fine, and fields missing from old records get defaults (empty string, zero).
+
+Removing a field is the mirror image, with one rule that trips people up: **never reuse a retired tag number** — data written years ago may still carry it, and new code must keep ignoring it. Protobuf lets you mark retired tags as `reserved` so nobody re-assigns them by accident.
+
+Changing a field's datatype is sometimes possible (check the docs per type pair) but risks truncation. Widen a 32-bit integer to 64 bits and new code reads old data happily — missing bits become zeros — but old code reading new data still holds the value in a 32-bit variable, and anything that doesn't fit gets chopped.
+
+### Avro
+
+**Apache Avro** took a different road. It began in 2009 as a Hadoop subproject, after protobuf proved a poor fit for Hadoop's needs. Avro also requires a schema, with two notations: Avro IDL for humans, and a JSON form for machines.
+
+```text
+record Person {
+  string               userName;
+  union { null, long } favoriteNumber = null;
+  array<string>        interests;
+}
+```
+
+Our example record encodes to 32 bytes — the most compact yet — and how it gets there is the interesting part. Look inside an Avro byte sequence and you'll find *nothing* identifying fields or datatypes. No names, no tags, no type bytes. Just values, concatenated: a string is a length prefix followed by UTF-8, an integer is a variable-length number, and nothing in the data says which is which. To parse, you walk the schema's fields in order and let the schema tell you each type.
+
+The flip side is severe: decode with even a slightly different schema than the encoder used and you get garbage. How can this format possibly support evolution?
+
+#### The writer's schema and the reader's schema
+
+Avro's answer is to stop pretending there's one schema. The encoding application uses whatever schema it was built with — the **writer's schema**. The decoding application has its own expectations — the **reader's schema** — and the two *don't have to be identical*, only compatible. At decode time, Avro compares both schemas and translates the data from the writer's view into the reader's; the spec defines this **schema resolution** exactly.
+
+Resolution matches fields *by name*, so field order doesn't matter. A field in the writer's schema that the reader doesn't know is ignored. A field the reader expects but the writer never wrote is filled from a **default value** declared in the reader's schema.
+
+<AvroResolution />
+
+Contrast with protobuf, where one schema definition governs both ends and compatibility comes from tag discipline. An Avro reader actively reconciles two schemas on every decode — old reading new, new reading old, either way.
+
+#### Avro's evolution rules
+
+With two schemas in play, the compatibility directions get crisp definitions: forward compatibility means the writer can be newer than the reader; backward means the writer can be older. The rule for keeping both: **you may only add or remove a field that has a default value**. Add a field with a default, and new readers handle old data (default fills the gap) while old readers handle new data (unknown field ignored). Add one *without* a default and you break backward compatibility; remove one without a default and you break forward compatibility.
+
+One quirk: Avro has no blanket nullability. A nullable field needs a **union** type including null — `union { null, long }` — and null can be the default only as the union's first branch. Slightly verbose, deliberately so: being explicit about what can be null prevents bugs. Changing a field's datatype works when Avro can convert between the types. Renaming is possible via **aliases** in the reader's schema, which makes a rename backward compatible but not forward compatible — old readers don't have the alias. Adding a branch to a union has the same asymmetry.
+
+#### But where does the writer's schema come from?
+
+There's an elephant in this design: the reader needs the exact writer's schema, but shipping the schema inside every record would dwarf the data and erase the space savings. The answer depends on context:
+
+- **A big file of records.** Hadoop-style workloads write millions of records with one schema into one file, so the writer includes the schema *once*, up front. Avro's object container file format does this; the file becomes self-describing.
+- **A database of individually written records.** Rows were written at different times under different schemas, so each record starts with a small **version number**, and a registry maps versions to schemas. Confluent's schema registry for Kafka and LinkedIn's Espresso work this way.
+- **A network connection.** Two processes negotiate the schema version at connection setup and use it for the connection's lifetime — the Avro RPC protocol's approach.
+
+A schema registry is worth having regardless: it doubles as documentation and lets you mechanically check that a schema change is compatible *before* anything deploys. Versions can be an incrementing integer or a hash of the schema.
+
+#### Dynamically generated schemas
+
+Why does it matter that Avro schemas contain no tag numbers? Because it makes schemas cheap to *generate*. Say you want to dump a relational database to a binary file: with Avro you can mechanically derive a record schema from each table — column names become field names — and export to an object container file. When the database schema changes next month, you regenerate and export again; the export job doesn't even need to notice. Readers of the new files still work, because resolution matches fields by name against their older reader's schema.
+
+Try the same with protobuf and you hit the tags: someone must maintain a stable mapping from column names to tag numbers and never, ever reuse a retired tag. Dynamically generated schemas weren't a protobuf design goal; for Avro they were.
+
+### The Merits of Schemas
+
+Protobuf and Avro schemas are far simpler than XML Schema or JSON Schema — no regex constraints, no value ranges — and that simplicity bought them implementations across many languages. The ideas are old: ASN.1, standardized in 1984, already did schema-driven binary encoding with tag numbers, and its DER encoding still signs your TLS certificates today (ASN.1 is also famously complex and badly documented; admire it from a distance). Even your database speaks a proprietary binary protocol over the network, with a vendor driver decoding it behind the ODBC or JDBC API.
+
+Against "just use JSON," schema-based binary formats offer a strong bundle: far more compact data, since field names stay out of it; a schema that doubles as documentation which *cannot* go stale, because decoding requires it; a registry that verifies forward and backward compatibility mechanically before deployment rather than in production at 2 a.m.; and code generation that gives statically typed languages compile-time type checking on data.
+
+<Callout type="insight" title="Schema-on-read flexibility, with guarantees">
+The punchline: schema evolution gives the same flexibility schemaless JSON databases advertise — write new shapes of data whenever you need — while keeping guarantees about your data and tooling to enforce them. One operational caveat: keep the number of schema formats in active use small.
+</Callout>
+
+## Modes of Dataflow
+
+Compatibility is a relationship between one process that encodes and another that decodes. That's abstract until you pin down *who* those processes are. The rest of the chapter walks the four most common channels: databases, service calls, workflow engines, and asynchronous messages.
+
+### Dataflow Through Databases
+
+In a database, the writing process encodes and the reading process decodes. The simplest case is one process doing both — then storing data is *sending a message to your future self*, and backward compatibility is the obvious requirement, or future-you can't read past-you's mail.
+
+Usually many processes hit the database at once — different services, or several instances of one service mid-rolling-upgrade. So a value written by *newer* code will routinely be read by *older* code that hasn't upgraded yet: databases demand forward compatibility too. And remember the round-trip hazard from the start of the chapter — old code that reads, updates, and rewrites a record must preserve new fields it doesn't understand, or a rolling upgrade quietly eats data.
+
+<RollingUpgrade />
+
+#### Different values written at different times
+
+Code gets replaced wholesale: deploy, and within minutes every running copy is new. Data does not. A database holds values written five milliseconds ago next to values written five years ago, each in whatever encoding was current at the time — a fact compressed into the phrase **data outlives code**.
+
+Migrating everything to the newest schema is possible but expensive at scale, so databases mostly defer it. LSM-tree storage engines rewrite data into the latest format opportunistically during compaction. Relational databases apply simple changes like adding a column with a null default without touching existing rows: when an old row is read, nulls are filled in for columns its on-disk encoding lacks. The result is a pleasant illusion — the database *appears* to have one schema while the storage underneath is an archaeological dig of historical versions. More structural changes (turning a single-valued attribute multivalued, moving data between tables) still force real rewrites, often orchestrated at the application level, and keeping both compatibility directions intact across such migrations remains a research problem.
+
+#### Archival storage
+
+Snapshots are the exception that rewrites. When you dump a database for backup or for loading into a data warehouse, the dump is typically encoded uniformly with the latest schema — you're copying everything anyway, so you might as well normalize the eras. Since a dump is written once and never modified, immutable-friendly formats fit well: Avro object container files, or an analytics-oriented columnar format like Parquet. Chapter 11 picks this up.
+
+### Dataflow Through Services: REST and RPC
+
+The second channel is the network request. The standard arrangement is **clients** and **servers**: a server exposes an API over the network — a **service** — and clients call it. The web is the canonical example, but browsers aren't the only clients: native mobile apps and JavaScript applications make HTTP requests too, usually getting JSON back instead of HTML.
+
+Services resemble databases — clients submit and query data — with one defining difference: a database accepts arbitrary queries in a query language, while a service exposes only the operations its business logic allows. That restriction is a feature (encapsulation), and it underwrites the central promise of service-oriented or microservices architecture: each service is owned by one team that deploys frequently *without coordinating with anyone else*. Which means old and new servers and clients run concurrently as a permanent condition, and API encodings must stay compatible across versions.
+
+#### Web services
+
+When HTTP is the underlying protocol, it's a **web service** — a slight misnomer, since the pattern reaches beyond the public web: user devices calling backends over the internet, service-to-service calls inside one organization, and cross-organization integrations like payment processors or OAuth.
+
+The dominant design philosophy is **REST**, which leans into HTTP rather than hiding it: simple data formats, URLs for naming resources, HTTP's own machinery for caching, authentication, and content negotiation. To call any service, though, a client must learn the endpoints and formats, so developers describe services in an IDL. The two big ones are **OpenAPI** (a.k.a. Swagger), written in JSON or YAML, for JSON-over-HTTP services, and Protocol Buffers' IDL for **gRPC** services. From a service definition, tooling generates client libraries in many languages, documentation, compatibility checks, and test GUIs. Frameworks like Spring Boot, FastAPI, and gRPC handle routing, metrics, and auth so you write only endpoint logic — FastAPI generates the IDL from your code; gRPC generates server scaffolding from the IDL.
+
+#### The problems with RPC
+
+Web services are merely the latest in a long parade of network-API technologies, most of which arrived with hype and left with regrets: Java's RMI and EJB (Java-only), DCOM (Microsoft-only), CORBA (excessively complex, no compatibility story), SOAP and WS-* (interoperable in theory, infamous in practice). All descend from one 1970s idea: the **remote procedure call**, which tries to make a network request look like calling a local function — a goal called **location transparency**. The book's position is blunt: that goal is a mistake, because a network call differs from a function call in ways no library can paper over.
+
+A local call is predictable — it succeeds or fails based on inputs you control. A network call can fail for reasons entirely outside your control: lost packets, a slow or dead remote machine. A local call returns, throws, or never returns; a network call has a fourth outcome, the **timeout**, where you learn *nothing* — not even whether the request was acted on. Retry it, and if the original actually succeeded but the response got lost, the action happens twice — unless the protocol builds in deduplication, i.e. <Term id="idempotent">idempotence</Term>. Latency is wildly variable: a millisecond on a good day, many seconds under congestion. You can't pass pointers — every parameter must be encoded into bytes, awkward for large or mutable objects. And client and server may use different languages, importing every cross-language type mismatch (JavaScript and big numbers, again). Part of REST's appeal is honesty: it treats state transfer over a network as exactly that, not a disguised function call.
+
+#### Load balancing, service discovery, and service meshes
+
+Before a client can call a service it must find it — **service discovery** — and serious deployments run many instances with requests spread across them — **load balancing**. The options form a ladder: hardware load balancers in datacenters; software ones like NGINX and HAProxy; DNS, which maps one name to many IPs but caches aggressively, so fast-changing instance sets go stale; discovery registries built on etcd or ZooKeeper, where instances register themselves, heartbeat to prove liveness, and publish metadata for smarter routing; and **service meshes** (Istio, Linkerd), which put a proxy sidecar beside client and server so encryption and observability happen between local proxies. Kubernetes-scale dynamism points toward meshes; simpler shops do fine with a software load balancer.
+
+#### Data encoding and evolution for RPC
+
+Dataflow through services allows one simplifying assumption databases don't: servers get updated before clients. So you need **backward compatibility on requests** (new server, old request format) and **forward compatibility on responses** (old client, new response format). Each RPC scheme inherits these properties from its encoding — gRPC gets protobuf's rules, Avro RPC gets Avro's — while RESTful JSON APIs rely on convention: adding optional request parameters and new response fields is considered safe.
+
+Across organizational boundaries the bar rises: you can't force other companies to upgrade their clients, so compatibility must hold more or less forever, and a breaking change means running multiple API versions side by side. There's no consensus on versioning mechanics — a version in the URL, in the `Accept` header, or (for keyed APIs, as Stripe does) a per-client version stored server-side and changed through an admin interface.
+
+### Durable Execution and Workflows
+
+Service architectures split applications across services, so a single business operation often spans many calls. Processing one payment might involve a fraud-detection service, a credit card gateway, and a banking service for the deposit. Such a multi-step sequence is a **workflow**, each step a **task**, and the whole thing is typically defined as a graph of tasks — in a general-purpose language, a DSL, or a notation like BPMN that non-engineers can read. (Vocabulary varies: Temporal calls tasks *activities*; others say *durable functions*. Same concept.)
+
+A **workflow engine** runs workflows: it decides when and where each task executes, handles failures, caps parallelism. Inside, an **orchestrator** schedules tasks and an **executor** runs them; execution starts when something triggers the workflow — a time-based schedule, an external service, even a human. Engines specialize: Airflow, Dagster, and Prefect orchestrate <Term id="etl">ETL</Term> pipelines; Camunda and Orkes offer graphical notations for business processes; Temporal and Restate provide something stronger called **durable execution**.
+
+Durable execution targets a nasty gap: you want the payment processed *exactly once*, but you can't wrap two services and a third-party gateway in one database transaction. The trick is logging. The framework records every RPC call and state change to durable storage, write-ahead-log style. When a task crashes midway, the framework re-runs it — but where the code makes a call that already succeeded in the previous attempt, it doesn't re-issue the call; it returns the recorded result from the log. The workflow resumes as if the crash never happened, and completed side effects don't repeat.
+
+```python
+@workflow.defn
+class RefundWorkflow:
+    @workflow.run
+    async def run(self, req: RefundRequest) -> RefundResult:
+        approved = await workflow.execute_activity(
+            check_refund_policy, req,
+            start_to_close_timeout=timedelta(seconds=10),
+        )
+        if not approved:
+            return RefundResult.DENIED
+        await workflow.execute_activity(
+            reverse_card_charge, req,
+            start_to_close_timeout=timedelta(seconds=30),
+        )
+        # ... restock inventory, notify customer ...
+```
+
+The fine print matters. External services still need <Term id="idempotent">idempotent</Term> APIs, and developers must remember to pass unique request IDs so a replayed call can be deduplicated downstream. Because the framework replays the logged history *in order*, workflow code must be **<Term id="deterministic">deterministic</Term>**: same inputs, same sequence of calls. Merely reordering two function calls in existing workflow code can cause undefined behavior on replay — so the safe way to change a workflow is to deploy the change as a *new version*, letting in-flight invocations finish on the old one. Random number generators and system clocks are out, too; frameworks supply deterministic stand-ins, and tools like Temporal's Workflow Check statically hunt for nondeterminism you forgot. Determinism as a superpower — and a discipline — returns in Chapter 9.
+
+### Event-Driven Architectures
+
+The last channel drops the request/response shape entirely. In an **event-driven architecture**, a process sends an **event** (or message) and — unlike RPC — doesn't wait for the recipient to process it. The message usually doesn't travel by direct connection either: it goes through an intermediary, a **message broker** (message queue, event broker), which stores it temporarily. Communication is <Term id="asynchronous">asynchronous</Term>: send and forget. (Need a reply? Wait for a response message on a separate channel — RPC rebuilt on top, but opt-in.)
+
+<MessageBrokerFlow />
+
+The broker buys a lot compared to direct RPC: it buffers messages when a recipient is down or overloaded, redelivers to processes that crashed, removes the need for service discovery (senders never learn recipients' addresses), can deliver one message to several recipients, and decouples senders from recipients entirely — the publisher neither knows nor cares who consumes.
+
+#### Message brokers
+
+The market ran from commercial middleware (TIBCO, IBM WebSphere, webMethods) through open source (RabbitMQ, ActiveMQ, NATS, Redpanda, Apache Kafka) to cloud services (Amazon Kinesis, Azure Service Bus, Google Cloud Pub/Sub); Chapter 12 compares them properly. Two delivery patterns dominate. With a **queue**, a producer adds a message under a name and *one* of the consumers receives it — work distribution. With a **topic**, the broker delivers each message to *every* subscriber — broadcast.
+
+Brokers don't impose a data model: a message is bytes plus metadata, so the encoding question lands back in your lap. The common answer is protobuf, Avro, or JSON with a **schema registry** beside the broker, storing valid schema versions and checking compatibility on changes; AsyncAPI, OpenAPI's messaging sibling, can specify message schemas. Durability varies — many brokers persist messages to disk against crashes, and most delete them after consumption, though some can retain messages indefinitely, which event sourcing requires. One familiar trap: a consumer that *republishes* messages to another topic must preserve unknown fields, or it recreates the database round-trip data-loss problem.
+
+#### Distributed actor frameworks
+
+The **actor model** is a concurrency model for a single process: instead of threads with their races, locks, and deadlocks, logic lives in **actors** — each typically representing one client or entity, owning private state, communicating only through asynchronous messages, processing one message at a time. Delivery isn't guaranteed; messages can be lost even locally.
+
+**Distributed actor frameworks** — Akka, Orleans, Erlang/OTP — stretch the model across machines: the same message-passing works whether sender and recipient share a node or not, with remote messages transparently encoded, shipped, and decoded. Note the irony: location transparency, the idea that sinks RPC, works *better* here, because the actor model already assumed messages can vanish — the gap between local and remote is narrow, just slower. Rolling upgrades still apply, though: a new-version node will message an old-version node and vice versa, so actor messages need the same forward and backward compatibility as everything else in this chapter, achievable with the same encodings.
+
+<Callout type="insight" title="Where this chapter points">
+Encoding looks like plumbing, yet it quietly sets the ceiling on how fast you can ship changes. Every dataflow here resurfaces later: Avro container files and Parquet in batch processing (Chapter 11), message brokers and event logs in stream processing (Chapter 12), the timeout-tells-you-nothing problem at the heart of distributed systems (Chapter 9), and idempotence as the foundation of exactly-once semantics (Chapter 12). Next comes what happens when the same data must live on several machines at once: replication, Chapter 6.
+</Callout>

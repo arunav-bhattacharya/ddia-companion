@@ -1,0 +1,52 @@
+assignments:
+  - id: ch01-a01
+    title: "Untangle a hospital network's data architecture"
+    scenario: |
+      MercyCare runs four hospitals and twenty clinics. Its operational systems grew independently: an electronic health record (EHR) system per hospital, a central appointment scheduler, a pharmacy inventory system, and a billing platform. Last quarter, the analytics team got read access to the EHR databases and started running bed-occupancy and readmission-rate reports directly against them. Twice since then, clinicians reported the EHR freezing during morning rounds — exactly when the daily reports run. Meanwhile, the data science team wants raw clinical notes and X-ray images to build a readmission-prediction model, and complains that the relational schemas are useless for feature engineering.
+    tasks:
+      - "Diagnose why the analysts' reports are freezing the EHR, using the OLTP/OLAP distinction, and explain why adding indexes or faster disks won't fix the underlying mismatch."
+      - "Design the data flow for MercyCare: which systems feed what, where ETL fits, and where a data warehouse vs a data lake serves the analysts vs the data scientists."
+      - "Label each store in your design as a system of record or derived data, and explain what that labeling buys the organization when something gets corrupted or out of sync."
+    hints:
+      - "Aggregate scans and point queries fight over the same resources when they share a database."
+      - "Analysts want SQL on clean schemas; data scientists want raw files. Two consumers, two shapes."
+    modelAnswer: |
+      The EHR databases are OLTP systems: clinicians issue point queries (one patient's chart) and small writes, and the system is sized for vast numbers of tiny interactive operations. Occupancy and readmission reports are OLAP queries that scan months of records to compute aggregates. Running them on the same database makes the heavyweight scans compete with clinicians' queries for CPU, memory, and I/O — indexes and faster disks just raise the ceiling slightly; the access patterns remain incompatible, and the schemas tuned for transactions stay awkward for analysis.
+
+      The fix is separation. ETL extracts from each EHR, the scheduler, pharmacy, and billing systems — periodic dumps or continuous streams — transforms the data into an analysis-friendly schema, and loads a single data warehouse. One warehouse, despite many operational databases, is the point: analysts can finally join admissions to billing to scheduling in one query without touching production. For the data scientists, raw clinical notes and images don't fit relational tables, so land raw files in a data lake on object storage (the sushi principle: each consumer transforms raw data to its own needs); the lake can also serve as an intermediate stop feeding the warehouse.
+
+      Labeling: the EHRs, scheduler, pharmacy, and billing systems are systems of record — authoritative, written first, each fact once. The warehouse, the lake, the model's feature sets, and the trained model itself are derived data: redundant copies that can always be rebuilt from the sources. That label is operationally precious — if the warehouse is corrupted, you re-run ETL rather than panic, and if two systems disagree, the system of record is right by definition.
+  - id: ch01-a02
+    title: "Cloud, self-hosted, or both for an agritech platform"
+    scenario: |
+      TerraSense sells soil-sensor kits to farms and runs the backing platform. Two workloads dominate. First, sensor ingestion: a steady, predictable stream of readings, 24/7, varying little month to month, currently handled by a PostgreSQL and Kafka setup the four-person infrastructure team has operated for years. Second, agronomy analytics: in the two weeks before each planting season, agronomists run massive interactive queries over years of sensor history; the rest of the year this cluster sits nearly idle. Finance flags that the analytics machines average 8% utilization. The CEO returns from a conference convinced everything must move to cloud native services immediately; the CTO, quoting a famous blog post, wants to buy more servers instead.
+    tasks:
+      - "Apply the chapter's framework (team expertise, load predictability, elasticity) to each workload separately and recommend cloud or self-hosting for each, with reasoning."
+      - "The CEO assumes moving to the cloud eliminates the operations team. Correct this using the chapter's account of operations in the cloud era."
+      - "List the loss-of-control risks TerraSense accepts for any workload it moves to a cloud service, and one mitigation."
+    hints:
+      - "Idle provisioned hardware is the textbook case for elasticity; a steady stream the team already runs well is the textbook case against."
+      - "Capacity planning doesn't disappear in the cloud — it changes into something else."
+    modelAnswer: |
+      The two workloads land on opposite sides of the trade-off. Sensor ingestion is steady and predictable, and the team has years of operating experience with exactly this stack — the chapter's two conditions under which self-hosting is often cheaper. Buying machines sized for a known, flat load wastes little. The analytics cluster is the mirror image: extreme load variability (two intense weeks, then near-idle at 8% utilization) is precisely where cloud elasticity pays, because interactive queries need a burst of parallel compute that cannot be smoothed by scheduling, and unused resources can be handed back. A cloud native warehouse — built on object storage, with storage separated from compute so compute scales to zero between seasons — fits naturally. A hybrid is not indecision; it is the trade-off resolved per workload.
+
+      Moving to the cloud changes operations rather than eliminating it. The team stops patching machines and watching disk space, and starts choosing services, integrating them (the new hard part, with few standards), watching quotas, and tracking costs: capacity planning becomes financial planning, performance optimization becomes cost optimization. Security of the application, monitoring, and troubleshooting never leave the building.
+
+      Risks accepted: no ability to add missing features or debug service internals, forced migrations if the vendor deprecates or reprices, vendor lock-in from nonstandard APIs, geopolitical lock-out, and trusting the provider with farm data. Mitigation: prefer services with open or standard interfaces (e.g., standard SQL, Kafka-compatible APIs) so a future migration is expensive rather than impossible.
+  - id: ch01-a03
+    title: "A freight startup resists premature distribution"
+    scenario: |
+      RoadRunner Freight, a nine-engineer startup, matches shippers with trucking capacity in one country. Its monolith and single PostgreSQL instance run comfortably at 30% capacity on one large server. A newly hired architect proposes a target architecture: fourteen microservices, each with its own database, deployed across three geographic regions for resilience, with the matching algorithm moved to serverless functions. The engineering manager asks you to review the proposal. One real constraint exists: a neighboring country RoadRunner wants to expand into next year has a data-residency law requiring shipment data about its residents to be stored and processed in-country.
+    tasks:
+      - "Critique the fourteen-microservices proposal using the chapter's argument about what problem microservices actually solve and what each service costs."
+      - "Evaluate the move to distribution generally: which of the chapter's reasons for distributing genuinely apply to RoadRunner today or next year, and which do not?"
+      - "Assess whether serverless suits the matching algorithm, naming the model's benefits and its fine print."
+    hints:
+      - "Count the teams, then count the proposed services."
+      - "One of the chapter's nine reasons to distribute is a legal one — and it is the only one with a deadline here."
+    modelAnswer: |
+      Microservices are primarily a technical solution to a people problem: letting many teams progress without coordinating. RoadRunner has nine engineers — at most two teams — so fourteen services buy no coordination relief while charging full price: each service needs deployment, scaling, log collection, monitoring, and on-call apparatus; testing requires running the constellation of dependencies; and API evolution between services breaks late and painfully. The chapter's advice for a small company is to implement the application in the simplest way possible.
+
+      On distribution generally, run down the reasons. Scalability: no — one server at 30% has years of headroom, and single machines keep getting bigger. Latency: no — one country. Elasticity and specialized hardware: nothing here demands them. Fault tolerance: a modest, legitimate want — a replica for failover (Chapter 6) is sensible without going multi-region. The one reason with a deadline is legal compliance: next year's expansion triggers a data-residency law, so shipment data about the neighboring country's residents must be stored and processed in-country. That argues for a second, in-country deployment scoped to that data — distribution where a concrete reason forces it, not three regions by default.
+
+      Serverless fits a spiky, stateless computation: the provider allocates resources per request and bills only for execution time — metered billing applied to compute. The fine print: execution time limits, constrained runtimes, and cold starts that add latency to a matching request after idle periods. If matching is latency-sensitive at peak, a conventionally deployed service may serve better; if it is bursty and tolerant of occasional slow starts, serverless is reasonable.

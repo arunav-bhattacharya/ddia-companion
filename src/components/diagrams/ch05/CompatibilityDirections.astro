@@ -1,0 +1,49 @@
+---
+import Diagram from '../Diagram.astro';
+---
+
+<Diagram caption="Backward compatibility lets new code read old data; forward compatibility lets old code read new data — the harder of the two.">
+  <svg viewBox="0 0 720 280" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="compat-title">
+    <title id="compat-title">Backward versus forward compatibility between old and new code versions</title>
+
+    <!-- Row 1: backward compatibility -->
+    <rect x="20" y="40" width="150" height="60" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="95" y="66" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-stroke)">Old code (v1)</text>
+    <text x="95" y="84" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">writes</text>
+
+    <rect x="270" y="40" width="160" height="60" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="350" y="66" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-stroke)">Data in v1 format</text>
+    <text x="350" y="84" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">no new fields</text>
+
+    <rect x="530" y="40" width="160" height="60" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="610" y="66" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-stroke)">New code (v2)</text>
+    <text x="610" y="84" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">reads</text>
+
+    <line x1="170" y1="70" x2="262" y2="70" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <polygon points="262,65 272,70 262,75" fill="var(--diagram-stroke)"/>
+    <line x1="430" y1="70" x2="522" y2="70" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <polygon points="522,65 532,70 522,75" fill="var(--diagram-stroke)"/>
+    <text x="476" y="58" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">backward compatibility</text>
+    <text x="476" y="118" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">easy: v2 knows what v1 used to write</text>
+
+    <!-- Row 2: forward compatibility -->
+    <rect x="20" y="170" width="150" height="60" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <text x="95" y="196" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-stroke)">New code (v2)</text>
+    <text x="95" y="214" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">writes</text>
+
+    <rect x="270" y="170" width="160" height="60" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <text x="350" y="196" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-stroke)">Data in v2 format</text>
+    <text x="350" y="214" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">contains new fields</text>
+
+    <rect x="530" y="170" width="160" height="60" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <text x="610" y="196" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-stroke)">Old code (v1)</text>
+    <text x="610" y="214" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">reads</text>
+
+    <line x1="170" y1="200" x2="262" y2="200" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <polygon points="262,195 272,200 262,205" fill="var(--diagram-accent)"/>
+    <line x1="430" y1="200" x2="522" y2="200" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <polygon points="522,195 532,200 522,205" fill="var(--diagram-accent)"/>
+    <text x="476" y="188" text-anchor="middle" font-size="12" font-weight="600" fill="var(--diagram-accent)">forward compatibility</text>
+    <text x="476" y="248" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">harder: v1 must ignore fields it has never seen</text>
+  </svg>
+</Diagram>

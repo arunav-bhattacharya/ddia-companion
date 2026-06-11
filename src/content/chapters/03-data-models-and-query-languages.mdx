@@ -1,0 +1,425 @@
+---
+title: "Data Models and Query Languages"
+chapter: 3
+description: "Relational tables, JSON documents, graphs, event logs, and DataFrames — what each model is good at, the query languages that fit them, and how to pick based on the shape of your data's relationships."
+readingMinutes: 27
+keyTakeaways:
+  - "A data model shapes not just how data is stored but how you think about the problem. Applications stack models in layers — objects on documents or tables, tables on bytes, bytes on electrons — each hiding the one below."
+  - "The relational model wins at joins and many-to-one/many-to-many relationships; the document model wins when your data is a self-contained tree that gets read and written as a unit."
+  - "Normalized data stores each fact once: cheap consistent writes, but reads need joins. Denormalized data duplicates facts for read speed and pays in write cost, storage, and consistency risk. Neither is good or bad — it's a read/write trade."
+  - "X's materialized timelines store only post and sender IDs, hydrating them at read time — proof that joins done right are not an obstacle to scale, especially for fast-changing data like usernames and like counts."
+  - "Document databases are not really schemaless: the schema is implicit and enforced on read by application code (schema-on-read) instead of on write by the database (schema-on-write)."
+  - "Analytics warehouses favor star schemas: an enormous fact table of events with foreign keys into wide dimension tables. Snowflake schemas normalize the dimensions further; one big table denormalizes them away entirely."
+  - "When many-to-many relationships dominate and queries traverse an unknown number of hops, model the data as a graph. Property graphs and triple stores express the same ideas with different vocabulary."
+  - "A variable-length traversal is one line in Cypher, SPARQL, or Datalog, but roughly thirty lines of recursive common table expressions in SQL — query-language fit is a real engineering concern, not aesthetics."
+  - "GraphQL is deliberately weak: no recursion, no arbitrary predicates. It's a safe contract between untrusted clients and a server's API, not a database query language — and it runs on top of any data model."
+  - "Event sourcing makes an append-only log of immutable, past-tense events the source of truth; CQRS derives read-optimized materialized views from it, each rebuildable by replaying the log."
+  - "DataFrames bridge relational tables and the matrices machine learning expects, manipulated through stepwise wrangling on a private copy rather than declarative queries against shared state."
+references:
+  - title: "A Relational Model of Data for Large Shared Data Banks"
+    url: "https://www.seas.upenn.edu/~zives/03f/cis550/codd.pdf"
+    type: paper
+    author: "E. F. Codd"
+    note: "The original 1970 argument for data independence and normalized relations — short, readable, and striking for how many 'modern' data-model debates Codd anticipated."
+  - title: "What Goes Around Comes Around... And Around..."
+    url: "https://db.cs.cmu.edu/papers/2024/whatgoesaround-sigmodrec2024.pdf"
+    type: paper
+    author: "Michael Stonebraker & Andrew Pavlo"
+    note: "Surveys two decades of post-relational contenders — MapReduce, document, graph, array, vector — and explains why each was largely absorbed back into SQL and relational systems."
+  - title: "CMU 15-445/645 Intro to Database Systems (Fall 2024)"
+    url: "https://15445.courses.cs.cmu.edu/fall2024/schedule.html"
+    type: course
+    author: "Andy Pavlo / Carnegie Mellon University"
+    note: "Free full lecture videos and slides; Lectures 1-2 work through relational algebra and modern SQL (window functions, recursive CTEs) with worked examples the chapter only sketches."
+  - title: "Turning the Database Inside Out with Apache Samza"
+    url: "https://www.youtube.com/watch?v=fU9hR3kiOK0"
+    type: video
+    author: "Martin Kleppmann (Strange Loop)"
+    note: "The book's author motivates event sourcing and CQRS from first principles by deconstructing a database into its replication log, indexes, and materialized views."
+  - title: "Event Sourcing"
+    url: "https://martinfowler.com/eaaDev/EventSourcing.html"
+    type: article
+    author: "Martin Fowler"
+    note: "The canonical pattern write-up, with concrete guidance on event replay, temporal queries, reversing events, and the tricky interplay with external systems."
+  - title: "Neo4j Cypher Manual — Introduction"
+    url: "https://neo4j.com/docs/cypher-manual/current/introduction/"
+    type: docs
+    author: "Neo4j"
+    note: "Authoritative reference for the ASCII-art pattern syntax, MATCH/WHERE semantics, and variable-length path queries behind the chapter's property-graph examples."
+  - title: "Learn GraphQL — Official Documentation"
+    url: "https://graphql.org/learn/"
+    type: docs
+    author: "GraphQL Foundation"
+    note: "Runnable examples of queries, fragments, variables, and the schema type system that clarify why GraphQL is a client-facing API language rather than a database query language."
+  - title: "Towards Scalable Dataframe Systems"
+    url: "https://arxiv.org/abs/2001.00888"
+    type: paper
+    author: "Devin Petersohn et al. (VLDB 2020)"
+    note: "Formalizes dataframe semantics — ordering, flexible schemas, row/column symmetry — and explains exactly why pandas-style APIs resist classic relational optimization."
+---
+
+import Callout from '../../components/mdx/Callout.astro';
+import Term from '../../components/mdx/Term.astro';
+import NormalizedVsDocument from '../../components/diagrams/ch03/NormalizedVsDocument.astro';
+import ManyToMany from '../../components/diagrams/ch03/ManyToMany.astro';
+import StarSchema from '../../components/diagrams/ch03/StarSchema.astro';
+import PropertyGraph from '../../components/diagrams/ch03/PropertyGraph.astro';
+import EventSourcingFlow from '../../components/diagrams/ch03/EventSourcingFlow.astro';
+
+The data model you choose does two jobs at once. It tells the database how to store your data — and it quietly tells *you* how to think about your problem. Pick tables and you start seeing the world as rows and foreign keys; pick documents and everything looks like a tree; pick a graph and suddenly relationships are the main characters. That second effect is the sneaky one, and it's why this choice deserves more thought than "we already had Postgres."
+
+Every application is a stack of these models. At the top, your code models the real world — people, orders, sensors, money — as objects and APIs. Those objects get expressed in a general-purpose model: JSON documents, relational tables, or graph vertices and edges. Database engineers expressed *that* model in bytes on disk (Chapter 4's territory), and hardware engineers expressed bytes as currents and magnetic fields. Each layer hides the mess below behind a clean interface — which is what lets a database vendor and an application developer cooperate without ever meeting. This chapter is about the middle layer: the relational, document, and graph models, two specialists — event sourcing and DataFrames — and the query languages that go with each.
+
+<Callout type="note" title="Declarative: say what, not how">
+Most of the query languages here — SQL, Cypher, SPARQL, Datalog — are **declarative**: you describe the pattern of data you want (conditions, sorting, grouping) and not the steps to find it. That's more than a convenience. Because you never specified *how*, the database's query optimizer is free to pick indexes, join algorithms, and execution order — and to change them later, or parallelize the query across cores and machines, without you touching a line. A hand-coded imperative loop locks all of those decisions in.
+</Callout>
+
+## Relational Versus Document Models
+
+The best-known data model is the relational one Edgar Codd proposed in 1970: data organized into **relations** (tables in SQL), each an unordered bag of **tuples** (rows). It started as a theoretical paper that many doubted could be implemented efficiently; by the mid-1980s it had flattened the competition — first the network and hierarchical models of the 1970s, later object databases, later still XML databases. Each challenger arrived with hype and left without dethroning anything. SQL's trick has been absorption: it grew support for XML, JSON, and graph data rather than ceding ground to them.
+
+The 2010s round of challengers traveled under the **NoSQL** banner — less a technology than a grab-bag of ideas about new data models, schema flexibility, scalability, and open source licensing. A counter-wave branded itself NewSQL: relational guarantees with NoSQL-style scalability. Both labels have faded precisely because the ideas won and got absorbed. The most durable legacy is the **document model**: data as JSON, popularized by MongoDB and Couchbase, now supported inside nearly every relational database too. So the real question isn't "SQL or NoSQL" — it's when each model earns its keep.
+
+### The Object-Relational Mismatch
+
+Most application code is object-oriented, and objects don't look like rows. Translating between an object graph in memory and tables, rows, and columns on disk requires an awkward adapter layer — the famous **impedance mismatch**, a metaphor borrowed from electronics, where mismatched input and output impedances between circuits cause signal reflections and lost power.
+
+**Object-relational mapping (ORM)** frameworks like ActiveRecord and Hibernate exist to absorb that boilerplate, and they take regular criticism for it. The recurring complaints: ORMs can't fully hide the relational model, so you end up thinking in both representations anyway; they mostly serve OLTP application code, while the analysts downstream still work with the raw relational schema, so its design still matters; support beyond relational databases is thin; auto-generated schemas can be awkward and slow, and customizing them costs the simplicity you came for.
+
+The sharpest trap is the **N+1 query problem**. Say a page lists N comments, each carrying its author's ID. Handwritten SQL would join to the `users` table and fetch author names in one query. A naive ORM loop instead issues one query for the comments, then one more per comment to resolve each author — N+1 round trips for something the database could do in one. The fix is telling the ORM to fetch authors eagerly, but you have to know to ask.
+
+None of which makes ORMs worthless. If your data genuinely fits the relational model, *some* translation layer is unavoidable, and an ORM handles the simple, repetitive cases (plus query-result caching and schema migrations); complicated queries can bypass it.
+
+Some data, though, resists tables altogether. Take a résumé — a LinkedIn-style profile. The user's name appears once, fine, that's a column. But a person has several jobs over a career, a variable number of education entries, a handful of contact methods. The relational reflex is to split these **one-to-many relationships** into `positions`, `education`, and `contact_info` tables, each with a foreign key back to `users`. The alternative is to keep the whole profile as one JSON document:
+
+```json
+{
+  "user_id":    251,
+  "first_name": "Priya",
+  "last_name":  "Nair",
+  "region_id":  "in:32",
+  "positions": [
+    {"job_title": "CTO",      "organization": "Helix Labs"},
+    {"job_title": "Engineer", "organization": "Northwind"}
+  ],
+  "education": [
+    {"school_name": "TU Delft",   "start": 2008, "end": 2010},
+    {"school_name": "IIT Madras", "start": 2004, "end": 2008}
+  ]
+}
+```
+
+A profile is a tree of one-to-many relationships, and the JSON makes that tree explicit. It also maps more directly onto the objects in application code — some developers feel it shrinks the impedance mismatch — and it has better <Term id="locality">locality</Term>: fetching the relational version means several queries or a messy multiway join, while the document version is one read that has everything.
+
+<NormalizedVsDocument />
+
+<Callout type="warning" title="One-to-many, or one-to-thousands?">
+One-to-many is sometimes called *one-to-few*, and the "few" is load-bearing. A résumé has a handful of positions, so embedding them is tidy. Comments on a celebrity's post can number in the thousands — embed those in one document and every read and write hauls the whole monster around. For genuinely large collections of related items, the boring multi-table representation wins.
+</Callout>
+
+### Normalization, Denormalization, and Joins
+
+Look back at that document: `region_id` is `"in:32"`, an opaque ID, not the string `"Kerala, India"`. Why bother? Because a standardized list of regions — picked from a dropdown rather than typed free-text — buys you consistent spelling across profiles, no ambiguity between identically named places, one place to update if a city is renamed, localized display in every language, and smarter search (the regions list can know Kerala is on India's southwest coast; the raw string doesn't).
+
+This is the question of **normalization**. Data is <Term id="normalized">normalized</Term> when each piece of human-meaningful information lives in exactly one place and everything else refers to it by ID. It's **denormalized** when that information is copied into every record that uses it. The deep reason to prefer IDs: an ID means nothing to humans, so it never has to change. Anything humans read — names, titles, logos — will eventually need changing, and if it's been duplicated everywhere, every copy must be found and updated, costing writes, storage, and the risk that some copies are missed and the data quietly disagrees with itself.
+
+The cost of normalization is paid at read time: every ID needs resolving into something displayable. In a relational database that's a <Term id="join">join</Term>:
+
+```sql
+SELECT users.*, regions.region_name
+FROM users
+JOIN regions ON users.region_id = regions.id
+WHERE users.id = 251;
+```
+
+Document databases can store data either way, but culturally they lean denormalized — partly because JSON makes stuffing in extra copies easy, partly because join support is often weak. Some document stores have no joins at all, leaving you to do them in application code: fetch one document, read the ID, issue a second query. MongoDB offers a join-like `$lookup` operator in its aggregation pipeline, so the picture varies by system.
+
+The trade cuts both ways and the résumé makes it concrete. The `organization` and `school_name` fields above are plain strings — denormalized. Suppose the product team wants each employer's logo shown. Denormalized, the logo URL gets copied into every profile mentioning the company, and a rebrand means hunting down every copy. Normalized, an `organizations` entity holds the name and logo once, and résumés reference its ID. As a rule: normalized data is faster and safer to write, slower to read; denormalized data is the reverse. It helps to see denormalization as a form of <Term id="derived-data">derived data</Term> — you've taken on the obligation to keep the copies updated, and if a process crashes halfway through updating them, you'd better have atomic transactions (Chapter 8) or stream processing (Chapter 12) keeping things consistent.
+
+Normalization tends to suit OLTP systems, where reads and writes both need to be fast and consistency matters; analytics often does better denormalized, since the data is historical, updated in bulk, and read-mostly. At small to moderate scale, normalized is usually the right default — joins are affordable and you skip the consistency headaches. At very large scale, join costs can bite.
+
+Which brings back Chapter 2's timeline cache. The materialized timeline is a denormalized join between `posts` and `follows`, kept consistent by the fan-out process. But here's the part people miss: X's actual timeline entries don't contain the post text. Each entry stores just the post ID, the sender's ID, and a little metadata. Reading a timeline therefore still performs two joins — look up each post ID for its content and current like count, look up each sender ID for their username and avatar. This ID resolution in application code is called **hydrating** the IDs. Why leave those joins in? Because like counts change several times a second on a hot post, and people rename themselves and swap photos. Denormalizing fast-changing data into millions of cached timelines would mean updating it everywhere, constantly — and would balloon storage.
+
+<Callout type="insight" title="Joins are not the enemy of scale">
+"Joins don't scale, denormalize everything" is folklore, and X's timelines refute it from inside one of the largest systems around. Hydrating IDs parallelizes beautifully, and its cost doesn't depend on follower counts. The scalable design denormalized the expensive join (posts × follows) and kept the cheap, fast-changing lookups normalized. Denormalization is a per-field decision driven by how often data changes and what reads and writes cost — not a religion.
+</Callout>
+
+### Many-to-One and Many-to-Many Relationships
+
+It's worth naming the relationship shapes precisely, because they decide which model fits. The résumé's positions and education entries are **one-to-many** (one profile, several jobs; each job belongs to one profile) — tree-shaped, document-friendly. The `region_id` field is **many-to-one**: many people live in one region. And once organizations become entities referenced by ID, you have **many-to-many**: a person works for several organizations over time, and an organization employs many people.
+
+Relational databases represent many-to-many with an **associative table** (or join table): each row of `positions` pairs one `user_id` with one `org_id`.
+
+<ManyToMany />
+
+Many-to-many relationships usually need querying in both directions — all organizations Priya worked for, and everyone who ever worked at Northwind. Two options. Store references on both sides (the résumé lists org IDs, the organization document lists résumé IDs) — denormalized, two copies of one fact, free to drift apart. Or store the relationship once and create <Term id="secondary-index">secondary indexes</Term> on both columns — the normalized answer: an index on `user_id` and another on `org_id`, or in a document database, an index on the `org_id` field *inside* the positions array, which most serious document stores (and relational databases with JSON support) can build.
+
+These shapes don't fit in one self-contained document, and that's the point: many-to-one and many-to-many are where the document model starts to creak and the relational model — or the graph model — takes over.
+
+### Stars and Snowflakes: Schemas for Analytics
+
+Data warehouses are usually relational, and their table layouts follow a few well-worn conventions: the star schema, the snowflake schema, dimensional modeling, and one big table. All are optimized for analysts asking questions, with ETL pipelines translating data from operational systems into the chosen shape.
+
+The **star schema** puts a **fact table** at the center. Each row is an event that happened: one customer bought one product at one store at one moment. Analyzing web traffic instead? Each row is a page view or a click. Facts are captured at maximum granularity — individual events, not rollups — because you can't know today which slice an analyst will want next year. The price of that flexibility is volume: fact tables at large enterprises run to petabytes.
+
+Some fact-table columns are attributes, like the sale price and the supplier cost (subtract and you have the margin). The rest are foreign keys into **dimension tables**, which carry the *who, what, where, when, how, and why* of each event. A `dim_product` row holds the SKU, brand, category, and package size; `dim_store` might record the city, the square footage, and whether there's an in-store bakery. Even dates get a dimension table, so a row can know it fell on a public holiday — letting analysts compare holiday and non-holiday sales without date arithmetic heroics. Warehouse tables run wide: fact tables with a few hundred columns are unremarkable.
+
+<StarSchema />
+
+Draw the relationships and you get a star — fact table in the middle, dimensions as the points. The **snowflake schema** takes normalization one step further: dimensions get sub-dimensions (a `dim_product` row references a `brands` table and a `categories` table instead of storing strings). More normalized, yes, but analysts generally prefer plain stars — fewer joins to remember.
+
+Notice the schema is almost entirely many-to-one: many sales per product, many sales per store. Other shapes get flattened away for simplicity — a customer buying five items in one basket becomes five fact rows that happen to share a customer ID and timestamp, not an explicit "transaction" entity. And some teams push denormalization to its endpoint, folding the dimension columns directly into the fact table and dropping the dimension tables entirely — **one big table (OBT)**. More storage, sometimes faster queries. In analytics this is a reasonable trade, because the data is an immutable log of history: the write-consistency problems that make denormalization scary in OLTP barely apply when nothing gets updated.
+
+### When to Use Which Model
+
+The case for documents: <Term id="schema">schema</Term> flexibility, read performance from locality, and proximity to the application's object model. The case for relational: joins, and graceful handling of many-to-one and many-to-many. Let's make that actionable.
+
+If your data is a tree — one-to-many relationships, typically loaded all at once — use documents. The relational alternative, *shredding* the tree across tables, breeds clunky schemas and tedious reassembly code. Documents also shine for user-ordered lists, like a kanban board or to-do app where items get dragged into position: a JSON array stores the order natively, while relational databases have no standard answer and resort to tricks — integer sort columns that need renumbering on insert, linked lists of IDs, fractional indexing. One genuine document weakness: you can't address a nested item directly. There's no ID for "the second entry in user 251's positions list" — only that awkward path expression. If things need referencing from outside, give them IDs in a relational design.
+
+**Schema flexibility.** Document databases are often called *schemaless*, which is a fib. The code reading those documents absolutely assumes a structure; the schema is just implicit, enforced at read time by application code rather than at write time by the database. The honest terms are **schema-on-read** versus **schema-on-write**, and the analogy to dynamic versus static type checking is exact — including the part where reasonable people argue about it forever with no clear winner.
+
+The difference shows up sharpest when the data's format changes. Suppose you've stored full names in one field and now want first and last names separately. Schema-on-read style, you start writing new documents in the new shape and patch over old ones as you read them:
+
+```js
+if (user && user.name && !user.first_name) {
+  // documents written before the change lack first_name
+  user.first_name = user.name.split(" ")[0];
+}
+```
+
+Schema-on-write style, you migrate:
+
+```sql
+ALTER TABLE users ADD COLUMN first_name text DEFAULT NULL;
+UPDATE users SET first_name = split_part(name, ' ', 1);  -- PostgreSQL
+```
+
+Adding a column with a default is fast in most relational databases even on huge tables, but that `UPDATE` rewrites every row, and other changes (like altering a column's type) can mean copying the whole table. Online schema-change tools exist, but big migrations stay operationally hairy — which is why even relational shops sometimes add the column as `NULL` and backfill lazily at read time, exactly like a document store would. Schema-on-read genuinely wins when the data is heterogeneous: many object types that can't sensibly each get a table, or structures dictated by external systems that change without asking. When records *do* share a structure, an enforced schema documents it and defends it. Chapter 5 takes up schema evolution properly.
+
+**Data locality.** A document is stored as one contiguous string — JSON, XML, or a binary cousin like BSON. If you typically need the whole thing (rendering a full profile page), one read fetches it all, where shredded tables would need multiple index lookups and possibly multiple disk seeks. But locality only pays if you need most of the document: the database loads the *entire* thing even when you wanted one field, and updates usually rewrite it whole. So keep documents smallish and avoid write patterns that nibble at big ones. Locality isn't a document-model monopoly, either — Google's Spanner interleaves child rows inside a parent table's storage, Oracle does the same with multi-table index cluster tables, and Bigtable's column families (inherited by HBase and Accumulo) chase the same goal.
+
+**Query languages.** Relational means SQL, but document databases vary wildly — some allow only key-value fetch by primary key, others add secondary indexes, a few offer rich query languages. XML databases brought XQuery and XPath; JSONPath and JSON Pointer are their JSON equivalents. MongoDB's aggregation pipeline is the most developed example: a marine biologist counting shark sightings per month writes a `$match` stage piped into a `$group` stage with a `$sum` — the same filter-group-aggregate logic a SQL `GROUP BY` expresses, in JSON syntax instead of SQL's English-sentence style. Equivalent expressiveness; the difference is mostly taste.
+
+**Convergence.** The two camps have spent two decades stealing each other's homework. Relational databases grew JSON columns, JSON query operators, and indexes on fields inside documents; document databases grew joins, secondary indexes, and declarative queries. This is good news, because most real applications want both — relational references *and* a few schema-flexible corners — and a hybrid database lets each part of the data take the shape that suits it.
+
+<Callout type="note" title="Codd saw it coming">
+The 1970 paper that started all this already contained the document model's seed. Codd called them *nonsimple domains*: the idea that a value in a row needn't be a primitive like a number or string — it could itself be a nested relation, a table inside a cell, arbitrarily deep. SQL finally shipped that idea as JSON support, a smooth thirty-plus years later.
+</Callout>
+
+## Graph-Like Data Models
+
+Relationship shape picks the model. Mostly one-to-many, tree-like, few cross-links? Documents. A regular dose of many-to-one and many-to-many? Relational handles it. But when *anything can relate to anything* and the connections are the data — that's when it gets natural to reach for a <Term id="graph">graph</Term>.
+
+A graph is just two kinds of objects: **vertices** (nodes, entities) and **edges** (relationships, arcs). The classics are homogeneous: social graphs (people who know each other), the web graph (pages linking to pages — what PageRank ranks), road and rail networks (junctions and the roads between them, where map apps run shortest-path searches). Storage-wise, an **adjacency list** (each vertex stores its neighbors' IDs) suits traversal; an **adjacency matrix** (a grid of 0s and 1s) suits the linear algebra of machine learning — a thread we pick up at the end of this chapter.
+
+But graphs aren't limited to one vertex type. Their other superpower is storing wildly different kinds of objects in one consistent structure: Facebook's single graph holds people, locations, events, check-ins, and comments, with edges for friendships, attendance, check-in locations, and who-commented-on-what. Search engines build knowledge graphs of organizations, people, and places harvested from the web.
+
+Two main graph models compete, with mostly cosmetic differences: the **property graph** (Neo4j, Memgraph, KùzuDB) and the **triple store** (Datomic, AllegroGraph, Blazegraph); some databases, like Amazon Neptune, support both. We'll look at both, plus four query languages — Cypher, SPARQL, Datalog, GraphQL — and SQL's attempt at graph queries.
+
+Our running example: Priya was born in Kerala, a state in India; Marco was born in Liguria, a region of Italy. They're married and live in Lisbon. People and places are vertices; born-in, lives-in, within, and married-to are edges.
+
+<PropertyGraph />
+
+### Property Graphs
+
+In the property graph model, each vertex carries a unique identifier, a label naming its type, its sets of incoming and outgoing edges, and a bag of key-value properties. Each edge carries its own identifier, the vertex it starts at (the *tail*), the vertex it points to (the *head*), a label naming the relationship, and its own properties.
+
+You could build this on two relational tables:
+
+```sql
+CREATE TABLE vertices (
+    vertex_id   integer PRIMARY KEY,
+    label       text,
+    properties  jsonb
+);
+CREATE TABLE edges (
+    edge_id     integer PRIMARY KEY,
+    tail_vertex integer REFERENCES vertices (vertex_id),
+    head_vertex integer REFERENCES vertices (vertex_id),
+    label       text,
+    properties  jsonb
+);
+CREATE INDEX edges_tails ON edges (tail_vertex);
+CREATE INDEX edges_heads ON edges (head_vertex);
+```
+
+Three properties of the model do the heavy lifting. Any vertex can connect to any other — no schema forbids an edge between a person and an allergen, say. Given a vertex, both its incoming and outgoing edges are efficiently findable (that's what those two indexes are for), so you can traverse forward and backward. And labels keep many kinds of vertex and relationship coexisting cleanly in one database. The `edges` table is really the many-to-many join table from earlier, generalized to hold every relationship type at once. (One formal limit: an edge connects exactly two vertices, while a join-table row can reference three or more things at once. Graphs work around it with an extra vertex standing in for the relationship, or with hypergraphs.)
+
+The payoff is modeling flexibility. Look again at the diagram: India's hierarchy goes state → country while Italy's goes region → country, Lisbon is recorded as a city but Kerala only at state granularity, and none of that required schema gymnastics. Want food allergies? Add allergen vertices, edges from people to allergens, edges from allergens to ingredients — then query what each person can safely eat. Graphs absorb new feature data gracefully, which makes them strong on evolvability.
+
+### The Cypher Query Language
+
+Cypher is the property-graph query language created for Neo4j (named after a character in *The Matrix*, not cryptography), later opened up as openCypher and adopted by Memgraph, KùzuDB, Amazon Neptune, Apache AGE, and others. Its signature is ASCII-art arrows. Inserting part of our example:
+
+```cypher
+CREATE
+  (europe   :Location {name:'Europe',   type:'continent'}),
+  (portugal :Location {name:'Portugal', type:'country'}),
+  (lisbon   :Location {name:'Lisbon',   type:'city'}),
+  (priya    :Person   {name:'Priya'}),
+  (lisbon) -[:WITHIN]-> (portugal) -[:WITHIN]-> (europe),
+  (priya)  -[:LIVES_IN]-> (lisbon)
+```
+
+The symbolic names (`lisbon`, `priya`) exist only inside the query, to wire up edges. Now ask: who emigrated from India to Europe?
+
+```cypher
+MATCH
+  (person) -[:BORN_IN]->  () -[:WITHIN*0..]-> (:Location {name:'India'}),
+  (person) -[:LIVES_IN]-> () -[:WITHIN*0..]-> (:Location {name:'Europe'})
+RETURN person.name
+```
+
+Read it as: find any vertex — call it `person` — with a `BORN_IN` edge leading, possibly via a chain of `WITHIN` edges, to the location named India, and a `LIVES_IN` edge leading, again via any number of `WITHIN` hops, to Europe. The `*0..` is the crux: *follow this edge zero or more times*, like a regular expression's `*`. Priya qualifies (Kerala is within India; Lisbon is within Portugal is within Europe); Marco doesn't.
+
+Being declarative, the query says nothing about execution. The engine might scan every person and check their birthplace chains — or start from the India and Europe vertices, expand outward through incoming `WITHIN` edges, and then hop backward through `BORN_IN` and `LIVES_IN` edges to find matching people. Index availability decides; you don't.
+
+### Graph Queries in SQL
+
+We just saw graph data sitting happily in two relational tables — so can SQL query it? Yes, with gritted teeth. The problem is that each traversed edge is a join with the `edges` table, and in a graph query you don't know *how many* joins you'll need: `LIVES_IN` might point at a street, a city, a district, or a country, each a different number of `WITHIN` hops from the vertex you want. SQL's answer to "a variable number of joins" is the **recursive common table expression** (`WITH RECURSIVE`). Building just the set of all locations inside India looks like this:
+
+```sql
+WITH RECURSIVE in_india(vertex_id) AS (
+    SELECT vertex_id FROM vertices
+      WHERE label = 'Location'
+        AND properties->>'name' = 'India'
+  UNION
+    SELECT edges.tail_vertex FROM edges
+      JOIN in_india ON edges.head_vertex = in_india.vertex_id
+      WHERE edges.label = 'within'
+)
+-- ...and the same again for in_europe, then more
+-- subqueries for born_in and lives_in, then a final join
+```
+
+Seed the set with the India vertex, then repeatedly add anything with a `within` edge pointing into the set, until nothing new appears. Now do it all again for Europe, write two more subqueries following `born_in` and `lives_in` edges backward, and intersect the results. The complete query runs about thirty lines to Cypher's four — before you've thought about cycle handling or breadth-first versus depth-first traversal. Same data, same question, wildly different ergonomics: that gap is the whole argument for fitting the query language to the data model. Oracle ships a different "hierarchical" extension for recursion; TigerGraph's GSQL and PGQL are further alternatives. The ISO **GQL** standard, published in 2024 and based on Cypher, may finally give graph databases the lingua franca SQL gave tables.
+
+### Triple Stores and SPARQL
+
+The triple store model expresses the same ideas as property graphs with different vocabulary. Everything is a three-part statement: *(subject, predicate, object)* — (Jim, likes, bananas). The subject is a vertex. The object is one of two things: a primitive value, making the predicate-object pair effectively a property on the subject (*(priya, birthYear, 1990)*), or another vertex, making the predicate an edge from subject to object (*(priya, marriedTo, marco)*). In practice, many "triple" stores add tuple positions — Amazon Neptune uses quads with a graph ID; Datomic uses 5-tuples with a transaction ID and a deletion flag — but the subject-predicate-object core survives.
+
+Triples have a pleasantly readable text format called Turtle, where semicolons chain several statements about one subject:
+
+```turtle
+@prefix : <urn:example:>.
+_:priya  a :Person;   :name "Priya";    :bornIn _:kerala.
+_:kerala a :Location; :name "Kerala";   :type "state";   :within _:india.
+_:india  a :Location; :name "India";    :type "country".
+```
+
+The `_:someName` identifiers are file-local — they exist only so multiple lines can refer to the same vertex.
+
+<Callout type="note" title="The Semantic Web's afterlife">
+Triple stores got much of their early energy from the **Semantic Web**, a 2000s project to make websites publish machine-readable data so the whole internet could become one queryable database. As envisioned, it didn't happen. But the wreckage was fertile: JSON-LD linked data, the ontologies underpinning biomedical science, Facebook's Open Graph protocol (the reason links unfurl into preview cards), Wikidata, and Schema.org's shared vocabularies all descend from it. Triples themselves are a perfectly good internal data model even if you never exchange data with anyone.
+</Callout>
+
+Turtle is one encoding of the **Resource Description Framework (RDF)**, the Semantic Web's data model (XML is another, much wordier one; Apache Jena converts between them). RDF's quirks come from its internet-scale ambitions: subjects, predicates, and objects are often full URIs, so that your `within` and someone else's `within` can't collide — they live in different namespaces. The URIs needn't resolve to anything; declare the prefix once and move on.
+
+RDF's query language is **SPARQL** — it predates Cypher, which borrowed its pattern-matching style, so it reads familiarly:
+
+```sparql
+PREFIX : <urn:example:>
+SELECT ?personName WHERE {
+  ?person :name ?personName.
+  ?person :bornIn  / :within* / :name "India".
+  ?person :livesIn / :within* / :name "Europe".
+}
+```
+
+Variables start with `?`, and `:within*` is the same "zero or more hops" idea as Cypher's `*0..`. Because RDF makes no distinction between properties and edges — predicates cover both — the same syntax queries either. A concise, capable language that deserves more attention than it gets.
+
+### Datalog: Recursive Relational Queries
+
+Datalog is the elder of this family — 1980s academic research, a subset of Prolog — and though mainstream support is rare, it powers Datomic, LogicBlox, CozoDB, and LinkedIn's LIquid, and it's exceptionally strong at exactly the recursive queries graphs need. Its data model is actually relational: the database holds **facts**, each equivalent to a row, written `table(val1, val2, ...)`:
+
+```prolog
+location(1, "Europe", "continent").
+location(2, "India", "country").
+location(3, "Kerala", "state").
+within(3, 2).      /* Kerala is in India */
+person(100, "Priya").
+born_in(100, 3).   /* Priya was born in Kerala */
+```
+
+Instead of one big query, you define **rules** — derived virtual tables, like SQL views that can recurse:
+
+```prolog
+in_place(LocID, Name) :- location(LocID, Name, _).
+in_place(LocID, Name) :- within(LocID, Via), in_place(Via, Name).
+
+migrated(P, From, To) :- person(ID, P),
+                         born_in(ID, B),  in_place(B, From),
+                         lives_in(ID, L), in_place(L, To).
+
+india_to_europe(P) :- migrated(P, "India", "Europe").
+```
+
+A rule fires when every pattern right of the `:-` matches existing facts (or previously derived ones), and the left side then behaves as if it were in the database. The first two rules say: a location is "in" itself; and anything `within` something in a place is also in that place — recursion doing the work of Cypher's `*0..`. The `migrated` rule composes on top, and the final rule specializes it. That's the Datalog mindset: build complex queries a small rule at a time, rules calling rules like functions calling functions. Different from the SELECT-and-go languages, and genuinely powerful once it clicks.
+
+### GraphQL
+
+GraphQL has "graph" in the name and belongs to a different conversation entirely. It's a query language for *clients* — a mobile app or web frontend asking a server for exactly the JSON it needs to render a screen. Its design constraint is that queries arrive from untrusted devices, so it is deliberately weak: no recursion, no arbitrary search conditions — nothing a malicious (or merely enthusiastic) client could use to flatten your server with expensive queries. Our "born in India, lives in Europe" query is inexpressible in GraphQL unless the server explicitly offers that search.
+
+Within its lane, it's genuinely useful. A team-chat app might fetch its UI data in one shot:
+
+```graphql
+query ChatScreen {
+  channels {
+    name
+    recentMessages(latest: 50) {
+      postedAt
+      body
+      sender { displayName avatarUrl }
+      replyTo {
+        body
+        sender { displayName }
+      }
+    }
+  }
+}
+```
+
+The response is JSON mirroring the query's shape — exactly the requested fields, nothing else. The server never needs to know what the UI wants; when a redesign adds the reply author's avatar, the client adds `avatarUrl` to the query and ships, no server change. Note the response happily duplicates data — a chatty user's name and avatar repeat in every message, and a reply embeds the original message's text rather than an ID the client would have to chase. GraphQL chooses bigger responses over client-side bookkeeping, on purpose.
+
+Underneath, the server can store everything normalized and join on demand — only joins declared in the GraphQL schema are reachable. And despite the name, GraphQL runs equally well over relational, document, or graph databases. The costs are organizational as much as technical: tooling to translate queries into calls to internal REST or gRPC services, plus authorization, rate limiting, and performance work that the flexibility makes harder.
+
+## Event Sourcing and CQRS
+
+Every model so far shares an unspoken assumption: you query data in the same shape you wrote it. Rows in, rows out; documents in, documents out. Complex applications sometimes can't find any single shape that serves all their reads — so they break the assumption: write the data in one form, and *derive* read-optimized representations from it. ETL into a warehouse was already this idea. Now push it to its logical end: what's the best possible representation if you optimize purely for writing, with reads somebody else's problem?
+
+An **event log**. Every change is encoded as a self-contained record — JSON with a timestamp, say — and appended to a sequence. Events are immutable: never edited, never deleted, only superseded by later events. Appending is the cheapest write a storage system can offer.
+
+Consider a conference management system, a sneaky-complicated domain: individuals register and pay by card; companies bulk-order seats by invoice and assign names later; some seats are held for speakers and sponsors; bookings get cancelled; the organizer moves the event to a bigger room. Even "how many seats are left?" is a nontrivial query over all of that. In the event-sourced design, every state change — registrations opened, seats booked, booking cancelled, room changed — is first appended to the log as an event. From the log, the system derives several **materialized views** (also called *projections* or *read models*), each updated as events arrive: one tracking every booking's status, one feeding the organizer's dashboard charts, one generating the badge-printer file.
+
+<EventSourcingFlow />
+
+Two named ideas live here. Using events as the source of truth, with all state changes expressed as events, is **event sourcing**. Keeping separate write-optimized and read-optimized representations, deriving the latter from the former, is **command query responsibility segregation (CQRS)**. Both terms come from the domain-driven design community, though the underlying idea is old — state machine replication, which reappears in Chapter 10, is a cousin.
+
+The vocabulary encodes a useful discipline. An incoming user request is a **command**, and it can still be rejected — validation happens first (are there actually three seats left?). Once accepted, it becomes a **fact**, appended as an event; downstream consumers building views are not allowed to reject events, because history already happened. That's also why the convention is past-tense event names: `SeatsBooked`, not `BookSeats`. If the customer cancels later, the booking still *was* a fact; the cancellation is a new event, not an edit. (A fact table from the star-schema world is also a pile of past events — but its rows share one column set and have no meaningful order, while an event log holds many event types and order is essential: a cancellation before its booking is nonsense.)
+
+What does all this buy?
+
+- **Intent.** "The booking was cancelled" says *why* state changed; "active=false on row 4001, three seat_assignments deleted, one refund row inserted" does not. The row changes still happen — inside a view — but the event explains them.
+- **Reproducibility.** Views must be derivable from the log deterministically, so you can always delete one and rebuild it by replaying the same events through the same code. Bug in the view logic? Fix the code, replay, done.
+- **Freedom of representation.** Each view can use any data model, denormalized however its queries like, in the same database as the log or a different one — even memory-only, if rebuilding on restart is acceptable.
+- **Evolvability.** A new feature is often just a new view over existing events, or a new event type alongside the old ones. Behavior can chain off events too: a cancellation event can trigger offering the seat to the waiting list.
+- **Reversibility.** A mistaken event gets corrected by appending a compensating event, which flows into every view automatically — unlike a conventional database, where an erroneous committed transaction is hard to unwind. Fewer irreversible actions, easier change: Chapter 2's argument again.
+- **Auditability and throughput.** The log doubles as an audit trail (regulated industries care), and append-only sequential writes sustain higher throughput than update-in-place; bursts queue in the log while views catch up at their own pace.
+
+The honest downsides: anything involving *external* information threatens determinism — if a view converts prices using today's exchange rate, replaying next month produces different numbers, so the rate must be captured in the event or be queryable as-of the event's timestamp. Immutability collides with privacy law — a GDPR deletion request is awkward when the log forbids deletion; workarounds include keeping personal data outside events or encrypting it with a key you can destroy (**crypto-shredding**), at the cost of harder rebuilds. And replays must not repeat externally visible side effects — nobody wants every confirmation email resent because you rebuilt a view.
+
+You can event-source on any database, or use purpose-built systems (EventStoreDB, MartenDB, Axon Framework) or a log-shaped message broker like Apache Kafka with stream processors maintaining the views — Chapter 12's subject. The one hard requirement: every view must process events in exactly the log's order, which, as Chapter 10 will show, is not trivial to guarantee in a distributed system.
+
+## DataFrames, Matrices, and Arrays
+
+The models so far serve operational systems and analytics alike. One last family lives almost entirely in the analytical and scientific corner: **DataFrames** and the multidimensional numeric arrays — matrices and beyond — they feed. R has them natively; Python has Pandas; Spark, Dask, and ArcticDB scale them up. Data scientists use them to prepare ML training data, explore datasets, run statistics, and build visualizations.
+
+A DataFrame looks like a relational table and supports relational-flavored bulk operations — filter rows, apply a function across them, group and aggregate, join two DataFrames on a key (the operation relational folks call join, DataFrame APIs call *merge*). The working style is different, though: not one declarative query against a shared database, but a *sequence of commands*, each reshaping the data a step further. That matches how data scientists actually work — incrementally wrangling a private copy of the dataset, usually on their own machine, until it answers the question — but it also means the system mostly can't optimize the whole pipeline the way a query planner optimizes SQL.
+
+DataFrames then go somewhere relational tables don't: into matrices. A classic example is movie ratings. As a relational table, that's three columns — user, movie, rating — one row per rating. Pivot it and you get a matrix with one row per user and one *column* per movie, ratings in the cells. Most cells are empty, since nobody has rated everything — a **sparse** matrix — and there may be thousands of columns, which no relational table would tolerate but NumPy-style sparse arrays handle without complaint. Matrices hold only numbers, so non-numeric data gets encoded: dates scale to floats in a convenient range, and categorical values get **one-hot encoding** — one column per possible genre, with a 1 in the column matching the movie and 0s elsewhere (a movie spanning genres just gets several 1s). Once everything is numeric, linear algebra applies, and linear algebra is the substrate of most machine learning — that ratings matrix is the raw material of a movie recommender. The DataFrame's role is the bridge: relational-ish on one end, matrix on the other, with the data scientist steering the transformation.
+
+Past DataFrames sit the **array databases**, like TileDB, built for storing huge multidimensional numeric arrays: satellite raster grids, medical imaging, telescope observations. Finance leans on DataFrames for time series — asset prices and trades over time — and their popularity has pulled DataFrame APIs into batch processing frameworks like Spark and Flink, where Chapter 11 will meet them again.
+
+<Callout type="insight" title="Where this chapter points">
+Every model here can impersonate the others — graphs fit in relational tables, documents in JSON columns — but the thirty-line recursive CTE is the warning about how that feels in practice. Match the model to the *shape of your relationships*: trees → documents, joins everywhere → relational, traversals → graphs, complex domain history → an event log, numbers headed for ML → DataFrames. Chapter 4 drops below this layer to ask how any of these models actually become bytes on disk, and Chapter 5 takes up the question this chapter kept deferring: what happens to schemas, explicit or implicit, when the data outlives the code that wrote it.
+</Callout>

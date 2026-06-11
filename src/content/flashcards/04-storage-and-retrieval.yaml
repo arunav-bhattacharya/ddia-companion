@@ -1,0 +1,61 @@
+cards:
+  - id: ch04-f01
+    front: "Why does adding an index slow down writes, and why don't databases index everything by default?"
+    back: "An index is an extra structure derived from the data, so every write must also update it — and nothing is cheaper than a plain append. Databases leave index choice to you because only you know the application's query patterns."
+  - id: ch04-f02
+    front: "What is an SSTable, and what does its sparse index exploit?"
+    back: "A file of key-value pairs sorted by key, each key appearing once. Because of the sorting, the index needs only the first key of each few-kilobyte block — find the bracketing entries, seek, and scan one block."
+  - id: ch04-f03
+    front: "Walk through the LSM-tree write and read paths."
+    back: "Writes go to an in-memory sorted memtable (plus an on-disk log for crash recovery); full memtables are flushed as immutable SSTable segments. Reads check the memtable, then segments newest to oldest. Background compaction merges segments, dropping overwritten values."
+  - id: ch04-f04
+    front: "What is a tombstone in log-structured storage?"
+    back: "A special deletion marker appended to the data files, since immutable segments can't have bytes removed. During compaction it tells the merge to discard earlier values of that key; once it reaches the oldest segment, the tombstone itself is dropped."
+  - id: ch04-f05
+    front: "A Bloom filter check returns 'all bits set' for a key. What do you know?"
+    back: "Only that the key is probably in the SSTable — it may be a false positive from other keys' bits. A single 0 bit would mean definitely absent. Rule of thumb: ~10 bits per key gives 1% false positives; each extra 5 bits divides that by ten."
+  - id: ch04-f06
+    front: "Size-tiered vs. leveled compaction — when does each win?"
+    back: "Size-tiered merges small new SSTables into ever-larger old ones: best for write-heavy workloads, but needs lots of temporary disk. Leveled keeps fixed-size SSTables in key-range-partitioned levels: more incremental, less spare disk, fewer SSTables per read — better for read-heavy workloads."
+  - id: ch04-f07
+    front: "How do B-trees organize data on disk?"
+    back: "Fixed-size pages (4–16 KiB) referencing each other by page number, forming a balanced tree from a root page down to leaf pages. Pages are overwritten in place. Branching factors in the hundreds keep depth at 3–4 levels even for huge databases."
+  - id: ch04-f08
+    front: "What happens when you insert into a full B-tree leaf page?"
+    back: "The page splits into two half-full pages and the parent gains the new boundary key. If the parent is full it splits too, cascading upward; splitting the root creates a new root — the only way the tree grows taller."
+  - id: ch04-f09
+    front: "Why do B-trees need a write-ahead log (WAL)?"
+    back: "A page split overwrites several pages; a crash partway through corrupts the tree (orphan or torn pages). Every modification is appended to the WAL before touching the tree, so recovery replays the log into a consistent state."
+  - id: ch04-f10
+    front: "What is write amplification, and why does it matter?"
+    back: "Total bytes written to disk divided by the bytes of a bare append-only log of the same data. High amplification eats the disk-bandwidth ceiling in write-heavy systems and wears out SSDs faster. LSM-trees usually amplify less than B-trees."
+  - id: ch04-f11
+    front: "Why are random writes slower than sequential writes even on SSDs?"
+    back: "Flash writes ~4 KiB pages but erases only ~512 KiB blocks. Random writes mix live and dead pages in each block, so the controller's garbage collection must copy live pages out before erasing — consuming bandwidth and wearing the flash."
+  - id: ch04-f12
+    front: "Clustered index vs. heap file vs. covering index — what does each store?"
+    back: "Clustered: the full row inside the index (InnoDB primary keys). Heap: rows in an unordered file, indexes hold references (PostgreSQL). Covering: key plus a few extra columns, so some queries are answered from the index alone."
+  - id: ch04-f13
+    front: "What is the real performance advantage of in-memory databases?"
+    back: "Not avoiding disk reads — the OS page cache already serves hot data from RAM. The win is skipping the overhead of encoding in-memory structures into a disk-friendly format. Durability comes from an append-only log, snapshots, or replicas."
+  - id: ch04-f14
+    front: "Why does column-oriented storage suit analytical queries?"
+    back: "Fact-table queries touch 4–5 of 100+ columns. Storing each column contiguously means reading only the needed columns, and same-typed repetitive values compress extremely well. All columns keep rows in the same order, so row k is reassembled by position."
+  - id: ch04-f15
+    front: "How do bitmap encoding and run-length encoding compress a column?"
+    back: "A column with n distinct values becomes n bitmaps, one bit per row. Sparse bitmaps are then run-length encoded into short counts of 0s and 1s. Queries become bitwise AND/OR over bitmaps — extremely fast on modern CPUs."
+  - id: ch04-f16
+    front: "Compiled vs. vectorized query execution — the one-line distinction?"
+    back: "Compilation generates machine code specific to the query (JIT-style, often via LLVM). Vectorization keeps an interpreter but processes a batch of column values per operator call. Both exploit sequential access, tight loops, SIMD, and direct work on compressed data."
+  - id: ch04-f17
+    front: "What does a data cube precompute, and what does it sacrifice?"
+    back: "A grid of aggregates (SUM, COUNT...) for every combination of chosen dimensions, summarizable along any axis. Queries matching the grid are instant, but anything outside it — like filtering by an attribute that isn't a dimension — needs the raw data."
+  - id: ch04-f18
+    front: "Why can't a concatenated (lastname, firstname) index find everyone with a given first name?"
+    back: "It sorts by the concatenated key, so entries with the same first name are scattered. It serves lastname prefixes and lastname-plus-firstname lookups only — the same reason a (lat, lng) index can't answer a 2D map-rectangle query."
+  - id: ch04-f19
+    front: "What is an inverted index?"
+    back: "A mapping from each term to a postings list of IDs of documents containing it. With sequential IDs, a postings list is a sparse bitmap, so multi-keyword queries are bitwise ANDs. Lucene stores the term mapping in SSTable-like merged files."
+  - id: ch04-f20
+    front: "Flat vs. IVF vs. HNSW vector indexes — the trade-off ladder?"
+    back: "Flat compares the query to every vector: exact but slow. IVF clusters vectors around centroids and probes only nearby partitions: faster, approximate. HNSW greedily searches layered proximity graphs: approximate, excellent speed/recall in practice."

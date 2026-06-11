@@ -1,0 +1,52 @@
+assignments:
+  - id: ch03-a01
+    title: "Pick a data model for an outpatient records platform"
+    scenario: |
+      MediTrail is building an electronic records platform for a network of 40 outpatient clinics covering 250,000 patients. A patient's chart — demographics, allergy list, current medications, and visit notes — is almost always loaded as a whole at the start of an appointment and rendered on one screen. The platform must also track referrals between specialists, insurance plans shared by thousands of patients, and lab results arriving from a dozen external laboratory systems whose payload formats differ and change without notice. The engineering team is split into a "everything in normalized PostgreSQL tables" camp and an "everything in one MongoDB document per patient" camp, and you've been asked to settle it.
+    tasks:
+      - "Classify the relationship shapes in this domain — one-to-many, many-to-one, many-to-many — and identify which parts of the data are tree-shaped and which are not."
+      - "Recommend a data model (or a hybrid), justifying the choice with the chapter's arguments about locality, join support, and schema flexibility."
+      - "The team wants to replace the free-text allergies field with structured entries (substance, severity, date recorded). Describe how this change plays out under schema-on-read versus schema-on-write, including what the migration costs."
+    hints:
+      - "Where is the data read as one unit? Where do queries need to run in both directions?"
+      - "The chapter's convergence point: relational databases have JSON columns now, and document databases have joins."
+    modelAnswer: |
+      The chart itself is a tree of one-to-many relationships — one patient, several allergies, medications, and visit notes — read as a unit at appointment time. That's the document model's home turf: storing it as one document gives locality (one read fetches the whole chart) and matches the rendering code's object structure. The rest of the domain isn't tree-shaped. Insurance plans are many-to-one (thousands of patients reference one plan — normalize it, so a plan rename is one update). Referrals are many-to-many between practitioners and patients, needing queries in both directions ("all referrals for this patient" and "all patients referred to this specialist"), which means an associative table or references plus secondary indexes — not embedding.
+
+      So neither camp wins outright. The cleanest fit is a hybrid: a relational core for patients, practitioners, plans, and referrals, with the chart's nested lists in JSON columns, or a document store that supports references and secondary indexes. The lab feeds are the strongest schema-on-read argument — their structure is dictated by external systems that change without notice, exactly the heterogeneous case where an enforced schema hurts more than it helps.
+
+      For the allergies change: schema-on-read means new records are written in the structured format while read-path code patches old documents on the fly — no migration, but every reader carries that compatibility code indefinitely. Schema-on-write means an ALTER TABLE (fast, even on large tables, when adding nullable columns) plus a backfill UPDATE that rewrites every row — operationally heavy at this scale, so teams often add the column as NULL and backfill lazily, which is schema-on-read wearing a relational costume.
+  - id: ch03-a02
+    title: "Sanctions screening as a graph problem"
+    scenario: |
+      TransGlobe, a freight forwarder moving 1.8 million shipments a year, must comply with a new rule: flag every shipment that transited any facility located within a sanctioned region. Shipments pass through ports, bonded warehouses, and airports; facilities sit inside cities, free-trade zones, districts, regions, and countries — and the depth of that hierarchy differs by country. Sanctioned regions are declared at any level, from a single free-trade zone to an entire country. The current implementation is a SQL query that joins facilities to cities to countries — exactly three levels — and the compliance team has discovered it silently misses shipments whenever a facility sits in a free-trade zone or a deeper administrative hierarchy.
+    tasks:
+      - "Model the domain as a property graph: name the vertex labels, edge labels, and two or three properties on each."
+      - "Sketch the screening query in Cypher using a variable-length traversal, and explain precisely why the fixed three-level SQL join misses shipments."
+      - "The team asks whether plain SQL could do this correctly at all. Explain how a recursive common table expression would work here and what it costs in practice."
+    hints:
+      - "The number of WITHIN hops between a facility and a sanctioned region is not known in advance."
+      - "Cypher's *0.. is a regular-expression star applied to edges."
+    modelAnswer: |
+      Vertices: Shipment (id, departure date), Facility (name, type: port/warehouse/airport), and Location (name, type: city/zone/district/region/country). Edges: TRANSITED from Shipment to Facility (with a timestamp property), LOCATED_IN from Facility to Location, and WITHIN from Location to its parent Location. Different countries simply have WITHIN chains of different lengths — the property graph needs no schema gymnastics to allow that.
+
+      The screening query is a variable-length traversal: MATCH (s:Shipment)-[:TRANSITED]->(:Facility)-[:LOCATED_IN]->()-[:WITHIN*0..]->(:Location {name: $sanctioned}) RETURN DISTINCT s. The *0.. means "follow WITHIN zero or more times," so it matches whether the facility sits directly in the sanctioned region or five administrative levels below it. The existing SQL fails because each traversed edge is a join, and writing three joins hardcodes three hops: a facility inside a free-trade zone inside a district inside a sanctioned region is four hops away and never appears in the result.
+
+      Plain SQL can be correct using WITH RECURSIVE: seed a set with the sanctioned region's vertex, repeatedly add every location with a WITHIN edge pointing into the set until nothing new appears, then join facilities and shipments against the set. It works, but the chapter's comparison applies — a four-line Cypher query becomes roughly thirty lines, before handling cycles or traversal order. With compliance queries arriving weekly, the ergonomic gap is the argument for a graph database, or at least for the Cypher-based ISO GQL standard as it spreads.
+  - id: ch03-a03
+    title: "Event-sourcing an insurance claims pipeline"
+    scenario: |
+      A home insurer processes 300,000 claims a year through a system that updates rows in place: a claim record's status column is overwritten at each step, and disputed claims require archaeology through backup snapshots to reconstruct what happened. Regulators now require a complete, reconstructable history of every claim decision. Meanwhile, three different read needs are straining the single claims table: a customer-facing status page, a fraud-analytics dashboard aggregating patterns across claims, and a monthly regulatory filing. The architecture group proposes rebuilding the pipeline around event sourcing with CQRS, and you're asked to evaluate the design.
+    tasks:
+      - "Design the event log: name five or six event types using the chapter's naming convention, and explain what happens between a customer submitting a request and an event landing in the log."
+      - "Describe the three materialized views, and walk through what happens when a bug is discovered in the fraud dashboard's aggregation logic."
+      - "Identify two pitfalls of this design — one about deterministic replay, one about privacy law — and propose a mitigation for each."
+    hints:
+      - "Commands can be rejected; events cannot — they record things that already happened."
+      - "What happens if view-maintenance code looks up a live repair-cost index, and you replay the log next year?"
+    modelAnswer: |
+      Events are named in the past tense because they are facts: ClaimFiled, DocumentsSubmitted, AssessorAssigned, CoverageConfirmed, PayoutApproved, PayoutIssued, ClaimReopened. A customer's submission arrives as a command, which is validated first — is the policy active, is the incident within coverage dates? A failing command is rejected and nothing is logged. Once accepted, it becomes an immutable event appended to the log, and downstream consumers may not reject it: history has happened. The log itself satisfies the regulator's demand for reconstructable history — auditability comes free.
+
+      Each read need becomes a materialized view fed by the log: a per-claim status projection (denormalized for one cheap read per page load), the fraud dashboard's aggregates, and the monthly filing. CQRS means each view takes whatever shape its queries want. When the fraud bug surfaces, the fix is the pattern's best trick: correct the code, delete the view, and replay the log through it — every historical claim is re-aggregated correctly, with no data migration and no archaeology.
+
+      Two pitfalls. Determinism: if view code converts payouts using a live exchange rate or repair-cost index, replaying next year yields different numbers — so capture the rate inside the event, or query it as-of the event's timestamp. Privacy: GDPR erasure requests collide with an immutable log holding claimant data — keep personal data outside the events, or encrypt it per-user and destroy the key on request (crypto-shredding). And gate side effects so a replay doesn't resend 300,000 payout-confirmation emails.

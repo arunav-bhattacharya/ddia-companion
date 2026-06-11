@@ -1,0 +1,58 @@
+[
+  {
+    "title": "A Relational Model of Data for Large Shared Data Banks",
+    "url": "https://www.seas.upenn.edu/~zives/03f/cis550/codd.pdf",
+    "type": "paper",
+    "author": "E. F. Codd",
+    "note": "The original 1970 argument for data independence and normalized relations — short, readable, and striking for how many 'modern' data-model debates Codd anticipated."
+  },
+  {
+    "title": "What Goes Around Comes Around... And Around...",
+    "url": "https://db.cs.cmu.edu/papers/2024/whatgoesaround-sigmodrec2024.pdf",
+    "type": "paper",
+    "author": "Michael Stonebraker & Andrew Pavlo",
+    "note": "Surveys two decades of post-relational contenders — MapReduce, document, graph, array, vector — and explains why each was largely absorbed back into SQL and relational systems."
+  },
+  {
+    "title": "CMU 15-445/645 Intro to Database Systems (Fall 2024) — Lecture Schedule",
+    "url": "https://15445.courses.cs.cmu.edu/fall2024/schedule.html",
+    "type": "course",
+    "author": "Andy Pavlo / Carnegie Mellon University",
+    "note": "Free full lecture videos and slides; Lectures 1-2 work through relational algebra and modern SQL (window functions, recursive CTEs) with worked examples the chapter only sketches."
+  },
+  {
+    "title": "Turning the Database Inside Out with Apache Samza (Strange Loop 2014)",
+    "url": "https://www.youtube.com/watch?v=fU9hR3kiOK0",
+    "type": "video",
+    "author": "Martin Kleppmann",
+    "note": "The book's author motivates event sourcing and CQRS from first principles by deconstructing a database into its replication log, indexes, and materialized views."
+  },
+  {
+    "title": "Event Sourcing",
+    "url": "https://martinfowler.com/eaaDev/EventSourcing.html",
+    "type": "article",
+    "author": "Martin Fowler",
+    "note": "The canonical pattern write-up, with concrete guidance on event replay, temporal queries, reversing events, and the tricky interplay with external systems."
+  },
+  {
+    "title": "Neo4j Cypher Manual — Introduction",
+    "url": "https://neo4j.com/docs/cypher-manual/current/introduction/",
+    "type": "docs",
+    "author": "Neo4j",
+    "note": "Authoritative reference for the ASCII-art pattern syntax, MATCH/WHERE semantics, and variable-length path queries behind the chapter's property-graph examples."
+  },
+  {
+    "title": "Learn GraphQL — Official Documentation",
+    "url": "https://graphql.org/learn/",
+    "type": "docs",
+    "author": "GraphQL Foundation",
+    "note": "Runnable examples of queries, fragments, variables, and the schema type system that clarify why GraphQL is a client-facing API language rather than a database query language."
+  },
+  {
+    "title": "Towards Scalable Dataframe Systems",
+    "url": "https://arxiv.org/abs/2001.00888",
+    "type": "paper",
+    "author": "Devin Petersohn et al. (VLDB 2020)",
+    "note": "Formalizes dataframe semantics — ordering, flexible schemas, row/column symmetry — and explains exactly why pandas-style APIs resist classic relational optimization."
+  }
+]

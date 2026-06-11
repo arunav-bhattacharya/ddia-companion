@@ -1,0 +1,58 @@
+[
+  {
+    "title": "MapReduce: Simplified Data Processing on Large Clusters",
+    "url": "https://research.google.com/archive/mapreduce-osdi04.pdf",
+    "type": "paper",
+    "author": "Jeffrey Dean and Sanjay Ghemawat (Google)",
+    "note": "The original OSDI 2004 paper: map and reduce functions over key/value pairs, with the runtime handling partitioning, scheduling, machine failures, and inter-machine communication."
+  },
+  {
+    "title": "Command-line Tools can be 235x Faster than your Hadoop Cluster",
+    "url": "https://adamdrake.com/command-line-tools-can-be-235x-faster-than-your-hadoop-cluster.html",
+    "type": "article",
+    "author": "Adam Drake",
+    "note": "A find | xargs mawk | mawk pipeline crunches 1.75 GB of chess data in ~12 seconds (~270 MB/sec) versus 26 minutes on Hadoop — a case study in Unix-pipeline batch processing."
+  },
+  {
+    "title": "Resilient Distributed Datasets: A Fault-Tolerant Abstraction for In-Memory Cluster Computing",
+    "url": "https://people.eecs.berkeley.edu/~matei/papers/2012/nsdi_spark.pdf",
+    "type": "paper",
+    "author": "Matei Zaharia et al. (UC Berkeley)",
+    "note": "The NSDI 2012 Spark paper: RDDs achieve fault tolerance via lineage of coarse-grained transformations instead of replicating intermediate state to disk like MapReduce."
+  },
+  {
+    "title": "RDD Programming Guide",
+    "url": "https://spark.apache.org/docs/latest/rdd-programming-guide.html",
+    "type": "docs",
+    "author": "Apache Spark project",
+    "note": "Official Spark guide to transformations vs. actions, lazy evaluation, persistence, and why ByKey and join operations trigger shuffles across partitions."
+  },
+  {
+    "title": "Performance Tuning (Spark SQL)",
+    "url": "https://spark.apache.org/docs/latest/sql-performance-tuning.html",
+    "type": "docs",
+    "author": "Apache Spark project",
+    "note": "Documents broadcast vs. sort-merge vs. shuffle-hash join strategies, join hints, and Adaptive Query Execution's automatic skew-join splitting — the joins taxonomy from this chapter in practice."
+  },
+  {
+    "title": "Building and operating a pretty big storage system called S3",
+    "url": "https://www.allthingsdistributed.com/2023/07/building-and-operating-a-pretty-big-storage-system.html",
+    "type": "article",
+    "author": "Andy Warfield (AWS, on Werner Vogels' blog)",
+    "note": "An S3 VP explains object-store internals: spreading objects across millions of disks for heat management and Reed-Solomon erasure coding into identity and parity shards."
+  },
+  {
+    "title": "Dags — Apache Airflow Documentation",
+    "url": "https://airflow.apache.org/docs/apache-airflow/stable/core-concepts/dags.html",
+    "type": "docs",
+    "author": "Apache Airflow project",
+    "note": "Official reference for orchestrating batch workflows as directed acyclic graphs of tasks with dependencies, schedules, and trigger rules — the scheduler layer above the processing engines."
+  },
+  {
+    "title": "Memory Management in DuckDB",
+    "url": "https://duckdb.org/2024/07/09/memory-management",
+    "type": "article",
+    "author": "Mark Raasveldt (DuckDB)",
+    "note": "Shows how a single-node engine handles larger-than-memory batch jobs by streaming chunks and adaptively spilling joins, aggregations, and sorts to disk — a modern counterpoint to cluster-first thinking."
+  }
+]

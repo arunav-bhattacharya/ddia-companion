@@ -1,0 +1,345 @@
+---
+title: "Storage and Retrieval"
+chapter: 4
+description: "How databases physically store data and find it again — LSM-trees and B-trees for transactions, columnar storage and vectorized execution for analytics, and the indexes behind maps, search, and AI."
+readingMinutes: 29
+keyTakeaways:
+  - "A database does two fundamental things: store data when you give it some, and return it when you ask. Every index speeds up some reads at the cost of extra work on every write — which is why databases make you choose your indexes."
+  - "Log-structured storage never modifies files: writes go to an in-memory memtable, get flushed to disk as sorted immutable SSTables, and background compaction merges segments, discarding overwritten values and tombstoned deletions."
+  - "Bloom filters give LSM reads a fast probabilistic 'definitely not in this segment' check — roughly 10 bits per key buys a 1% false-positive rate, and every 5 extra bits cuts it tenfold."
+  - "B-trees split the database into fixed-size pages updated in place; a branching factor in the hundreds means three or four levels reach hundreds of terabytes, and a write-ahead log makes page overwrites crash-safe."
+  - "Rule of thumb: LSM-trees suit write-heavy workloads (large sequential writes, lower write amplification), B-trees suit read-heavy ones (predictable lookups, cheap range queries) — but only a benchmark of your workload settles it."
+  - "An index can hold the actual row (clustered), a pointer into an unordered heap file, or a few extra columns that let it answer queries alone (covering) — each choice trades read speed against space and write cost."
+  - "In-memory databases are fast not because they skip disk reads — the OS page cache already does that — but because they skip encoding data structures into a disk-friendly format."
+  - "Cloud data warehouses have decomposed into swappable parts on object storage: query engines (Trino), storage formats (Parquet, ORC), table formats (Iceberg, Delta), and data catalogs."
+  - "Column-oriented storage lets a query read 4 or 5 columns out of 100 and nothing else, and same-order columns compress superbly via bitmap and run-length encoding — sort order multiplies the effect."
+  - "Analytical engines spend CPU as carefully as I/O: query compilation generates machine code per query, vectorized execution processes column batches with tight loops and SIMD — both also operate directly on compressed data."
+  - "Full-text search rests on inverted indexes (term → postings list), maintained with the same log-structured merging as LSM-trees; semantic search embeds documents as vectors and finds neighbors with approximate indexes like IVF and HNSW."
+references:
+  - title: "CMU 15-445/645 Fall 2024 — Lecture 8: B+Tree Indexes"
+    url: "https://15445.courses.cs.cmu.edu/fall2024/slides/08-indexes1.pdf"
+    type: course
+    author: "Andy Pavlo, Carnegie Mellon University"
+    note: "Lecture slides going deeper than this summary on B+tree splits, deletes, variable-length keys, and node-size design choices."
+  - title: "The Log-Structured Merge-Tree (LSM-Tree)"
+    url: "https://www.cs.umb.edu/~poneil/lsmtree.pdf"
+    type: paper
+    author: "Patrick O'Neil, Edward Cheng, Dieter Gawlick, Elizabeth O'Neil"
+    note: "The original 1996 paper that motivated deferring and batching index writes — the direct ancestor of every LSM engine named in this chapter."
+  - title: "Bigtable: A Distributed Storage System for Structured Data"
+    url: "https://static.googleusercontent.com/media/research.google.com/en//archive/bigtable-osdi06.pdf"
+    type: paper
+    author: "Fay Chang, Jeffrey Dean, Sanjay Ghemawat, et al. (Google)"
+    note: "The paper that coined 'SSTable' and 'memtable' — sections 4–6 show how a real system wires together a commit log, an in-memory buffer, and compaction."
+  - title: "RocksDB Wiki: Leveled Compaction"
+    url: "https://github.com/facebook/rocksdb/wiki/Leveled-Compaction"
+    type: docs
+    author: "RocksDB team (Meta)"
+    note: "How a production LSM engine actually organizes levels and picks files to compact — the concrete machinery behind this chapter's write-amplification discussion."
+  - title: "Lightweight Compression in DuckDB"
+    url: "https://duckdb.org/2022/10/28/lightweight-compression"
+    type: article
+    author: "Mark Raasveldt (DuckDB)"
+    note: "Walks through RLE, bit-packing, dictionary, and FSST encodings in a real analytical engine — the practical detail behind why columns compress so well."
+  - title: "Everything You Always Wanted to Know About Compiled and Vectorized Queries But Were Afraid to Ask"
+    url: "https://www.vldb.org/pvldb/vol11/p2209-kersten.pdf"
+    type: paper
+    author: "Timo Kersten, Viktor Leis, et al."
+    note: "The empirical head-to-head between query compilation and vectorized execution that this chapter's query-execution section condenses into two paragraphs."
+  - title: "Elasticsearch from the Bottom Up, Part 1"
+    url: "https://www.elastic.co/blog/found-elasticsearch-from-the-bottom-up"
+    type: article
+    author: "Alex Brasetvik (Elastic)"
+    note: "Builds Lucene's inverted index up from term dictionaries to immutable merged segments — a clear bridge from this chapter's SSTables to full-text search."
+  - title: "Hierarchical Navigable Small Worlds (HNSW)"
+    url: "https://www.pinecone.io/learn/series/faiss/hnsw/"
+    type: article
+    author: "Pinecone (Faiss: The Missing Manual)"
+    note: "A visual, runnable explainer of the HNSW graph index with recall-versus-speed benchmarks — the natural next step after this chapter's vector section."
+---
+
+import Callout from '../../components/mdx/Callout.astro';
+import Term from '../../components/mdx/Term.astro';
+import LsmWritePath from '../../components/diagrams/ch04/LsmWritePath.astro';
+import BTreeLookup from '../../components/diagrams/ch04/BTreeLookup.astro';
+import RowVsColumn from '../../components/diagrams/ch04/RowVsColumn.astro';
+import InvertedIndex from '../../components/diagrams/ch04/InvertedIndex.astro';
+import HnswSearch from '../../components/diagrams/ch04/HnswSearch.astro';
+
+Strip away everything else and a database has two jobs: when you hand it data, it keeps the data; when you ask later, it hands the data back. Chapter 3 looked at that exchange from your side of the counter — data models and query languages. This chapter walks around to the database's side: how do bytes get arranged on disk so that one record among billions turns up in a millisecond?
+
+You will probably never write a storage engine. You will, however, choose one, and some night you'll stare at a latency graph wondering why writes stall every few minutes (usually: compaction). A working mental model is what separates picking a database from guessing. The deepest split is between engines built for transaction processing (<Term id="oltp">OLTP</Term>) — torrents of small reads and writes — and engines built for analytics, which inhale millions of rows per query. We'll take them in turn, then finish with the specialist indexes behind maps, search boxes, and AI retrieval.
+
+## Storage and Indexing for OLTP
+
+Here is a complete, working key-value database in two shell functions:
+
+```bash
+db_set () {
+    echo "$1,$2" >> database
+}
+
+db_get () {
+    grep "^$1," database | sed -e "s/^$1,//" | tail -n 1
+}
+```
+
+Call `db_set 42 '{"city":"Lisbon"}'` and the pair is appended to a file. Call `db_get 42` and you get the value back. Updating a key just appends a newer line — that's why `db_get` takes the *last* match, not the first.
+
+Ridiculous as it looks, `db_set` is genuinely fast, because appending to a file is about the cheapest write a computer can do. Many real databases are built on exactly this primitive: a **log**, meaning an append-only sequence of records on disk. Not a log in the "application prints debug text" sense — this <Term id="log">log</Term> may be binary and purely internal; the append-only discipline is the point.
+
+`db_get`, on the other hand, is a disaster. It scans the entire file on every lookup — O(n) cost, doubling with your data. To find things efficiently you need an **index**: an extra structure, derived from the data, whose only job is to make certain queries faster. And here is the trade-off the whole chapter orbits: an <Term id="index">index</Term> speeds up reads, but every write now has to update the index too. Indexes make reads cheaper by making writes more expensive. That's why databases don't index everything automatically — you, knowing your query patterns, choose which indexes earn their keep.
+
+### Log-Structured Storage
+
+Suppose we keep the append-only file but want fast lookups. Easy: hold a hash map in memory that maps each key to the byte offset of its most recent value in the file. Writes append and update the map; reads consult the map, seek, and read. If the relevant chunk of file is in the filesystem cache, a read involves no disk I/O at all.
+
+This works — but four problems lurk. Old, overwritten values are never reclaimed, so the file grows forever. The hash map lives only in memory, so a restart means rescanning the whole log to rebuild it. The map must *fit* in memory, and on-disk hash maps perform badly (random I/O everywhere, painful resizing, fiddly collision handling). And range queries are hopeless: to scan keys 10000 through 19999 you'd have to look up every key individually.
+
+#### The SSTable file format
+
+The fix for most of these problems is to keep the file *sorted by key*. A **Sorted String Table (SSTable)** is a file of key-value pairs in key order, with each key appearing exactly once.
+
+Sorting buys you a smaller index. Instead of every key, you keep a **sparse index**: group the pairs into blocks of a few kilobytes and record only the first key of each block. Looking for `maple` when the index lists `mango` and `marble`? Sorting guarantees that `maple`, if present, lives in the block starting at `mango` — seek there and scan a few kilobytes. Each block can also be compressed, saving disk space and I/O bandwidth for a little CPU.
+
+#### Memtables, flushing, and compaction
+
+Sorting creates a new problem: you can't append to a sorted file, because new keys belong in the middle. The log-structured answer is a hybrid of an append-only log and sorted files:
+
+1. Writes go into an in-memory ordered structure — a red-black tree, skip list, or trie — called the **memtable**. It accepts keys in any order and reads them back sorted.
+2. When the memtable exceeds a threshold (typically a few megabytes), it's written out, already sorted, as a new SSTable **segment**. Meanwhile a fresh memtable takes over.
+3. A read checks the memtable first, then the newest segment, then the next-newest, until the key turns up or the segments run out.
+4. In the background, a merging and **compaction** process combines segments and throws away values that were overwritten or deleted.
+
+<LsmWritePath />
+
+Merging segments works like the merge step of mergesort: walk the input files side by side, always copy the lowest key to the output, and when the same key shows up in several inputs, keep only the most recent value. The output is a new sorted segment, built using barely any memory.
+
+Two details make this crash-proof. First, since RAM evaporates on a crash, every write is *also* appended to an unsorted log on disk, whose only job is rebuilding the memtable after a restart. Each time a memtable is flushed, the corresponding stretch of log can be discarded; checksums catch any half-written entries. Second, deleting a key can't just remove bytes from immutable files, so deletion appends a marker called a **tombstone**. During merges, the tombstone tells the compactor to drop earlier values of that key; once it reaches the oldest segment, the tombstone itself can go.
+
+This whole scheme is the **LSM-tree** (Log-Structured Merge-tree), published in 1996 and popularized by Google's Bigtable paper, which coined *SSTable* and *memtable*. It powers RocksDB, Cassandra, ScyllaDB, and HBase. The signature property: a segment file is written once and never modified afterward. That immutability simplifies everything downstream — crashes mid-merge just mean deleting the unfinished file and starting over; reads continue against the old segments while a merge runs, then switch to the result. Immutable segments even suit cloud object storage — SlateDB and Delta Lake do exactly that.
+
+#### Bloom filters
+
+LSM reads have an awkward case: a key written long ago — or worse, a key that doesn't exist — forces a check of segment after segment. To dodge this, each SSTable usually carries a **Bloom filter**: a small bitmap giving a fast, probabilistic answer to "could this key be in here?"
+
+For every key in the segment, several hash functions each pick a bit position, and those bits are set to 1. To test a key, hash it the same way and inspect its bits. Any 0 among them means the key is *definitely absent* — skip the whole segment without touching it. All 1s means the key is *probably* present; occasionally other keys happen to have set all the same bits — a **false positive** — and you decode the block for nothing. Correctness never depends on the filter, only speed.
+
+The accuracy is tunable with space. A handy rule of thumb: about 10 bits of filter per key gives a 1% false-positive rate, and each additional 5 bits per key divides that rate by ten.
+
+#### Compaction strategies
+
+*When* to compact, and *which* segments, is a real design decision, and most LSM engines let you pick a strategy:
+
+- **Size-tiered compaction** merges newer, smaller SSTables into older, larger ones. Four 256 MB segments might merge into one of roughly 898 MB (overwrites, deletions, and expired entries shave off the rest). Old segments grow huge, and merging them needs a lot of temporary disk, but most data gets rewritten only a few times in big sequential merges — great for very high write throughput.
+- **Leveled compaction** keeps SSTables at a fixed size and organizes them into levels L0, L1, L2, …, each level bigger than the last. Beyond L0, the SSTables within a level partition the key range (one file for a–m, another for n–z). When a level overflows its budget, a file or two merges down into the next level. Compaction proceeds in small increments, uses less spare disk, and reads touch fewer SSTables.
+
+Mostly writes, few reads? Size-tiered. Read-dominated, or a small set of hot keys amid many cold ones? Leveled. Happily, most LSM implementations offer both.
+
+<Callout type="note" title="Embedded storage engines">
+Not every database is a server you talk to over a network. **Embedded databases** — RocksDB, SQLite, LMDB, DuckDB, KùzuDB — are libraries living inside your application's process, reached by ordinary function calls and reading files on local disk. They're the default for mobile apps' local data, and a respectable backend choice when data fits one machine and concurrency is modest — for instance, one small database per tenant in a multitenant system. Everything in this chapter applies to both.
+</Callout>
+
+### B-Trees
+
+The incumbent alternative to the log-structured family is the **B-tree**: introduced in 1970, declared "ubiquitous" before the decade was out, and still the standard index in nearly every relational database and plenty of nonrelational ones.
+
+B-trees agree with SSTables on the headline — keep key-value pairs sorted by key, so lookups and range queries are fast — and disagree about everything else. Log-structured engines write multi-megabyte immutable segments. B-trees chop the database into small, fixed-size **pages** (traditionally 4 KiB; PostgreSQL uses 8 KiB, MySQL 16 KiB) and *overwrite pages in place*. Each page has a number, so pages can reference each other like on-disk pointers, and out of those references you build a tree.
+
+<BTreeLookup />
+
+One page is the **root**; every lookup starts there. The root holds a set of keys acting as range boundaries, with a child-page reference for each gap between them. Searching for key 437 in the diagram: the root says 437 falls between 300 and 500, so follow that child; the next page subdivides further; one more hop lands on a **leaf page** that holds the key with its value inline, or a reference to where the value lives. The number of children per page is the **branching factor** — several hundred in practice. That fan-out is why B-trees are shallow: the tree stays balanced with depth O(log n), and a four-level tree of 4 KiB pages with branching factor 500 can address about 250 TB. Three or four page reads to find anything.
+
+Updating an existing key is simple: find its leaf, rewrite that page with the new value. Inserting is simple too, until a leaf is full. Then the page **splits** into two half-full pages and the parent is updated with the new boundary — and if the parent is full, *it* splits, possibly cascading all the way up. When the root itself splits, a new root is created above it — the only way a B-tree gets taller.
+
+#### Making B-trees reliable
+
+Overwriting pages in place is exactly where the danger lives. A split touches several pages — two children plus a parent — and a crash partway through leaves a corrupted tree, perhaps an orphan page no parent points to. If the hardware can't even write one page atomically, you can get a **torn page**, half new bytes and half old.
+
+The standard defense is a **write-ahead log (WAL)**: an append-only file to which every intended modification is written *before* being applied to the tree's pages. After a crash, the database replays the log and restores the tree to consistency. (Filesystems use the same trick under the name journaling.) The WAL also unlocks a performance win: modified pages can sit in memory for a while instead of being written immediately, because anything written to the WAL and flushed with `fsync` is already <Term id="durable">durable</Term>.
+
+Notice the small irony: the update-in-place school still needs an append-only log to be safe.
+
+#### B-tree variants
+
+Five decades of production use bred plenty of refinements. Some databases, like LMDB, skip the WAL entirely with **copy-on-write**: a modified page is written to a fresh location and new parent pages are created pointing at it — handy for crash safety and, as Chapter 8 will show, for concurrency. Interior pages often store abbreviated keys, since boundary keys only need to be distinctive, not complete; shorter keys mean higher branching factors and fewer levels. Some implementations lay out leaf pages sequentially on disk so range scans avoid seeking (hard to maintain as the tree grows), and many add sibling pointers between adjacent leaves so an in-order scan never climbs back to a parent.
+
+### Comparing B-Trees and LSM-Trees
+
+The folk wisdom: LSM-trees for write-heavy workloads, B-trees for read-heavy ones. It's a decent prior, but benchmarks are notoriously sensitive to workload details, so treat any general claim as a hypothesis to test on *your* data. The boundary is blurry anyway — some engines blend the schools, for instance by keeping multiple B-trees and merging them LSM-style.
+
+**Reads.** A B-tree lookup is one page per level: fast and, just as valuable, *predictable*. An LSM read may rummage through several SSTables at various stages of compaction, with Bloom filters doing damage control. Range queries tilt toward B-trees: the sorted tree serves them directly, while an LSM engine must scan all segments in parallel and merge results — and Bloom filters can't help, since you can't hash "every key between A and B." Watch out also for LSM latency spikes: if compaction can't keep pace with incoming writes, memtables back up, and engines like RocksDB respond by stalling *all* reads and writes until the flush completes.
+
+**Writes.** A B-tree updating keys scattered across the key space scatters page overwrites all over the disk — **random writes**. An LSM engine only ever writes whole segments — fewer, far larger, **sequential writes**. Disks of every kind deliver more throughput for sequential writes than random ones, dramatically so on spinning disks and still noticeably on SSDs, so an LSM engine generally sustains higher write throughput on the same hardware.
+
+<Callout type="example" title="Why SSDs still prefer sequential writes">
+No moving parts, so why would SSDs care? Because flash is written in pages of about 4 KiB but erased only in blocks of about 512 KiB. Before erasing a block, the controller must rescue any still-valid pages by copying them elsewhere — internal garbage collection. Sequential workloads tend to fill blocks with data that lives and dies together, so blocks erase cleanly; random workloads leave every block a jumble of live and dead pages, so the controller burns bandwidth shuffling data — bandwidth your application doesn't get — and the extra writes physically wear out the flash sooner. Random writes don't just run slower on SSDs; they age them.
+</Callout>
+
+**Write amplification.** Every storage engine writes a logical change to disk more than once. An LSM-tree writes a value to the WAL, again when the memtable flushes, and again at every compaction it participates in. A B-tree writes to its WAL and to the page — and often must write the *whole* page even when a few bytes changed. Divide total bytes hitting disk by the bytes you'd write to a bare append-only log and you get the **write amplification** factor. It matters twice over: in a write-heavy system, disk bandwidth is the ceiling, and amplification decides how many application writes fit under it; and on SSDs, every amplified write is wear. Typical workloads see lower amplification from LSM-trees — they never write full pages for small changes and they compress SSTable blocks — one more reason they suit write-heavy systems. One benchmarking trap: a young LSM-tree hasn't started compacting yet, so measure for long enough that compaction is sharing the disk.
+
+**Disk space.** B-trees fragment: deleted keys leave dead pages mid-file that future inserts may reuse but the filesystem never gets back, which is why PostgreSQL ships a vacuum process. LSM compaction rewrites files anyway, so fragmentation mostly self-heals, and SSTables compress better than page-structured trees — though size-tiered compaction needs hefty temporary space, and overwritten values linger until compaction collects them. Lingering has a compliance angle: a "deleted" record survives in higher levels until its tombstone has propagated through every compaction level, which can take a while — awkward when regulation says deleted means *gone*. On the flip side, immutable segments make snapshots nearly free: note which files exist now, don't delete them, done. Snapshotting a B-tree whose pages churn in place takes real ingenuity.
+
+| | B-tree | LSM-tree |
+|---|---|---|
+| Write pattern | small random page overwrites | large sequential segment writes |
+| Write throughput | lower | higher, until compaction lags |
+| Point reads | predictable, one page per level | several segments, rescued by Bloom filters |
+| Range queries | naturally fast | must merge-scan all segments |
+| Write amplification | whole page per change + WAL | WAL + flush + every compaction; usually lower |
+| Space overhead | fragmentation (vacuum needed) | overwritten data awaiting compaction; better compression |
+| Crash recovery | WAL replay over mutable pages | delete unfinished files; WAL rebuilds memtable |
+| Snapshots | hard — pages mutate | easy — segments are immutable |
+
+### Multicolumn and Secondary Indexes
+
+Everything so far has been a primary-key index: one unique key, one record — the way you resolve a row, document, or vertex by its ID. Real applications immediately want more. `CREATE INDEX` on a relational table builds a **secondary index** so you can also search by, say, `user_id` — and unlike a primary key, a <Term id="secondary-index">secondary index</Term> maps each value to potentially *many* rows. Two standard solutions: make the index value a list of matching row identifiers (foreshadowing the postings lists of full-text search), or make each entry unique by tacking the row identifier onto the key. Either way, B-trees and log-structured engines both serve fine as the underlying structure. Indexes spanning several columns at once we'll meet at the end of the chapter.
+
+### Storing Values Within the Index
+
+A subtler design question: what does the index actually store next to the key?
+
+One answer is the row itself. That's a **clustered index** — in MySQL's InnoDB, the primary key index always holds the full row, and SQL Server lets you nominate one clustered index per table. The opposite answer stores only a *reference*, with rows living in a **heap file** in no particular order; PostgreSQL works this way. Heap storage avoids duplicating data when several indexes exist — each index just points into the heap. Updates are pleasant when the new value is no bigger than the old one: overwrite in place, indexes untouched. A bigger value, though, must move to roomier quarters, and then either every index gets updated to the new address or a forwarding pointer squats in the old spot.
+
+In between sits the **covering index**, which stores a *subset* of the table's columns alongside the key. If a query needs only those columns, the index alone can answer it — the index "covers" the query — skipping the heap lookup entirely. The price: duplicated data, more disk, slower writes.
+
+### Keeping Everything in Memory
+
+Every structure so far is a workaround for disks being awkward. We tolerate the awkwardness for two reasons: disks survive power loss, and disk capacity costs far less per gigabyte than RAM. But RAM keeps getting cheaper, and plenty of datasets simply aren't that large. Hence **in-memory databases**.
+
+Some, like Memcached, are pure caches — restart, lose everything, shrug, refill. Others promise real durability despite living in RAM: battery-backed memory in exotic cases, but usually an append-only change log on disk, periodic snapshots, or replicas on other machines. The disk log is write-only in normal operation — every read is served from memory — and on-disk files can be backed up and inspected with ordinary tools. VoltDB, SingleStore, and Oracle TimesTen offer relational models this way; RAMCloud is an open source key-value store that applies log-structured ideas to both memory and disk. Redis and Couchbase sit lower on the durability dial, writing to disk asynchronously.
+
+Here's the counterintuitive part: the speed advantage is *not* about avoiding disk reads. A disk-based engine with enough RAM rarely touches the disk for reads either — the operating system caches recently used blocks anyway. The real win is skipping the labor of encoding in-memory structures into a disk-friendly format and back. And data models that are painful to express in pages and segments become easy: Redis offers priority queues and sets as first-class citizens because everything stays in memory.
+
+## Data Storage for Analytics
+
+A <Term id="data-warehouse">data warehouse</Term> usually speaks SQL, same as your OLTP database, and the resemblance ends at the parser. Analytical queries — scan a year of sales, aggregate by weekday — punish OLTP internals, so warehouse engines are built differently from the disk up. Most vendors now pick one side and commit. The exceptions advertising hybrid transactional/analytical processing (HTAP), like Microsoft SQL Server and SingleStore, increasingly turn out to be two distinct storage and query engines sharing a SQL front door.
+
+### Cloud Data Warehouses
+
+The on-premises generation — Teradata, Vertica, SAP HANA — has been joined by cloud-native warehouses: Google BigQuery, Amazon Redshift, Snowflake. The cloud versions lean on infrastructure their ancestors never had, chiefly object storage and serverless compute. Persisting data in object storage rather than local disks decouples storage from compute, so each scales (and bills) independently, and integration with the surrounding cloud — log ingestion, Dataflow, Kinesis — comes close to free.
+
+Something more interesting happened to the open source stack: the monolithic warehouse came apart into four interchangeable layers.
+
+- **Query engine** — Trino, Presto, Apache DataFusion — parses SQL, plans, optimizes, and executes, often as distributed parallel tasks, sometimes delegating execution to Spark or Flink.
+- **Storage format** — Parquet, ORC, Lance, Nimble — defines how a table's rows become bytes in a file, typically on object storage, readable by any tool that speaks the format — the shared files of a "data lake" — not just one vendor's engine.
+- **Table format** — Apache Iceberg, Delta — answers the question storage formats dodge: since Parquet files are immutable, how do inserts and deletes work? A table format tracks which files constitute a table, its schema, and offers niceties like time travel (query the table as of last Tuesday) and even transactions.
+- **Data catalog** — Snowflake's Polaris, Databricks' Unity Catalog — tracks which *tables* make up a database, usually as a standalone REST service, which conveniently lets data-governance and discovery tools read the same metadata the query engines use.
+### Column-Oriented Storage
+
+Warehouse schemas center on enormous **fact tables** — trillions of rows, petabytes — that are often more than a hundred columns wide. Yet a typical analytical query touches four or five of those columns; nobody runs `SELECT *` on a trillion rows on purpose. Something like:
+
+```sql
+SELECT dim_date.weekday, dim_product.category,
+       SUM(fact_sales.quantity) AS total
+FROM fact_sales
+  JOIN dim_date    ON fact_sales.date_key   = dim_date.date_key
+  JOIN dim_product ON fact_sales.product_sk = dim_product.product_sk
+WHERE dim_date.year = 2024
+  AND dim_product.category IN ('Fresh fruit', 'Candy')
+GROUP BY dim_date.weekday, dim_product.category;
+```
+
+Millions of rows, three columns of the fact table. In a row-oriented engine — which is what OLTP databases are; document stores too, with each document a contiguous blob — even with helpful indexes, the engine drags hundred-column rows off disk, parses all of them, and discards 97% of the bytes.
+
+**Column-oriented storage** flips the layout: store all values of each *column* together instead of all values of each row. A query reads only the column files it mentions. The one rule holding it together: every column stores rows in the same order, so the 23rd entry of every column file belongs to row 23, and a full row can be reassembled by position when needed. In practice engines also chop tables into blocks of thousands or millions of rows — commonly aligned to time ranges — so a date-bounded query reads only its columns within only the relevant blocks.
+
+<RowVsColumn />
+
+Columnar layout has conquered analytics: Snowflake at cloud scale, DuckDB embedded in a process, Pinot and Druid for product analytics, the Parquet/ORC/Lance/Nimble file formats, Apache Arrow and Pandas/NumPy in memory, InfluxDB IOx and TimescaleDB for time series. (Parquet even handles document-shaped data via a technique called shredding, inherited from Google's Dremel.)
+
+<Callout type="warning" title="Column-oriented is not 'wide-column'">
+Despite the name, wide-column (column-family) databases — Bigtable, HBase, Accumulo — are **row-oriented**: each row, however many columns it has, is stored together. If someone proposes HBase for your analytics warehouse, this is the misconception to check first.
+</Callout>
+
+#### Column compression
+
+Look down a single column and you'll see repetition — the same product IDs, the same handful of category codes — and repetition is what compression eats. One technique with an outsized payoff in warehouses is **bitmap encoding**. A column with n distinct values becomes n bitmaps, one per value, one bit per row: the bit is 1 where the row has that value. Distinct values are usually few relative to rows (a retailer with billions of sales but 100,000 products), and each bitmap is then mostly zeros — *sparse* — so a **run-length encoding (RLE)**, storing the lengths of runs of identical bits, shrinks it dramatically. Roaring bitmaps switch between representations per chunk, whichever is smaller.
+
+The reward shows up at query time:
+
+- `WHERE product_sk IN (31, 68, 69)` — load three bitmaps, bitwise OR.
+- `WHERE product_sk = 30 AND store_sk = 3` — load two bitmaps, bitwise AND, which works *because* all columns keep rows in the same order: bit k means row k everywhere.
+
+CPUs chew through bitwise operations absurdly fast.
+
+#### Sort order in column storage
+
+A column store can simply append rows in arrival order. But you can instead impose an order — choosing sort columns the way you'd choose an index. The sort must apply to entire rows, not each column separately (independently sorted columns would scramble the row correspondence that makes everything work). If dashboards always filter on recent dates, sorting by `date_key` first means a "last month" query scans one slice instead of everything; a second sort key like `product_sk` then groups same-product sales within each date for cheap filtering and grouping.
+
+Sorting also supercharges compression. The first sort key ends up with long runs of repeated values — RLE can flatten a billion-row column to a few kilobytes. The second key compresses less, the third less still, and columns far down the priority list sit in effectively random order. Front-load the columns you query most; the compression on the first one or two is the prize.
+
+#### Writing to column-oriented storage
+
+Sorted, compressed, columnar files are wonderful to read and dreadful to update — inserting one row into the middle means rewriting every column file from that point on. Sound familiar? The cure is the one from the first half of this chapter: writes accumulate in a row-oriented, sorted, in-memory structure, and when enough pile up, they're merged with the on-disk column files and written out in bulk as new immutable files — LSM thinking, wearing a columnar costume. Immutable bulk files are also exactly what object storage wants. Queries transparently combine the disk files with recent in-memory writes, so analysts see their inserts immediately; Snowflake, Vertica, Pinot, and Druid all work this way.
+
+<Callout type="insight" title="One idea, four costumes">
+Count the appearances of "accumulate sorted data in memory, write immutable sorted files, merge in the background": LSM-trees for OLTP, columnar warehouse writes, Lucene's full-text segments later in this chapter, and the Iceberg/Delta table formats layered on immutable Parquet. It may be the single most reused mechanism in modern storage — learn it once, recognize it everywhere.
+</Callout>
+
+### Query Execution: Compilation and Vectorization
+
+An analytical SQL query is decomposed into a plan of **operators** — scans, filters, joins, aggregations — possibly spread across many machines. When a query scans millions of rows, I/O is only half the bill; the CPU cycles spent per value start to dominate. The naive operator is an interpreter: for each row, consult a description of the query to see what to compare and compute. Per-row interpretive overhead, multiplied by a hundred million rows, is how queries end up CPU-bound. Two faster schools emerged:
+
+- **Query compilation.** Generate code specific to this query — a tight loop over the rows doing exactly the needed comparisons and copies — then compile it to machine code (LLVM is a popular backend) and run it. Effectively just-in-time compilation, as in the JVM, but for SQL.
+- **Vectorized processing.** Keep the interpreter, but stop interpreting per row. The engine ships a fixed set of operators that each process a *batch* of column values per call. Pass the `product_sk` column and the ID for bananas to the equality operator, get back a bitmap of matches; do the same for the store column; AND the bitmaps. The interpretive overhead is paid once per batch of thousands, not once per value.
+
+Implementation-wise they're night and day; performance-wise both win, and for the same underlying reasons: sequential memory access instead of cache-hostile pointer chasing, tight inner loops that keep CPU pipelines full and branch predictors happy, parallelism via threads and SIMD instructions, and — neatly — operating directly on compressed data such as those bitmaps, never paying to decompress into an intermediate format.
+
+### Materialized Views and Data Cubes
+
+Chapter 2's timeline cache introduced materialization; warehouses formalize it. A **virtual view** is a saved query — read it and the engine inlines the definition and runs the whole thing. A **materialized view** is an actual copy of the results on disk, which must be updated when underlying data changes. (Some databases do this automatically; systems like Materialize specialize in it.) The trade is the standard one: pay on write, <Term id="materialize">materialize</Term> once, read many times cheaply.
+
+The warehouse-flavored special case is the **data cube** (or OLAP cube): a grid of precomputed aggregates along dimension axes. Take two dimensions, date and product: each cell holds, say, `SUM(net_price)` for that date-product pair, and summing along a row or column collapses a dimension — sales by product across all dates, or by date across all products. With five dimensions (date, product, store, promotion, customer), each cell holds the aggregate for one combination of all five, and you can summarize along any axis.
+
+The payoff: questions matching the precomputed grid — total sales per store yesterday — return instantly, no row scanning. The catch: anything outside the grid is unanswerable from the cube. Share of sales from items over $100? Not without price as a dimension. So warehouses keep the raw data as the source of truth and sprinkle cubes on top as accelerators for the hottest queries.
+
+## Multidimensional and Full-Text Indexes
+
+B-trees and LSM-trees handle queries on *one* attribute: exact lookups, ranges, prefixes. The most common step up is the **concatenated index**, which glues several fields into one key — like a printed phone book ordered by (lastname, firstname). Great for "everyone surnamed Okafor" and "Okafor, Amara" — and utterly useless for "everyone named Amara," because first names are scattered through the book.
+
+That weakness bites hard with geospatial data. A map view needs every restaurant inside a rectangle of latitude *and* longitude:
+
+```sql
+SELECT * FROM restaurants
+WHERE latitude  BETWEEN 51.4946 AND 51.5079
+  AND longitude BETWEEN -0.1162 AND -0.1004;
+```
+
+A concatenated index on (latitude, longitude) can narrow only the latitude band — within it, every longitude on Earth qualifies. You need a **multidimensional index** that constrains both axes at once. One trick maps 2D coordinates onto a single number with a space-filling curve and indexes that with a plain B-tree. More commonly, dedicated spatial structures like **R-trees** or Bkd-trees partition space so that nearby points share subtrees — PostGIS builds R-trees on PostgreSQL's Generalized Search Tree facility. Regular grids of squares, triangles, or hexagons work too. And none of this is geography-specific: a three-dimensional index on (red, green, blue) finds products by color range, and a (date, temperature) index finds last year's observations between 25 and 30 °C without scanning a whole year or a whole thermometer.
+
+### Full-Text Search
+
+Searching documents by keywords is, squinting slightly, an extreme multidimensional query: every possible term is a dimension, and a document scores 1 in the dimensions of words it contains. "Red apples" asks for a 1 in *red* and a 1 in *apples*, across a vocabulary of millions of dimensions. (Real information retrieval also wrestles with segmenting languages written without spaces, grammatical variants, and synonyms — a deep specialist field we'll wave to from the boat.)
+
+The workhorse structure is the **inverted index**: a key-value mapping from each term to the **postings list** of IDs of documents containing it. With sequential document IDs, a postings list is exactly a sparse bitmap — the same animal as the warehouse bitmaps earlier — and multi-keyword queries become bitwise ANDs of postings.
+
+<InvertedIndex />
+
+Lucene, the engine inside Elasticsearch and Solr, stores its term-to-postings mapping in sorted, SSTable-like files, merged in the background — the log-structured pattern's third appearance. PostgreSQL's GIN index type uses postings lists too, powering <Term id="full-text-search">full-text search</Term> and JSON-document indexing.
+
+Two refinements worth knowing. For arbitrary substring and even regex search, index **n-grams**: every length-n character window — the trigrams of `hello` are `hel`, `ell`, `llo` — at the cost of a bulky index. For typo tolerance, Lucene searches within an **edit distance** (one added, removed, or replaced letter at distance 1), storing its term set as a finite-state automaton over characters and transforming it into a Levenshtein automaton to walk all close-enough terms efficiently.
+
+### Vector Embeddings
+
+Keyword search has a ceiling: the help page titled "canceling your subscription" should match the query "how to close my account," which shares not a single word with it. **Semantic search** aims at meaning rather than spelling — and it's the retrieval half of retrieval-augmented generation (RAG), where search results get fed into a large language model's context.
+
+The enabling idea is the **vector embedding**: an embedding model (often itself an LLM) converts a document into an array of floating-point numbers — a point in a high-dimensional space — arranged so that semantically similar documents land near each other. A page about growing tomatoes might embed (in a toy three-dimensional space) at [0.4, 0.8, 0.3]; a page on watering vegetables nearby at [0.4, 0.7, 0.4]; a page on B-tree internals somewhere across the room at [0.9, 0.1, −0.6]. Production embeddings run to a thousand-plus dimensions, and no individual number means anything — only distances do, measured by **cosine similarity** (angle between vectors) or **Euclidean distance** (straight line). Word2Vec, BERT, and GPT did this for text; newer multimodal models embed text and images into one shared space.
+
+Query time: embed the user's query (plus context like their location) with the same model, then find the stored vectors nearest to it. That last step needs a **vector index**, because R-trees and friends fall apart in thousand-dimensional space. The main contenders:
+
+- **Flat indexes** store vectors as-is and compare the query against every one. Exact answers, linear cost — fine until the collection grows.
+- **Inverted file (IVF) indexes** cluster the space into partitions around centroids and compare only against vectors in the partitions nearest the query. Fast but approximate: a true neighbor sitting just across a partition boundary gets missed. The number of partitions *probed* per query is the accuracy-versus-speed dial.
+- **HNSW (Hierarchical Navigable Small World) indexes** maintain layered proximity graphs — a sparse top layer over increasingly dense ones. A search greedily walks toward the query in the top layer, drops down, refines, and repeats to the bottom. Also approximate, and excellent in practice.
+
+<HnswSearch />
+
+Faiss ships tuned variants of both families; pgvector brings IVF and HNSW to PostgreSQL. The accuracy trade-off has a name worth knowing — these are *approximate nearest neighbor* (ANN) searches — and for most search applications, trading a sliver of recall for orders-of-magnitude speed is the obvious deal.
+
+<Callout type="note" title="Two unrelated meanings of 'vector'">
+This chapter used "vector" for two completely different things. In *vectorized query execution*, a vector is a batch of column values processed in one operator call — an execution strategy. In *vector embeddings*, a vector is a point in semantic space — a data representation. Vectorized engines don't process embeddings any more than a music conductor conducts electricity.
+</Callout>
+
+<Callout type="insight" title="Where this chapter points">
+The chapter's master key: every storage engine is some arrangement of logs, sorted structures, and background merging, tuned for a read/write mix. That key unlocks many doors ahead. The WAL you met here becomes the backbone of replication in Chapter 6 — shipping a log *is* replication. Immutable segments and snapshots resurface in transactions (Chapter 8). Materialized views grow into the derived-data systems of Chapters 11–13. And the next time a tuning guide mutters about compaction strategies, page sizes, or sort keys, you'll know which lever it's describing — and which workload it's asking about.
+</Callout>

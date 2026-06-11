@@ -1,0 +1,52 @@
+---
+import Diagram from '../Diagram.astro';
+---
+
+<Diagram caption="A read-your-writes violation: the user's comment is safely on the leader, but their refresh hits a follower the write hasn't reached yet — to them, the comment just vanished." wide>
+  <svg viewBox="0 0 760 290" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="ryw-title">
+    <title id="ryw-title">Timeline where a user writes a comment to the leader, then reads from a lagging follower and does not see the comment</title>
+
+    <!-- Lifeline labels -->
+    <text x="20" y="64" font-size="12" font-weight="600" fill="var(--diagram-stroke)">user</text>
+    <text x="20" y="134" font-size="12" font-weight="600" fill="var(--diagram-stroke)">leader</text>
+    <text x="20" y="204" font-size="12" font-weight="600" fill="var(--diagram-stroke)">follower</text>
+
+    <!-- Lifelines -->
+    <line x1="100" y1="60" x2="740" y2="60" stroke="var(--diagram-muted)" stroke-width="1.5"/>
+    <line x1="100" y1="130" x2="740" y2="130" stroke="var(--diagram-muted)" stroke-width="1.5"/>
+    <line x1="100" y1="200" x2="740" y2="200" stroke="var(--diagram-muted)" stroke-width="1.5"/>
+
+    <!-- user -> leader: insert comment -->
+    <line x1="140" y1="60" x2="183" y2="126" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <polygon points="177,124 185,130 183,118" fill="var(--diagram-stroke)"/>
+    <text x="120" y="46" font-size="11" fill="var(--diagram-stroke)">insert comment</text>
+
+    <!-- leader -> user: ok -->
+    <line x1="200" y1="130" x2="243" y2="64" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <polygon points="237,65 245,60 244,72" fill="var(--diagram-stroke)"/>
+    <text x="243" y="46" font-size="11" fill="var(--diagram-stroke)">ok</text>
+
+    <!-- leader -> follower: replication, slow (dashed, arrives late) -->
+    <line x1="200" y1="133" x2="600" y2="196" stroke="var(--diagram-stroke)" stroke-width="1.5" stroke-dasharray="6 4"/>
+    <polygon points="592,194 602,200 596,189" fill="var(--diagram-stroke)"/>
+    <text x="400" y="155" font-size="11" fill="var(--diagram-muted)">replication lag…</text>
+
+    <!-- user -> follower: read (before replication arrives) -->
+    <line x1="330" y1="60" x2="398" y2="196" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <polygon points="392,193 400,200 399,188" fill="var(--diagram-accent)"/>
+    <text x="320" y="46" font-size="11" fill="var(--diagram-accent)">reload page</text>
+
+    <!-- follower -> user: stale response -->
+    <line x1="420" y1="200" x2="488" y2="64" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <polygon points="482,66 490,60 489,72" fill="var(--diagram-accent)"/>
+    <text x="478" y="46" font-size="11" fill="var(--diagram-accent)">“no such comment”</text>
+
+    <!-- annotation -->
+    <text x="500" y="235" font-size="11" fill="var(--diagram-muted)">the read raced the replication stream — and won, unfortunately</text>
+
+    <!-- time arrow -->
+    <line x1="100" y1="265" x2="700" y2="265" stroke="var(--diagram-muted)" stroke-width="1.5"/>
+    <polygon points="700,260 710,265 700,270" fill="var(--diagram-muted)"/>
+    <text x="730" y="269" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">time</text>
+  </svg>
+</Diagram>

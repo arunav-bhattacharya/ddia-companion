@@ -1,0 +1,51 @@
+---
+import Diagram from '../Diagram.astro';
+---
+
+<Diagram caption="An inverted index maps each term to a postings list of the documents containing it; intersecting two postings lists answers a multi-keyword query.">
+  <svg viewBox="0 0 720 330" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="invidx-title">
+    <title id="invidx-title">Three documents tokenized into an inverted index of terms and postings lists</title>
+
+    <!-- Documents -->
+    <rect x="30" y="36" width="220" height="60" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="140" y="62" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-stroke)">Doc 1</text>
+    <text x="140" y="82" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">“fresh red apples”</text>
+
+    <rect x="30" y="116" width="220" height="60" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="140" y="142" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-stroke)">Doc 2</text>
+    <text x="140" y="162" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">“red wine”</text>
+
+    <rect x="30" y="196" width="220" height="60" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="140" y="222" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-stroke)">Doc 3</text>
+    <text x="140" y="242" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">“apples with wine”</text>
+
+    <!-- Tokenize arrow -->
+    <line x1="260" y1="146" x2="402" y2="146" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <polygon points="402,141 412,146 402,151" fill="var(--diagram-stroke)"/>
+    <text x="336" y="134" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">split into terms, invert</text>
+
+    <!-- Inverted index table -->
+    <text x="550" y="28" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-stroke)">term → postings list</text>
+
+    {[
+      { term: 'apples', postings: '1, 3', hot: true },
+      { term: 'fresh', postings: '1', hot: false },
+      { term: 'red', postings: '1, 2', hot: true },
+      { term: 'wine', postings: '2, 3', hot: false },
+    ].map((row, i) => {
+      const y = 44 + i * 48;
+      return (
+        <g>
+          <rect x="420" y={y} width="120" height="38" rx="5" fill="var(--diagram-fill)" stroke={row.hot ? 'var(--diagram-accent)' : 'var(--diagram-stroke)'} stroke-width="1.5"/>
+          <text x="480" y={y + 24} text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-stroke)">{row.term}</text>
+          <rect x="550" y={y} width="130" height="38" rx="5" fill="var(--diagram-fill)" stroke={row.hot ? 'var(--diagram-accent)' : 'var(--diagram-muted)'} stroke-width="1.5"/>
+          <text x="615" y={y + 24} text-anchor="middle" font-size="13" fill="var(--diagram-stroke)">{row.postings}</text>
+        </g>
+      );
+    })}
+
+    <!-- Query annotation -->
+    <text x="370" y="300" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-accent)">query “red apples”  →  {'{1, 2} ∩ {1, 3} = Doc 1'}</text>
+    <text x="370" y="320" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">postings lists stored as sorted lists or sparse bitmaps — intersect with a bitwise AND</text>
+  </svg>
+</Diagram>

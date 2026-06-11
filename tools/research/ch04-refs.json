@@ -1,0 +1,58 @@
+[
+  {
+    "title": "CMU 15-445/645 Fall 2024 — Lecture 8: B+Tree Indexes",
+    "url": "https://15445.courses.cs.cmu.edu/fall2024/slides/08-indexes1.pdf",
+    "type": "course",
+    "author": "Andy Pavlo, Carnegie Mellon University",
+    "note": "Lecture slides covering B+Tree structure, insert/delete/split operations, and design choices like node size and variable-length keys — a deeper treatment of the chapter's B-tree section."
+  },
+  {
+    "title": "The Log-Structured Merge-Tree (LSM-Tree)",
+    "url": "https://www.cs.umb.edu/~poneil/lsmtree.pdf",
+    "type": "paper",
+    "author": "Patrick O'Neil, Edward Cheng, Dieter Gawlick, Elizabeth O'Neil",
+    "note": "The original 1996 paper that introduced the LSM-tree, motivating deferred, batched index writes for insert-heavy workloads — the direct ancestor of the storage engines in this chapter."
+  },
+  {
+    "title": "Bigtable: A Distributed Storage System for Structured Data (OSDI 2006)",
+    "url": "https://static.googleusercontent.com/media/research.google.com/en//archive/bigtable-osdi06.pdf",
+    "type": "paper",
+    "author": "Fay Chang, Jeffrey Dean, Sanjay Ghemawat, et al. (Google)",
+    "note": "The paper that coined the terms SSTable and memtable; section 4-6 show how a real system combines a commit log, in-memory buffer, and immutable sorted files with compaction."
+  },
+  {
+    "title": "RocksDB Wiki: Leveled Compaction",
+    "url": "https://github.com/facebook/rocksdb/wiki/Leveled-Compaction",
+    "type": "docs",
+    "author": "RocksDB team (Meta)",
+    "note": "Official documentation of how a production LSM engine organizes SSTables into size-tiered levels and picks files to compact — concrete detail behind the chapter's compaction and write-amplification discussion."
+  },
+  {
+    "title": "Lightweight Compression in DuckDB",
+    "url": "https://duckdb.org/2022/10/28/lightweight-compression",
+    "type": "article",
+    "author": "Mark Raasveldt (DuckDB)",
+    "note": "Engineering blog explaining why columnar layouts compress so well, walking through RLE, bit-packing, frame-of-reference, dictionary, and FSST encodings used in a real analytical engine."
+  },
+  {
+    "title": "Everything You Always Wanted to Know About Compiled and Vectorized Queries But Were Afraid to Ask",
+    "url": "https://www.vldb.org/pvldb/vol11/p2209-kersten.pdf",
+    "type": "paper",
+    "author": "Timo Kersten, Viktor Leis, Alfons Kemper, Thomas Neumann, et al.",
+    "note": "VLDB 2018 paper that empirically compares query compilation (HyPer-style) with vectorized execution (VectorWise-style) — the definitive reference for the chapter's query-execution section."
+  },
+  {
+    "title": "Elasticsearch from the Bottom Up, Part 1",
+    "url": "https://www.elastic.co/blog/found-elasticsearch-from-the-bottom-up",
+    "type": "article",
+    "author": "Alex Brasetvik (Elastic)",
+    "note": "Builds up Lucene's inverted index from term dictionaries and postings lists to immutable segments and merging — a clear bridge from the chapter's SSTable ideas to full-text search."
+  },
+  {
+    "title": "Hierarchical Navigable Small Worlds (HNSW)",
+    "url": "https://www.pinecone.io/learn/series/faiss/hnsw/",
+    "type": "article",
+    "author": "Pinecone (Faiss: The Missing Manual series)",
+    "note": "Visual explainer of the HNSW graph index for approximate nearest-neighbor vector search, with Faiss code and recall/speed trade-off benchmarks for the chapter's vector-embedding section."
+  }
+]

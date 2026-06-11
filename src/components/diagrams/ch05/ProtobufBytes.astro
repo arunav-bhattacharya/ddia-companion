@@ -1,0 +1,58 @@
+---
+import Diagram from '../Diagram.astro';
+---
+
+<Diagram caption="Protocol Buffers replaces field names with numeric tags: each value is prefixed by one byte packing the field tag and wire type, and integers use a variable-length encoding." wide>
+  <svg viewBox="0 0 880 300" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="pbbytes-title">
+    <title id="pbbytes-title">Byte-level breakdown of a record encoded with Protocol Buffers field tags</title>
+
+    <!-- Schema reference -->
+    <rect x="20" y="20" width="370" height="84" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="36" y="44" font-size="12" font-weight="600" fill="var(--diagram-stroke)">schema</text>
+    <text x="36" y="64" font-size="12" font-family="monospace" fill="var(--diagram-stroke)">string user_name = 1;</text>
+    <text x="36" y="82" font-size="12" font-family="monospace" fill="var(--diagram-stroke)">int64 favorite_number = 2;</text>
+
+    <rect x="470" y="20" width="390" height="84" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="486" y="44" font-size="12" font-weight="600" fill="var(--diagram-stroke)">record</text>
+    <text x="486" y="64" font-size="12" font-family="monospace" fill="var(--diagram-stroke)">user_name = "Martin"</text>
+    <text x="486" y="82" font-size="12" font-family="monospace" fill="var(--diagram-stroke)">favorite_number = 1337</text>
+
+    <!-- Byte strip -->
+    <!-- 0A -->
+    <rect x="20" y="150" width="64" height="48" rx="4" fill="var(--diagram-fill)" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <text x="52" y="179" text-anchor="middle" font-size="14" font-family="monospace" font-weight="600" fill="var(--diagram-accent)">0A</text>
+    <!-- 06 -->
+    <rect x="88" y="150" width="64" height="48" rx="4" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="120" y="179" text-anchor="middle" font-size="14" font-family="monospace" fill="var(--diagram-stroke)">06</text>
+    <!-- Martin -->
+    <rect x="156" y="150" width="240" height="48" rx="4" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="276" y="179" text-anchor="middle" font-size="14" font-family="monospace" fill="var(--diagram-stroke)">4D 61 72 74 69 6E</text>
+    <!-- 10 -->
+    <rect x="400" y="150" width="64" height="48" rx="4" fill="var(--diagram-fill)" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <text x="432" y="179" text-anchor="middle" font-size="14" font-family="monospace" font-weight="600" fill="var(--diagram-accent)">10</text>
+    <!-- B9 0A -->
+    <rect x="468" y="150" width="130" height="48" rx="4" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="533" y="179" text-anchor="middle" font-size="14" font-family="monospace" fill="var(--diagram-stroke)">B9 0A</text>
+
+    <!-- Annotations -->
+    <line x1="52" y1="198" x2="52" y2="222" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <text x="52" y="240" text-anchor="middle" font-size="11" fill="var(--diagram-accent)">tag 1 + type</text>
+    <text x="52" y="256" text-anchor="middle" font-size="11" fill="var(--diagram-accent)">"length-delimited"</text>
+
+    <line x1="120" y1="198" x2="120" y2="270" stroke="var(--diagram-muted)" stroke-width="1.5"/>
+    <text x="124" y="286" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">length 6</text>
+
+    <line x1="276" y1="198" x2="276" y2="222" stroke="var(--diagram-muted)" stroke-width="1.5"/>
+    <text x="276" y="240" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">"Martin" in UTF-8</text>
+    <text x="276" y="256" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">(no field name anywhere)</text>
+
+    <line x1="432" y1="198" x2="432" y2="270" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <text x="432" y="286" text-anchor="middle" font-size="11" fill="var(--diagram-accent)">tag 2 + type "varint"</text>
+
+    <line x1="533" y1="198" x2="533" y2="222" stroke="var(--diagram-muted)" stroke-width="1.5"/>
+    <text x="540" y="240" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">1337 as a 2-byte varint —</text>
+    <text x="540" y="256" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">top bit of each byte says "more to come"</text>
+
+    <text x="700" y="179" font-size="12" fill="var(--diagram-muted)">… interests follow</text>
+  </svg>
+</Diagram>

@@ -1,0 +1,58 @@
+[
+  {
+    "title": "Consistent Hashing and Random Trees: Distributed Caching Protocols for Relieving Hot Spots on the World Wide Web",
+    "url": "https://www.cs.princeton.edu/courses/archive/fall09/cos518/papers/chash.pdf",
+    "type": "paper",
+    "author": "David Karger, Eric Lehman, Tom Leighton, Matthew Levine, Daniel Lewin, Rina Panigrahy (STOC 1997)",
+    "note": "The original paper that introduced consistent hashing, proving that adding or removing a node remaps only a small fraction of keys -- the foundation of hash-based rebalancing in Dynamo, Cassandra, and many caches."
+  },
+  {
+    "title": "Herding elephants: Lessons learned from sharding Postgres at Notion",
+    "url": "https://www.notion.com/blog/sharding-postgres-at-notion",
+    "type": "article",
+    "author": "Garrett Fidalgo (Notion Engineering)",
+    "note": "Case study of sharding by workspace ID (multitenancy) into 480 logical shards on 32 physical databases, chosen because 480 has many divisors for future rebalancing; covers double-writes and verification during migration."
+  },
+  {
+    "title": "How Figma's databases team lived to tell the scale",
+    "url": "https://www.figma.com/blog/how-figmas-databases-team-lived-to-tell-the-scale/",
+    "type": "article",
+    "author": "Sammy Steele (Figma Engineering)",
+    "note": "Nine-month horizontal sharding of Postgres via a custom DBProxy query router and 'colos' of tables sharing a shard key, separating logical from physical sharding to cut over with about ten seconds of unavailability."
+  },
+  {
+    "title": "How Discord Stores Trillions of Messages",
+    "url": "https://discord.com/blog/how-discord-stores-trillions-of-messages",
+    "type": "article",
+    "author": "Bo Ingram (Discord Engineering)",
+    "note": "Shows hot-partition pain in practice: huge servers create skewed partitions in Cassandra, which Discord relieved with request coalescing and consistent-hash-based routing during its migration to ScyllaDB."
+  },
+  {
+    "title": "Vitess Reference: Sharding",
+    "url": "https://vitess.io/docs/22.0/reference/features/sharding/",
+    "type": "docs",
+    "author": "Vitess project (CNCF)",
+    "note": "Explains key ranges, Vindexes as pluggable sharding functions, and live resharding where new shards are copied and kept up to date while old shards keep serving traffic -- a concrete model for operational rebalancing."
+  },
+  {
+    "title": "MongoDB Manual: Sharding",
+    "url": "https://www.mongodb.com/docs/manual/sharding/",
+    "type": "docs",
+    "author": "MongoDB, Inc.",
+    "note": "Production docs contrasting ranged vs hashed sharding trade-offs (targeted range queries vs even distribution under monotonic keys), plus mongos request routing and the automatic balancer."
+  },
+  {
+    "title": "Best practices for designing and using partition keys effectively in DynamoDB",
+    "url": "https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/bp-partition-key-design.html",
+    "type": "docs",
+    "author": "Amazon Web Services",
+    "note": "Quantifies hot-spot limits (3,000 RCU / 1,000 WCU per partition) and prescribes high-cardinality keys, write sharding with random suffixes, and adaptive capacity -- directly mirrors the chapter's skewed-workload section."
+  },
+  {
+    "title": "CMU 15-445/645 Lecture 23: Introduction to Distributed Databases (Fall 2025)",
+    "url": "https://15445.courses.cs.cmu.edu/fall2025/notes/23-distributed1.pdf",
+    "type": "course",
+    "author": "Andy Pavlo (Carnegie Mellon University)",
+    "note": "University lecture notes covering horizontal partitioning schemes (hash, range, consistent hashing) and shared-nothing architectures, giving an academic framing that complements the chapter's industrial examples."
+  }
+]

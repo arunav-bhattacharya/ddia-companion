@@ -1,0 +1,58 @@
+[
+  {
+    "title": "Distributed Systems Lecture Series (University of Cambridge)",
+    "url": "https://www.youtube.com/playlist?list=PLeKd45zvjcDFUEv_ohr_HdUFe97RItdiB",
+    "type": "course",
+    "author": "Martin Kleppmann",
+    "note": "Eight free lectures (~7 hours) by DDIA's author that turn the chapter's brief 'problems with distributed systems' section into working knowledge of system models, clocks, replication, and consensus."
+  },
+  {
+    "title": "CMU 15-445/645: Intro to Database Systems",
+    "url": "https://15445.courses.cs.cmu.edu/",
+    "type": "course",
+    "author": "Andy Pavlo and Jignesh Patel, Carnegie Mellon University",
+    "note": "Full lecture videos, slides, and projects showing how the OLTP internals the chapter only gestures at are actually built: storage layouts, buffer pools, indexes, and concurrency control."
+  },
+  {
+    "title": "\"One Size Fits All\": An Idea Whose Time Has Come and Gone",
+    "url": "https://cs.brown.edu/people/ugur/fits_all.pdf",
+    "type": "paper",
+    "author": "Michael Stonebraker and Ugur Cetintemel",
+    "note": "The 2005 paper behind the chapter's OLTP/OLAP split: benchmark evidence for why a single DBMS engine cannot serve warehousing and stream-processing workloads at once."
+  },
+  {
+    "title": "Lakehouse: A New Generation of Open Platforms that Unify Data Warehousing and Advanced Analytics",
+    "url": "https://www.cidrdb.org/cidr2021/papers/cidr2021_paper17.pdf",
+    "type": "paper",
+    "author": "Michael Armbrust, Ali Ghodsi, Reynold Xin, and Matei Zaharia (CIDR 2021)",
+    "note": "The paper that coined 'lakehouse': details the failure modes of the two-tier warehouse-plus-lake architecture (staleness, reliability, cost) and how open formats plus a transactional metadata layer fix them."
+  },
+  {
+    "title": "Challenges with Distributed Systems",
+    "url": "https://aws.amazon.com/builders-library/challenges-with-distributed-systems/",
+    "type": "article",
+    "author": "Jacob Gabrielson, Amazon Builders' Library",
+    "note": "An Amazon principal engineer breaks a single network request/reply into eight independent failure points, making the chapter's claim that distributed systems are fundamentally harder concrete and testable."
+  },
+  {
+    "title": "Serverless Computing: One Step Forward, Two Steps Back",
+    "url": "https://www.cidrdb.org/cidr2019/papers/p119-hellerstein-cidr19.pdf",
+    "type": "paper",
+    "author": "Joseph M. Hellerstein et al., UC Berkeley (CIDR 2019)",
+    "note": "Berkeley's sharp critique of FaaS — data shipped to code, no addressable network state, short function lifetimes — pinpoints exactly when the chapter's serverless trade-off goes wrong for data systems."
+  },
+  {
+    "title": "Turning the Database Inside Out with Apache Samza (Strange Loop 2014)",
+    "url": "https://www.youtube.com/watch?v=fU9hR3kiOK0",
+    "type": "video",
+    "author": "Martin Kleppmann",
+    "note": "Kleppmann's influential talk that shaped DDIA's derived-data thinking: treats the system of record as an immutable event log and derived data as materialized views maintained by stream processing."
+  },
+  {
+    "title": "Why We're Leaving the Cloud",
+    "url": "https://world.hey.com/dhh/why-we-re-leaving-the-cloud-654b47e0",
+    "type": "article",
+    "author": "David Heinemeier Hansson (37signals)",
+    "note": "The widely debated counterargument to cloud-by-default, with real spend figures (over $500k/year on RDS and Elasticsearch alone) showing when stable, predictable workloads favor self-hosting."
+  }
+]

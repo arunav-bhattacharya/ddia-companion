@@ -1,0 +1,55 @@
+assignments:
+  - id: ch04-a01
+    title: "Pick a storage engine for a wind-farm telemetry platform"
+    scenario: |
+      You're building the ingestion layer for a company operating 4,000 wind turbines. Each turbine reports 200 sensor readings per second, totalling roughly 800,000 writes per second at peak. Reads are rare: an engineer occasionally pulls the last 24 hours for one turbine, and a nightly job exports the day's data. Regulations require raw readings to be deleted 90 days after collection. The platform runs on NVMe SSDs, and the hardware budget is tight, so write throughput per node matters. A teammate proposes PostgreSQL with a B-tree index on (turbine_id, timestamp); you suspect a log-structured engine fits better.
+    tasks:
+      - "Argue for an LSM-based engine over the B-tree proposal using sequential vs. random writes and write amplification, and explain why the SSD hardware strengthens the argument."
+      - "Choose a compaction strategy (size-tiered or leveled) for this workload and justify it. Identify one operational risk of your choice and how you'd monitor for it."
+      - "Explain how the 90-day deletion requirement interacts with tombstones and compaction levels, and what you'd verify before telling compliance that data is really gone."
+    hints:
+      - "Where does each engine's write amplification come from, and what does it cost on flash?"
+      - "How long can a tombstone linger before it reaches the oldest segment?"
+    modelAnswer: |
+      At 800,000 writes/second, the bottleneck is how many disk bytes each application write costs. A B-tree scatters page overwrites across the key space — random writes — and must write a whole page (plus WAL) even for a small change. An LSM engine appends to a memtable and writes large immutable SSTable segments sequentially; its write amplification (WAL, flush, compactions) is typically lower for this insert-heavy pattern. On NVMe SSDs the gap persists: random writes fragment flash erase blocks, forcing the controller's garbage collection to copy live pages around, stealing bandwidth and wearing out the drives the budget can't afford to replace.
+
+      Size-tiered compaction fits a 95%-plus write workload: data is rewritten only a few times in large sequential merges, maximizing ingest throughput. The risks: large temporary disk usage during big merges, and compaction falling behind the write rate — engines like RocksDB then apply backpressure, stalling all reads and writes. Monitor pending-compaction bytes, memtable flush latency, and free disk headroom, and alert before stalls hit the latency graph.
+
+      Deletion by tombstone is not deletion. A 90-day-expired reading survives in older segments until its tombstone has propagated through every compaction level, which under size-tiered compaction can take a long time for cold data. Before making compliance promises, verify the engine's TTL/expiry support, measure actual tombstone propagation time, and consider time-partitioned tables where dropping a whole 90-day-old segment file deletes the data immediately and verifiably.
+  - id: ch04-a02
+    title: "Rescue the dashboards at a grocery chain"
+    scenario: |
+      A 600-store grocery chain copies its transactional database (row-oriented, B-tree indexes) into a nightly replica that analysts query. The fact_sales table has 2.4 billion rows and 130 columns; the most common dashboard query sums quantity and revenue by store and week for the last quarter, touching 5 columns. Dashboards take 40 minutes. Leadership wants them under 10 seconds, and also wants the finance team's fixed daily-totals report to be effectively instant. You've been asked to design a proper analytics store, ideally on cloud object storage so other teams can reuse the data.
+    tasks:
+      - "Explain why the row-oriented replica is slow for this query and how column-oriented storage changes the arithmetic."
+      - "Choose a sort order for the columnar table and explain its double effect on scan pruning and compression."
+      - "Propose how the finance daily-totals report becomes near-instant, and state the flexibility cost of that choice."
+      - "Sketch the cloud stack — storage format, table format, catalog — and explain how new rows get written if columnar files are immutable."
+    hints:
+      - "Which columns repeat the most, and what does run-length encoding do to a sorted repetitive column?"
+      - "Where have you seen 'buffer writes in memory, merge into immutable files' before?"
+    modelAnswer: |
+      The replica drags 130-column rows off disk to use 5 of them — over 95% of I/O is waste, and B-tree indexes don't help a scan-and-aggregate query over a whole quarter. Columnar storage reads only the five referenced column files, in blocks restricted to the quarter, cutting raw I/O by more than an order of magnitude before compression even starts.
+
+      Sort by date_key first, then store_sk. Date-bounded dashboards then scan only the matching blocks (pruning), and the first sort key compresses spectacularly: long runs of identical dates collapse under run-length encoding, with bitmap encoding handling low-cardinality columns like store. Same data, far fewer bytes scanned.
+
+      For finance, materialize a data cube — precomputed SUM aggregates on the (date, store) grid. The fixed daily-totals report becomes a lookup along one axis. The cost is flexibility: any question outside the cube's dimensions (say, totals for baskets over $100) needs the raw table, so the cube is an accelerator, never the source of truth.
+
+      On the cloud: Parquet files on object storage as the storage format, Apache Iceberg as the table format tracking which immutable files constitute the table (with schema and time travel), and a catalog such as Polaris or Unity so other engines and governance tools discover the tables. Writes follow the LSM pattern in columnar costume: batches accumulate in a sorted in-memory buffer, then merge into new immutable Parquet files; queries transparently combine disk files with recent buffered writes.
+  - id: ch04-a03
+    title: "Three indexes for a hotel-booking search page"
+    scenario: |
+      You own search at a hotel-booking startup with 1.2 million properties and 40 million guest reviews. The search page must support three features: (1) a map view returning all hotels inside the rectangle the user is looking at, (2) keyword search over reviews with typo tolerance ("ocan view" should match "ocean view"), and (3) a new "describe your ideal stay" box where a free-text wish like "quiet place to work near the beach" returns semantically matching hotels even when no review uses those words. Your primary database indexes everything with B-trees, and each feature is currently slow or impossible.
+    tasks:
+      - "Explain why a concatenated B-tree index on (latitude, longitude) cannot serve the map view, and name two index approaches that can."
+      - "Design the review-search feature: name the core data structure, how it's maintained on disk, and how typo tolerance works."
+      - "Design the semantic feature end to end: how hotels are represented, how a query is processed, and which index family makes it fast at this scale — including the trade-off you're accepting."
+    hints:
+      - "What can a sorted one-dimensional index narrow, and what must it leave unfiltered?"
+      - "Lucene's segment files should remind you of something from the first half of the chapter."
+    modelAnswer: |
+      A concatenated (latitude, longitude) index sorts by latitude first, so it can narrow the latitude band but then contains every longitude on Earth within it — a 2D rectangle needs both axes constrained at once. Use a multidimensional index: an R-tree (as PostGIS builds on PostgreSQL's GiST), which groups nearby points into the same subtrees, or map coordinates onto one dimension with a space-filling curve and index that with an ordinary B-tree; regular grids (squares, hexagons) also work.
+
+      Review search wants an inverted index: each term maps to a postings list of review IDs, with multi-keyword queries intersecting lists (sparse bitmaps make that a bitwise AND). Lucene — via Elasticsearch or Solr — maintains the term dictionary in sorted, SSTable-like segment files merged in the background, the same log-structured pattern as an LSM-tree. Typo tolerance comes from edit-distance search: the term set is stored as a finite-state automaton and queried via a Levenshtein automaton, so "ocan" finds "ocean" at distance 1.
+
+      For semantic search, run each hotel's description and reviews through an embedding model to produce a vector; embed the user's wish with the same model and find nearest stored vectors by cosine similarity. At 1.2 million vectors with low latency, use an approximate nearest-neighbor index — HNSW (layered proximity graphs) or IVF (probe only nearby centroid partitions), both available in Faiss or pgvector. You're accepting approximation: a small loss of recall in exchange for orders-of-magnitude faster queries, tunable via HNSW search width or IVF probe count.

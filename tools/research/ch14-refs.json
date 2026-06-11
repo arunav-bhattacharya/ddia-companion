@@ -1,0 +1,58 @@
+[
+  {
+    "title": "The era of blind faith in big data must end",
+    "url": "https://www.ted.com/talks/cathy_o_neil_the_era_of_blind_faith_in_big_data_must_end",
+    "type": "video",
+    "author": "Cathy O'Neil",
+    "note": "The 'Weapons of Math Destruction' author's TED2017 talk on how secret, important, and harmful algorithms encode bias into lending, hiring, and insurance decisions."
+  },
+  {
+    "title": "Machine Bias",
+    "url": "https://www.propublica.org/article/machine-bias-risk-assessments-in-criminal-sentencing",
+    "type": "article",
+    "author": "Julia Angwin, Jeff Larson, Surya Mattu, Lauren Kirchner (ProPublica)",
+    "note": "Landmark 2016 investigation of the COMPAS recidivism algorithm, which falsely labeled Black defendants as future criminals at nearly twice the rate of white defendants."
+  },
+  {
+    "title": "Shoshana Zuboff on Surveillance Capitalism (VPRO Documentary)",
+    "url": "https://www.youtube.com/watch?v=hIXhnWUmMvw",
+    "type": "video",
+    "author": "Shoshana Zuboff / VPRO",
+    "note": "Free 50-minute documentary in which Zuboff explains how tech companies turn behavioral data into prediction products — the chapter's 'data as assets and power' theme."
+  },
+  {
+    "title": "Fairness and Machine Learning: Limitations and Opportunities",
+    "url": "https://fairmlbook.org/",
+    "type": "course",
+    "author": "Solon Barocas, Moritz Hardt, Arvind Narayanan",
+    "note": "Free MIT Press textbook with video tutorials and course materials covering formal fairness criteria, causality, and US anti-discrimination law for ML systems."
+  },
+  {
+    "title": "Regulation (EU) 2016/679 (GDPR) — Official Text",
+    "url": "https://eur-lex.europa.eu/eli/reg/2016/679/oj/eng",
+    "type": "docs",
+    "author": "European Parliament and Council",
+    "note": "The authoritative EUR-Lex text of the GDPR, including all 173 recitals — the primary source for the chapter's discussion of data protection legislation."
+  },
+  {
+    "title": "What is GDPR, the EU's new data protection law?",
+    "url": "https://gdpr.eu/what-is-gdpr/",
+    "type": "article",
+    "author": "GDPR.eu (Proton AG)",
+    "note": "Readable overview of the GDPR's seven principles, lawful bases for processing, consent rules, and data subject rights — a gentler entry point than the legal text."
+  },
+  {
+    "title": "Haunted by Data",
+    "url": "https://idlewords.com/talks/haunted_by_data.htm",
+    "type": "article",
+    "author": "Maciej Ceglowski",
+    "note": "Strata 2015 talk (cited in DDIA) comparing stored behavioral data to nuclear waste and arguing for data minimization and retention limits."
+  },
+  {
+    "title": "The Moral Character of Cryptographic Work",
+    "url": "https://web.cs.ucdavis.edu/~rogaway/papers/moral-fn.pdf",
+    "type": "paper",
+    "author": "Phillip Rogaway",
+    "note": "Post-Snowden essay (cited in DDIA) arguing that technical work rearranges power and that engineers bear moral responsibility for enabling or resisting mass surveillance."
+  }
+]

@@ -1,0 +1,58 @@
+[
+  {
+    "title": "Turning the Database Inside-Out with Apache Samza",
+    "url": "https://martin.kleppmann.com/2015/03/04/turning-the-database-inside-out.html",
+    "type": "video",
+    "author": "Martin Kleppmann",
+    "note": "The talk behind the chapter's unbundling thesis: treat the replication log as a first-class citizen and derive materialized views from an immutable event stream instead of mutating shared state. Full video plus transcript."
+  },
+  {
+    "title": "Is Kafka a Database? (Kafka Summit keynote)",
+    "url": "https://martin.kleppmann.com/2018/10/17/kafka-summit.html",
+    "type": "video",
+    "author": "Martin Kleppmann",
+    "note": "Kleppmann's follow-up to 'inside-out': how a totally ordered log can enforce ACID-style guarantees and consistency across heterogeneous systems. Video and slides linked from his site."
+  },
+  {
+    "title": "End-to-End Arguments in System Design",
+    "url": "https://web.mit.edu/saltzer/www/publications/endtoend/endtoend.pdf",
+    "type": "paper",
+    "author": "J.H. Saltzer, D.P. Reed, D.D. Clark",
+    "note": "The classic 1984 paper the chapter applies to databases: low-level functions like duplicate suppression are redundant unless the application endpoints implement them too. Free PDF from Saltzer's MIT page."
+  },
+  {
+    "title": "Life beyond Distributed Transactions: an Apostate's Opinion",
+    "url": "https://www.cidrdb.org/cidr2007/papers/cidr07p15.pdf",
+    "type": "paper",
+    "author": "Pat Helland",
+    "note": "Helland's CIDR 2007 position paper arguing scalable systems must abandon cross-entity transactions in favor of per-entity state plus at-least-once messaging with operation identifiers for idempotence."
+  },
+  {
+    "title": "Questioning the Lambda Architecture",
+    "url": "https://www.oreilly.com/radar/questioning-the-lambda-architecture/",
+    "type": "article",
+    "author": "Jay Kreps",
+    "note": "The article that proposed the kappa architecture: instead of maintaining the same logic in both batch and stream layers, reprocess history by replaying a retained log through one stream processor."
+  },
+  {
+    "title": "Online Event Processing: Achieving Consistency Where Distributed Transactions Have Failed",
+    "url": "https://martin.kleppmann.com/2019/05/01/olep-cacm.html",
+    "type": "paper",
+    "author": "Martin Kleppmann, Alastair R. Beresford, Boerge Svingen",
+    "note": "CACM/Queue paper (open-access PDF linked) formalizing the chapter's log-based approach: append-only event logs provide atomicity, uniqueness constraints, and multi-partition consistency without atomic commit."
+  },
+  {
+    "title": "View Maintenance: A New Approach to Data Processing",
+    "url": "https://materialize.com/blog/olvm/",
+    "type": "article",
+    "author": "Frank McSherry",
+    "note": "Materialize's chief scientist frames incremental view maintenance (OLVM) as a third workload beside OLTP/OLAP, with differential dataflow doing work proportional to input changes rather than to queries."
+  },
+  {
+    "title": "Pattern: Saga",
+    "url": "https://microservices.io/patterns/data/saga.html",
+    "type": "docs",
+    "author": "Chris Richardson",
+    "note": "Canonical reference for sagas: a multi-service operation as a sequence of local transactions with compensating actions, via choreography or orchestration — the microservices take on multi-partition processing."
+  }
+]

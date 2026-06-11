@@ -1,0 +1,97 @@
+---
+import Diagram from '../Diagram.astro';
+---
+
+<Diagram wide caption="A property graph: person and location vertices mixed in one database, connected by labeled edges. Note the varying depth of the location hierarchies — exactly what variable-length traversals are for.">
+  <svg viewBox="0 0 760 400" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="propgraph-title">
+    <title id="propgraph-title">A graph of two people, Priya and Marco, their birthplaces in India and Italy, and their shared home in Lisbon</title>
+
+    <!-- Edges first -->
+    <!-- married -->
+    <line x1="240" y1="60" x2="520" y2="60" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <polygon points="512,55 524,60 512,65" fill="var(--diagram-stroke)"/>
+    <text x="380" y="50" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">MARRIED_TO</text>
+
+    <!-- Priya born_in Kerala -->
+    <line x1="140" y1="86" x2="110" y2="160" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <polygon points="104,153 108,165 116,158" fill="var(--diagram-stroke)"/>
+    <text x="78" y="126" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">BORN_IN</text>
+
+    <!-- Kerala within India -->
+    <line x1="110" y1="212" x2="110" y2="280" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <polygon points="105,272 110,284 115,272" fill="var(--diagram-stroke)"/>
+    <text x="68" y="250" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">WITHIN</text>
+
+    <!-- Marco born_in Liguria -->
+    <line x1="620" y1="86" x2="650" y2="160" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <polygon points="644,158 652,165 656,153" fill="var(--diagram-stroke)"/>
+    <text x="688" y="126" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">BORN_IN</text>
+
+    <!-- Liguria within Italy -->
+    <line x1="650" y1="212" x2="650" y2="280" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <polygon points="645,272 650,284 655,272" fill="var(--diagram-stroke)"/>
+    <text x="692" y="250" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">WITHIN</text>
+
+    <!-- Italy within Europe -->
+    <line x1="582" y1="316" x2="452" y2="350" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <polygon points="458,355 448,351 456,343" fill="var(--diagram-stroke)"/>
+    <text x="530" y="350" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">WITHIN</text>
+
+    <!-- Priya lives_in Lisbon -->
+    <line x1="210" y1="86" x2="346" y2="160" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <polygon points="337,160 351,163 343,150" fill="var(--diagram-stroke)"/>
+    <text x="248" y="134" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">LIVES_IN</text>
+
+    <!-- Marco lives_in Lisbon -->
+    <line x1="550" y1="86" x2="414" y2="160" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <polygon points="417,150 409,163 423,160" fill="var(--diagram-stroke)"/>
+    <text x="512" y="134" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">LIVES_IN</text>
+
+    <!-- Lisbon within Portugal -->
+    <line x1="380" y1="212" x2="380" y2="270" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <polygon points="375,262 380,274 385,262" fill="var(--diagram-stroke)"/>
+    <text x="338" y="244" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">WITHIN</text>
+
+    <!-- Portugal within Europe -->
+    <line x1="380" y1="322" x2="380" y2="348" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <polygon points="375,340 380,352 385,340" fill="var(--diagram-stroke)"/>
+    <text x="338" y="340" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">WITHIN</text>
+
+    <!-- Person vertices (accent) -->
+    <rect x="130" y="34" width="120" height="52" rx="8" fill="var(--diagram-fill)" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <text x="190" y="56" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-stroke)">Priya</text>
+    <text x="190" y="74" text-anchor="middle" font-size="12" fill="var(--diagram-accent)">:Person</text>
+
+    <rect x="510" y="34" width="120" height="52" rx="8" fill="var(--diagram-fill)" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <text x="570" y="56" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-stroke)">Marco</text>
+    <text x="570" y="74" text-anchor="middle" font-size="12" fill="var(--diagram-accent)">:Person</text>
+
+    <!-- Location vertices -->
+    <rect x="50" y="160" width="120" height="52" rx="8" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="110" y="182" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-stroke)">Kerala</text>
+    <text x="110" y="200" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">:Location · state</text>
+
+    <rect x="50" y="284" width="120" height="52" rx="8" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="110" y="306" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-stroke)">India</text>
+    <text x="110" y="324" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">:Location · country</text>
+
+    <rect x="590" y="160" width="120" height="52" rx="8" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="650" y="182" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-stroke)">Liguria</text>
+    <text x="650" y="200" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">:Location · region</text>
+
+    <rect x="590" y="284" width="120" height="52" rx="8" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="650" y="306" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-stroke)">Italy</text>
+    <text x="650" y="324" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">:Location · country</text>
+
+    <rect x="320" y="160" width="120" height="52" rx="8" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="380" y="182" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-stroke)">Lisbon</text>
+    <text x="380" y="200" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">:Location · city</text>
+
+    <rect x="320" y="270" width="120" height="52" rx="8" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="380" y="292" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-stroke)">Portugal</text>
+    <text x="380" y="310" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">:Location · country</text>
+
+    <rect x="320" y="352" width="120" height="40" rx="8" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="380" y="377" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-stroke)">Europe</text>
+  </svg>
+</Diagram>

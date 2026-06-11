@@ -1,0 +1,37 @@
+---
+import Diagram from '../Diagram.astro';
+---
+
+<Diagram caption="The build-versus-buy spectrum: at one end you write and operate everything yourself; at the other, a vendor does both and you only see an API.">
+  <svg viewBox="0 0 740 220" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="build-buy-title">
+    <title id="build-buy-title">Spectrum from bespoke in-house software to vendor-operated cloud services</title>
+
+    <!-- Axis -->
+    <line x1="50" y1="120" x2="676" y2="120" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <polygon points="674,114 690,120 674,126" fill="var(--diagram-accent)"/>
+
+    <text x="50" y="146" text-anchor="start" font-size="11" fill="var(--diagram-muted)">you do everything</text>
+    <text x="690" y="146" text-anchor="end" font-size="11" fill="var(--diagram-muted)">vendor does everything</text>
+
+    <!-- Point 1: bespoke -->
+    <circle cx="120" cy="120" r="5" fill="var(--diagram-accent)"/>
+    <line x1="120" y1="104" x2="120" y2="115" stroke="var(--diagram-muted)" stroke-width="1"/>
+    <text x="120" y="78" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-stroke)">Bespoke software</text>
+    <text x="120" y="96" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">written and run in-house</text>
+
+    <!-- Point 2: self-hosted -->
+    <circle cx="370" cy="120" r="5" fill="var(--diagram-accent)"/>
+    <line x1="370" y1="125" x2="370" y2="156" stroke="var(--diagram-muted)" stroke-width="1"/>
+    <text x="370" y="174" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-stroke)">Self-hosted off-the-shelf</text>
+    <text x="370" y="192" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">open source or commercial, deployed by you —</text>
+    <text x="370" y="206" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">on premises or on cloud VMs (IaaS)</text>
+
+    <!-- Point 3: cloud service -->
+    <circle cx="620" cy="120" r="5" fill="var(--diagram-accent)"/>
+    <line x1="620" y1="104" x2="620" y2="115" stroke="var(--diagram-muted)" stroke-width="1"/>
+    <text x="620" y="78" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-stroke)">Cloud service / SaaS</text>
+    <text x="620" y="96" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">vendor builds and operates it</text>
+
+    <text x="370" y="34" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">who builds the software, and who runs it?</text>
+  </svg>
+</Diagram>

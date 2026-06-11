@@ -1,0 +1,54 @@
+---
+import Diagram from '../Diagram.astro';
+---
+
+<Diagram caption="An OLTP query fetches one record by key; an OLAP query scans every record and boils them down to one aggregate." wide>
+  <svg viewBox="0 0 760 330" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="oltp-olap-title">
+    <title id="oltp-olap-title">Comparison of OLTP point queries and OLAP aggregate queries</title>
+
+    <!-- Left: OLTP -->
+    <text x="190" y="28" text-anchor="middle" font-size="14" font-weight="600" fill="var(--diagram-stroke)">OLTP — operational</text>
+
+    <rect x="70" y="46" width="240" height="46" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="190" y="65" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-stroke)">App server</text>
+    <text x="190" y="83" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">“show me order #4711”</text>
+
+    <line x1="190" y1="92" x2="190" y2="124" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <polygon points="185,124 190,134 195,124" fill="var(--diagram-stroke)"/>
+
+    <!-- OLTP table rows -->
+    <rect x="70" y="140" width="240" height="22" rx="3" fill="var(--diagram-fill)" stroke="var(--diagram-muted)" stroke-width="1"/>
+    <rect x="70" y="166" width="240" height="22" rx="3" fill="var(--diagram-fill)" stroke="var(--diagram-muted)" stroke-width="1"/>
+    <rect x="70" y="192" width="240" height="22" rx="3" fill="var(--diagram-accent)" fill-opacity="0.18" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <text x="190" y="207" text-anchor="middle" font-size="11" fill="var(--diagram-stroke)">order #4711</text>
+    <rect x="70" y="218" width="240" height="22" rx="3" fill="var(--diagram-fill)" stroke="var(--diagram-muted)" stroke-width="1"/>
+    <rect x="70" y="244" width="240" height="22" rx="3" fill="var(--diagram-fill)" stroke="var(--diagram-muted)" stroke-width="1"/>
+    <rect x="70" y="270" width="240" height="22" rx="3" fill="var(--diagram-fill)" stroke="var(--diagram-muted)" stroke-width="1"/>
+
+    <text x="190" y="316" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">touches 1 record, found by key</text>
+
+    <!-- Divider -->
+    <line x1="380" y1="20" x2="380" y2="310" stroke="var(--diagram-muted)" stroke-width="1" stroke-dasharray="4 5"/>
+
+    <!-- Right: OLAP -->
+    <text x="570" y="28" text-anchor="middle" font-size="14" font-weight="600" fill="var(--diagram-stroke)">OLAP — analytical</text>
+
+    <rect x="450" y="46" width="240" height="46" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="570" y="65" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-stroke)">Analyst</text>
+    <text x="570" y="83" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">“January revenue per store?”</text>
+
+    <line x1="570" y1="92" x2="570" y2="124" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <polygon points="565,124 570,134 575,124" fill="var(--diagram-stroke)"/>
+
+    <!-- OLAP table rows (all scanned) -->
+    <rect x="450" y="140" width="240" height="22" rx="3" fill="var(--diagram-accent)" fill-opacity="0.18" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <rect x="450" y="166" width="240" height="22" rx="3" fill="var(--diagram-accent)" fill-opacity="0.18" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <rect x="450" y="192" width="240" height="22" rx="3" fill="var(--diagram-accent)" fill-opacity="0.18" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <rect x="450" y="218" width="240" height="22" rx="3" fill="var(--diagram-accent)" fill-opacity="0.18" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <rect x="450" y="244" width="240" height="22" rx="3" fill="var(--diagram-accent)" fill-opacity="0.18" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <rect x="450" y="270" width="240" height="22" rx="3" fill="var(--diagram-accent)" fill-opacity="0.18" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <text x="570" y="207" text-anchor="middle" font-size="11" fill="var(--diagram-stroke)">… millions of rows …</text>
+
+    <text x="570" y="316" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">scans every record, returns one aggregate</text>
+  </svg>
+</Diagram>

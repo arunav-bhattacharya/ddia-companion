@@ -1,0 +1,81 @@
+---
+import Diagram from '../Diagram.astro';
+---
+
+<Diagram caption="HNSW search: start at the sparse top layer, greedily move toward the query vector, then drop a layer and repeat — each layer is denser, until the bottom layer pinpoints the (approximate) nearest neighbor.">
+  <svg viewBox="0 0 720 410" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="hnsw-title">
+    <title id="hnsw-title">Three layers of an HNSW vector index with the greedy search path highlighted</title>
+
+    <!-- Layer bands -->
+    <rect x="60" y="20" width="540" height="100" rx="8" fill="var(--diagram-fill)" stroke="var(--diagram-muted)" stroke-width="1.5"/>
+    <rect x="60" y="145" width="540" height="100" rx="8" fill="var(--diagram-fill)" stroke="var(--diagram-muted)" stroke-width="1.5"/>
+    <rect x="60" y="270" width="540" height="100" rx="8" fill="var(--diagram-fill)" stroke="var(--diagram-muted)" stroke-width="1.5"/>
+
+    <text x="612" y="66" font-size="12" fill="var(--diagram-muted)">layer 2</text>
+    <text x="612" y="81" font-size="12" fill="var(--diagram-muted)">(sparsest)</text>
+    <text x="612" y="196" font-size="12" fill="var(--diagram-muted)">layer 1</text>
+    <text x="612" y="316" font-size="12" fill="var(--diagram-muted)">layer 0</text>
+    <text x="612" y="331" font-size="12" fill="var(--diagram-muted)">(all vectors)</text>
+
+    <!-- Layer 2 edges -->
+    <line x1="140" y1="70" x2="330" y2="55" stroke="var(--diagram-muted)" stroke-width="1.5"/>
+    <line x1="330" y1="55" x2="480" y2="85" stroke="var(--diagram-muted)" stroke-width="1.5"/>
+
+    <!-- Layer 1 edges -->
+    <line x1="120" y1="200" x2="220" y2="170" stroke="var(--diagram-muted)" stroke-width="1.5"/>
+    <line x1="220" y1="170" x2="300" y2="215" stroke="var(--diagram-muted)" stroke-width="1.5"/>
+    <line x1="300" y1="215" x2="390" y2="180" stroke="var(--diagram-muted)" stroke-width="1.5"/>
+    <line x1="390" y1="180" x2="470" y2="205" stroke="var(--diagram-muted)" stroke-width="1.5"/>
+    <line x1="470" y1="205" x2="545" y2="180" stroke="var(--diagram-muted)" stroke-width="1.5"/>
+    <line x1="220" y1="170" x2="390" y2="180" stroke="var(--diagram-muted)" stroke-width="1.5"/>
+
+    <!-- Layer 0 edges -->
+    <line x1="100" y1="320" x2="160" y2="295" stroke="var(--diagram-muted)" stroke-width="1.5"/>
+    <line x1="160" y1="295" x2="220" y2="335" stroke="var(--diagram-muted)" stroke-width="1.5"/>
+    <line x1="220" y1="335" x2="280" y2="300" stroke="var(--diagram-muted)" stroke-width="1.5"/>
+    <line x1="280" y1="300" x2="340" y2="330" stroke="var(--diagram-muted)" stroke-width="1.5"/>
+    <line x1="340" y1="330" x2="400" y2="295" stroke="var(--diagram-muted)" stroke-width="1.5"/>
+    <line x1="400" y1="295" x2="455" y2="335" stroke="var(--diagram-muted)" stroke-width="1.5"/>
+    <line x1="455" y1="335" x2="515" y2="305" stroke="var(--diagram-muted)" stroke-width="1.5"/>
+    <line x1="280" y1="300" x2="400" y2="295" stroke="var(--diagram-muted)" stroke-width="1.5"/>
+
+    <!-- Search path (accent) -->
+    <line x1="140" y1="70" x2="330" y2="55" stroke="var(--diagram-accent)" stroke-width="2"/>
+    <line x1="330" y1="55" x2="300" y2="215" stroke="var(--diagram-accent)" stroke-width="2" stroke-dasharray="5 4"/>
+    <line x1="300" y1="215" x2="390" y2="180" stroke="var(--diagram-accent)" stroke-width="2"/>
+    <line x1="390" y1="180" x2="470" y2="205" stroke="var(--diagram-accent)" stroke-width="2"/>
+    <line x1="470" y1="205" x2="455" y2="335" stroke="var(--diagram-accent)" stroke-width="2" stroke-dasharray="5 4"/>
+    <line x1="455" y1="335" x2="515" y2="305" stroke="var(--diagram-accent)" stroke-width="2"/>
+
+    <!-- Layer 2 nodes -->
+    <circle cx="140" cy="70" r="8" fill="var(--diagram-accent)"/>
+    <circle cx="330" cy="55" r="7" fill="var(--bg)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <circle cx="480" cy="85" r="7" fill="var(--bg)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="140" y="48" text-anchor="middle" font-size="12" font-weight="600" fill="var(--diagram-accent)">entry point</text>
+
+    <!-- Layer 1 nodes -->
+    <circle cx="120" cy="200" r="7" fill="var(--bg)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <circle cx="220" cy="170" r="7" fill="var(--bg)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <circle cx="300" cy="215" r="7" fill="var(--bg)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <circle cx="390" cy="180" r="7" fill="var(--bg)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <circle cx="470" cy="205" r="7" fill="var(--bg)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <circle cx="545" cy="180" r="7" fill="var(--bg)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+
+    <!-- Layer 0 nodes -->
+    <circle cx="100" cy="320" r="7" fill="var(--bg)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <circle cx="160" cy="295" r="7" fill="var(--bg)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <circle cx="220" cy="335" r="7" fill="var(--bg)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <circle cx="280" cy="300" r="7" fill="var(--bg)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <circle cx="340" cy="330" r="7" fill="var(--bg)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <circle cx="400" cy="295" r="7" fill="var(--bg)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <circle cx="455" cy="335" r="7" fill="var(--bg)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <circle cx="515" cy="305" r="8" fill="var(--diagram-accent)"/>
+    <text x="515" y="358" text-anchor="middle" font-size="12" font-weight="600" fill="var(--diagram-accent)">nearest neighbor</text>
+
+    <!-- Query marker -->
+    <rect x="538" y="322" width="14" height="14" rx="3" transform="rotate(45 545 329)" fill="none" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <text x="568" y="334" font-size="12" fill="var(--diagram-muted)">query</text>
+
+    <text x="330" y="398" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">solid accent lines: greedy moves within a layer — dashed: descending to the next layer</text>
+  </svg>
+</Diagram>

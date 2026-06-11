@@ -1,0 +1,57 @@
+---
+import Diagram from '../Diagram.astro';
+---
+
+<Diagram caption="A star schema: a huge fact table of events at the center, with foreign keys radiating out to wide dimension tables that describe the who, what, where, and when.">
+  <svg viewBox="0 0 720 420" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="star-title">
+    <title id="star-title">A fact_sales table at the center connected to date, product, store, customer, and promotion dimension tables</title>
+
+    <!-- Spokes (drawn first, under the boxes) -->
+    <line x1="360" y1="210" x2="130" y2="80" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <line x1="360" y1="210" x2="590" y2="80" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <line x1="360" y1="210" x2="130" y2="345" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <line x1="360" y1="210" x2="590" y2="345" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <line x1="360" y1="210" x2="360" y2="55" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+
+    <!-- Fact table (center) -->
+    <rect x="255" y="140" width="210" height="140" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <text x="360" y="164" text-anchor="middle" font-size="14" font-weight="600" fill="var(--diagram-stroke)">fact_sales</text>
+    <line x1="267" y1="172" x2="453" y2="172" stroke="var(--diagram-muted)" stroke-width="1"/>
+    <text x="360" y="190" text-anchor="middle" font-size="12" fill="var(--diagram-stroke)">date_key · product_key</text>
+    <text x="360" y="208" text-anchor="middle" font-size="12" fill="var(--diagram-stroke)">store_key · customer_key</text>
+    <text x="360" y="226" text-anchor="middle" font-size="12" fill="var(--diagram-stroke)">promo_key · quantity · price</text>
+    <text x="360" y="250" text-anchor="middle" font-size="12" fill="var(--diagram-accent)">one row per purchase event</text>
+    <text x="360" y="268" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">(billions of rows)</text>
+
+    <!-- dim_date -->
+    <rect x="40" y="30" width="180" height="64" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="130" y="52" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-stroke)">dim_date</text>
+    <text x="130" y="70" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">weekday · holiday?</text>
+    <text x="130" y="86" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">fiscal quarter</text>
+
+    <!-- dim_product -->
+    <rect x="500" y="30" width="180" height="64" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="590" y="52" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-stroke)">dim_product</text>
+    <text x="590" y="70" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">SKU · brand · category</text>
+    <text x="590" y="86" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">package size</text>
+
+    <!-- dim_promotion -->
+    <rect x="270" y="14" width="180" height="46" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="360" y="34" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-stroke)">dim_promotion</text>
+    <text x="360" y="51" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">coupon · discount type</text>
+
+    <!-- dim_store -->
+    <rect x="40" y="324" width="180" height="64" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="130" y="346" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-stroke)">dim_store</text>
+    <text x="130" y="364" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">city · square footage</text>
+    <text x="130" y="380" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">in-store bakery?</text>
+
+    <!-- dim_customer -->
+    <rect x="500" y="324" width="180" height="64" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="590" y="346" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-stroke)">dim_customer</text>
+    <text x="590" y="364" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">loyalty tier · region</text>
+    <text x="590" y="380" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">signup date</text>
+
+    <text x="360" y="408" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">every spoke is a many-to-one relationship: many sales, one product / store / customer / date</text>
+  </svg>
+</Diagram>

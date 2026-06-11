@@ -1,0 +1,60 @@
+---
+import Diagram from '../Diagram.astro';
+---
+
+<Diagram caption="Event-driven dataflow: the sender publishes a message to a broker and moves on without waiting; the broker buffers it and delivers it to one consumer (queue) or to every subscriber (topic).">
+  <svg viewBox="0 0 720 300" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="broker-title">
+    <title id="broker-title">A producer sending messages through a message broker to queue consumers and topic subscribers</title>
+
+    <!-- Producer -->
+    <rect x="20" y="120" width="140" height="60" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="90" y="146" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-stroke)">Producer</text>
+    <text x="90" y="164" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">encodes the message</text>
+
+    <!-- Arrow to broker -->
+    <line x1="160" y1="150" x2="252" y2="150" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <polygon points="252,145 262,150 252,155" fill="var(--diagram-stroke)"/>
+    <text x="206" y="138" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">send &amp; forget</text>
+    <text x="206" y="172" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">(asynchronous)</text>
+
+    <!-- Broker -->
+    <rect x="262" y="60" width="180" height="180" rx="8" fill="var(--diagram-fill)" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <text x="352" y="86" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-stroke)">Message broker</text>
+    <text x="352" y="104" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">buffers if consumers</text>
+    <text x="352" y="119" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">are down or slow</text>
+
+    <rect x="282" y="134" width="140" height="36" rx="4" fill="var(--bg)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="352" y="157" text-anchor="middle" font-size="12" font-family="monospace" fill="var(--diagram-stroke)">queue: jobs</text>
+
+    <rect x="282" y="184" width="140" height="36" rx="4" fill="var(--bg)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="352" y="207" text-anchor="middle" font-size="12" font-family="monospace" fill="var(--diagram-stroke)">topic: events</text>
+
+    <!-- Queue consumers: only one gets it -->
+    <rect x="540" y="30" width="160" height="48" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="620" y="50" text-anchor="middle" font-size="12" font-weight="600" fill="var(--diagram-stroke)">Consumer A</text>
+    <text x="620" y="67" text-anchor="middle" font-size="11" fill="var(--diagram-accent)">gets the message</text>
+
+    <rect x="540" y="92" width="160" height="48" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="620" y="112" text-anchor="middle" font-size="12" font-weight="600" fill="var(--diagram-stroke)">Consumer B</text>
+    <text x="620" y="129" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">idle this time</text>
+
+    <line x1="422" y1="146" x2="532" y2="58" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <polygon points="528,52 540,54 532,64" fill="var(--diagram-stroke)"/>
+    <text x="478" y="84" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">one of them</text>
+
+    <!-- Topic subscribers: all get it -->
+    <rect x="540" y="170" width="160" height="48" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="620" y="190" text-anchor="middle" font-size="12" font-weight="600" fill="var(--diagram-stroke)">Subscriber 1</text>
+    <text x="620" y="207" text-anchor="middle" font-size="11" fill="var(--diagram-accent)">gets a copy</text>
+
+    <rect x="540" y="232" width="160" height="48" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="620" y="252" text-anchor="middle" font-size="12" font-weight="600" fill="var(--diagram-stroke)">Subscriber 2</text>
+    <text x="620" y="269" text-anchor="middle" font-size="11" fill="var(--diagram-accent)">gets a copy</text>
+
+    <line x1="422" y1="196" x2="532" y2="194" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <polygon points="530,189 540,194 530,199" fill="var(--diagram-accent)"/>
+    <line x1="422" y1="212" x2="532" y2="252" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <polygon points="526,256 536,254 530,244" fill="var(--diagram-accent)"/>
+    <text x="478" y="240" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">all of them</text>
+  </svg>
+</Diagram>

@@ -1,0 +1,52 @@
+assignments:
+  - id: ch06-a01
+    title: "Replication design for a payments ledger"
+    scenario: |
+      You are the data architect at LedgerLine, a payment processor handling 2,000 transactions per second from merchants across Europe, with the database in Frankfurt. Regulators require that no acknowledged transaction is ever lost. The current setup is PostgreSQL with one leader and five asynchronous read replicas (two in Frankfurt, three in Dublin); failover is automated with a 10-second timeout. Last month, a 40-second network blip between the racks triggered an automatic failover, and reconciliation later found 211 acknowledged transactions missing. The CTO wants a proposal before the next audit.
+    tasks:
+      - "Explain precisely how 211 acknowledged transactions could vanish in this architecture, naming the replication mode and failover behavior responsible."
+      - "Propose a replication configuration that makes acknowledged writes durable across at least two nodes without making the system hostage to any single replica, and state its latency cost."
+      - "Evaluate the 10-second timeout: what are the failure modes of shortening versus lengthening it, and what alternative do some operations teams choose for a system like this?"
+    hints:
+      - "What does the leader promise the client before followers have the data?"
+      - "One synchronous follower is not the same as all synchronous followers."
+    modelAnswer: |
+      The replicas are asynchronous, so the leader acknowledged transactions before any follower received them. When the network blip exceeded the 10-second timeout, automated failover promoted a follower that lagged behind the old leader; the standard resolution is to discard the old leader's unreplicated writes. Those 211 acknowledged-but-unreplicated transactions were exactly that discard — confirmed to merchants, never durable.
+
+      The fix is semi-synchronous replication: one follower (ideally in a different availability zone) is synchronous, the rest stay asynchronous, and if the synchronous follower becomes slow or unavailable, an asynchronous one is promoted into the role. Every acknowledged write then exists on at least two nodes, and failover can target the synchronous follower, which is guaranteed up to date. The cost is one extra round trip on the write path — acceptable within a region; making the Dublin replicas synchronous would put inter-region latency on every transaction, which is not. A majority quorum (e.g., three of five) is the stronger variant if the team can absorb more write latency.
+
+      The 10-second timeout is a dial with no good setting. Shorter timeouts turn load spikes and network glitches into needless failovers — disruptive exactly when the system is strained, as this incident showed. Longer timeouts mean genuine leader failures take longer to recover from. Given the regulatory stakes, many operations teams keep failover manual for systems like this: the software detects and alerts, a human decides — trading seconds of availability for not improvising durability decisions automatically.
+  - id: ch06-a02
+    title: "Offline-first field app for rural vaccination teams"
+    scenario: |
+      A public-health NGO runs vaccination campaigns in regions with patchy connectivity. Each of 40 field teams carries a tablet that must record patient visits, view immunization history, and update stock counts for vaccine vials — all while offline for up to three days. Tablets sync whenever they find a signal. Two teams sometimes visit the same village in the same week, so the same patient record can be edited on two tablets before either syncs. Vial stock counts are decremented on every dose. The current prototype uses last-write-wins on a Unix timestamp, and nurses report records 'losing' updates and stock numbers that don't add up.
+    tasks:
+      - "Identify the replication architecture this app actually is, and explain why the two reported bugs are predictable consequences of LWW on wall-clock timestamps."
+      - "Design conflict resolution for the two data types: the patient visit record (a set of dated entries plus editable fields) and the vial stock counter. Name the algorithm family you would use for each."
+      - "Explain why conflict avoidance (routing each patient's writes to one designated tablet) is not workable here, and what detection mechanism the sync protocol needs instead of timestamps."
+    hints:
+      - "Each tablet is a leader. What does that make the system?"
+      - "Counters and sets have well-known convergent merge algorithms."
+    modelAnswer: |
+      Each tablet holds a full local replica and accepts writes offline — this is multi-leader replication with a sync engine, where replication lag is measured in days. With LWW, two tablets editing the same patient record produce concurrent writes; neither knew about the other, so 'last' is undefined and one tablet's edits are silently discarded — the lost updates nurses observe. Stock counts are worse: LWW replaces one absolute count with another instead of combining decrements, so doses recorded on one tablet vanish whenever the other tablet's count wins. Tablet clocks also drift, so a fast clock beats genuinely later writes.
+
+      Both data types want CRDTs (strong eventual consistency: all replicas that saw the same writes converge). Patient visits: a CRDT map per patient — visit entries as an add-wins set keyed by unique IDs, editable fields merged per field, with deletions tracked explicitly as tombstones so removed entries don't resurrect (the Amazon-cart lesson). Stock: a counter CRDT that sums each replica's increments and decrements rather than storing an absolute value — 200 minus each tablet's recorded doses, never double-counted, never dropped.
+
+      Conflict avoidance fails because it requires routing all writes for a record through one leader, and an offline tablet cannot defer to another tablet it can't reach — two teams in one village will both write. Instead of timestamps, the sync protocol needs version vectors: one counter per tablet per record, exchanged on sync, so the system can distinguish a newer version (overwrite) from concurrent edits (merge with the CRDT).
+  - id: ch06-a03
+    title: "Tuning quorums for a sensor platform on Cassandra"
+    scenario: |
+      AgriSense ingests soil-moisture readings from 30,000 farm sensors into a Cassandra cluster with replication factor n = 3, spread across three availability zones. Writes arrive at 50,000 per second; dashboards read aggregates a few times per minute, and an irrigation controller reads the latest value for a field before deciding to water. Current settings: write consistency ONE (w = 1), read consistency ONE (r = 1). Farmers complain the irrigation controller sometimes acts on hours-old moisture data right after a node restarts. The team also wants to survive one zone going down with no write outage.
+    tasks:
+      - "Explain why w = 1, r = 1 produces the stale-read incidents, and what background mechanisms Cassandra-style systems rely on to eventually fix such staleness."
+      - "Choose w and r values for the sensor writes and for the irrigation controller's reads, justifying them against the w + r > n rule and the one-zone-down requirement."
+      - "The team proposes consistency level ANY for writes during outages 'so nothing is ever rejected.' Explain what that setting is, and the trade-off it makes."
+    hints:
+      - "Which replicas does a read at r = 1 consult after a node was down?"
+      - "Dashboards and the irrigation controller don't need the same guarantees."
+    modelAnswer: |
+      With w = 1 and r = 1, w + r = 2 ≤ n = 3: the read and write sets need not overlap. A restarted node that missed hours of writes happily serves r = 1 reads with stale values until read repair (which only fixes data that gets read), hinted handoff (delivering writes stored on its behalf), or the background anti-entropy sweep catches it up — none of which is immediate. The irrigation controller is reading precisely the kind of fresh-or-useless value that quorum overlap exists to protect.
+
+      Keep sensor writes cheap but durable: w = 2 (QUORUM). At 50k writes/second, w = 2 still completes after the two fastest replicas and tolerates one zone down (two of three replicas reachable), meeting the no-write-outage requirement; w = 3 would block writes whenever any zone failed. For the irrigation controller, read at r = 2 (QUORUM): 2 + 2 > 3, so its read set must overlap the write set in at least one fresh replica. Dashboards aggregating minutes of data can stay at r = 1 — staleness there is harmless and the reads are cheaper. Note quorums make staleness unlikely, not impossible (failed partial writes, clock-skewed LWW), which is acceptable for irrigation.
+
+      Consistency level ANY is a sloppy quorum: during a partition, any reachable node accepts the write — even one that doesn't normally own that key — and hands it off when the proper replicas return. It maximizes write availability but breaks the overlap guarantee entirely: a subsequent quorum read may not see the write until handoff completes. Fine for raw sensor readings; the controller's decisions should not depend on it.

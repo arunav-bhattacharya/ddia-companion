@@ -1,0 +1,55 @@
+cards:
+  - id: ch05-f01
+    front: "Backward compatibility vs. forward compatibility — definitions?"
+    back: "Backward compatibility: newer code can read data written by older code. Forward compatibility: older code can read data written by newer code. Rolling upgrades and slow-updating clients mean both are needed at once."
+  - id: ch05-f02
+    front: "Why is forward compatibility usually harder to achieve than backward compatibility?"
+    back: "Backward is easy: the author of new code knows the old format and can handle it explicitly. Forward requires old code to gracefully ignore — and ideally preserve — additions it has never heard of."
+  - id: ch05-f03
+    front: "Why are language built-in serializers (Java Serializable, pickle, Marshal) a bad idea for stored or transmitted data?"
+    back: "They lock you into one language, decoding can instantiate arbitrary classes (a remote-code-execution attack surface), and versioning and efficiency are afterthoughts. Acceptable only for very transient purposes."
+  - id: ch05-f04
+    front: "What goes wrong with large integers in JSON?"
+    back: "JSON doesn't distinguish integers from floats or specify precision. Integers above 2^53 can't be exactly represented in an IEEE 754 double, so JavaScript parsers corrupt them — X returns 64-bit post IDs twice, as number and as string, to cope."
+  - id: ch05-f05
+    front: "Why do binary JSON formats like MessagePack save so little space?"
+    back: "They have no schema, so every field name (userName, interests, ...) must still be spelled out inside the encoded bytes. The example record drops only from 81 to 66 bytes — schema-based formats halve it."
+  - id: ch05-f06
+    front: "What is a field tag in Protocol Buffers, and which schema changes does it allow or forbid?"
+    back: "A number (1, 2, 3...) that identifies a field on the wire instead of its name. You may rename fields freely; you may never change or reuse a tag number. New fields need fresh tags."
+  - id: ch05-f07
+    front: "How does old protobuf code stay forward compatible when it reads a record containing an unknown field?"
+    back: "The unknown tag's wire-type annotation tells the parser how many bytes to skip, so the field is ignored — and can be preserved on rewrite — instead of corrupting the record."
+  - id: ch05-f08
+    front: "What is the risk of widening a protobuf field from int32 to int64?"
+    back: "New code reads old data fine (missing bits become zeros), but old code still holds the value in a 32-bit variable — a 64-bit value that doesn't fit gets truncated."
+  - id: ch05-f09
+    front: "Writer's schema vs. reader's schema in Avro — what are they?"
+    back: "The writer's schema is whatever schema the encoding application used; the reader's schema is what the decoding application expects. They need not be identical, only compatible: Avro resolves the differences at decode time."
+  - id: ch05-f10
+    front: "How does Avro schema resolution reconcile a writer's schema with a reader's schema?"
+    back: "Fields are matched by name (order is irrelevant). Fields only the writer knows are ignored; fields only the reader expects are filled from default values declared in the reader's schema."
+  - id: ch05-f11
+    front: "What is Avro's core schema evolution rule?"
+    back: "You may only add or remove a field that has a default value. Adding one without a default breaks backward compatibility; removing one without a default breaks forward compatibility."
+  - id: ch05-f12
+    front: "How does an Avro reader learn which writer's schema encoded the data?"
+    back: "Context-dependent: a large file includes the schema once at the start (object container files); databases prefix each record with a version number resolved via a schema registry; network connections negotiate the schema at setup."
+  - id: ch05-f13
+    front: "Why is Avro friendlier than protobuf for schemas generated dynamically (e.g., from a database dump)?"
+    back: "Avro schemas contain no tag numbers, so a schema can be mechanically regenerated from each table — fields match by name across versions. Protobuf would need someone to maintain stable column-to-tag mappings and never reuse retired tags."
+  - id: ch05-f14
+    front: "What advantages do schema-based binary formats offer over schemaless JSON?"
+    back: "Much more compact data (no field names on the wire); the schema is documentation that can't go stale (decoding requires it); a registry can verify compatibility before deployment; code generation gives compile-time type checks."
+  - id: ch05-f15
+    front: "What does 'data outlives code' mean for dataflow through databases?"
+    back: "Deploys replace code in minutes, but five-year-old rows keep their original encoding unless rewritten. Databases fill defaults at read time (or rewrite during compaction), so the database appears to have one schema over a mix of historical encodings."
+  - id: ch05-f16
+    front: "Name three ways a network request fundamentally differs from a local function call."
+    back: "It can fail for reasons outside your control; a timeout returns no information at all (retries then need idempotence); latency is wildly variable; parameters must be encoded — no pointers; client and server may use different languages."
+  - id: ch05-f17
+    front: "In service dataflow, why do you need backward compatibility on requests but forward compatibility on responses?"
+    back: "It's reasonable to assume servers update before clients. An old client then sends old-format requests to a new server (backward) and must read new-format responses with old code (forward)."
+  - id: ch05-f18
+    front: "How does durable execution achieve effectively-once workflows, and what does it demand of your code?"
+    back: "The framework logs every RPC and state change; on failure it replays the task, returning recorded results instead of re-issuing completed calls. Code must be deterministic — changes ship as new workflow versions, never edits to running ones."

@@ -1,0 +1,67 @@
+---
+import Diagram from '../Diagram.astro';
+---
+
+<Diagram wide caption="Event sourcing with CQRS: validated commands become immutable events in an append-only log, and every read-optimized view is derived from that log — and can be rebuilt from it.">
+  <svg viewBox="0 0 780 340" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="escqrs-title">
+    <title id="escqrs-title">A command flowing through validation into an event log, which feeds three materialized views</title>
+
+    <!-- Command -->
+    <rect x="20" y="120" width="140" height="60" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="90" y="145" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-stroke)">Command</text>
+    <text x="90" y="164" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">“reserve 3 seats”</text>
+
+    <!-- Arrow to validation -->
+    <line x1="160" y1="150" x2="196" y2="150" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <polygon points="194,145 204,150 194,155" fill="var(--diagram-stroke)"/>
+
+    <!-- Validation -->
+    <rect x="204" y="120" width="110" height="60" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="259" y="145" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-stroke)">Validate</text>
+    <text x="259" y="164" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">seats available?</text>
+
+    <!-- Arrow to log -->
+    <line x1="314" y1="150" x2="350" y2="150" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <polygon points="348,145 358,150 348,155" fill="var(--diagram-stroke)"/>
+    <text x="334" y="136" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">append</text>
+
+    <!-- Event log -->
+    <rect x="358" y="74" width="180" height="152" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <text x="448" y="98" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-stroke)">Event log</text>
+    <text x="448" y="114" text-anchor="middle" font-size="11" fill="var(--diagram-accent)">immutable · append-only</text>
+
+    <rect x="372" y="124" width="152" height="22" rx="4" fill="var(--bg)" stroke="var(--diagram-stroke)" stroke-width="1"/>
+    <text x="448" y="139" text-anchor="middle" font-size="11" fill="var(--diagram-stroke)">1 RegistrationsOpened</text>
+    <rect x="372" y="150" width="152" height="22" rx="4" fill="var(--bg)" stroke="var(--diagram-stroke)" stroke-width="1"/>
+    <text x="448" y="165" text-anchor="middle" font-size="11" fill="var(--diagram-stroke)">2 SeatsBooked (×3)</text>
+    <rect x="372" y="176" width="152" height="22" rx="4" fill="var(--bg)" stroke="var(--diagram-stroke)" stroke-width="1"/>
+    <text x="448" y="191" text-anchor="middle" font-size="11" fill="var(--diagram-stroke)">3 BookingCancelled</text>
+    <rect x="372" y="202" width="152" height="22" rx="4" fill="var(--bg)" stroke="var(--diagram-accent)" stroke-width="1"/>
+    <text x="448" y="217" text-anchor="middle" font-size="11" fill="var(--diagram-accent)">4 RoomChanged</text>
+
+    <!-- Fan-out arrows to views -->
+    <line x1="538" y1="110" x2="592" y2="66" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <polygon points="586,64 596,62 590,74" fill="var(--diagram-accent)"/>
+    <line x1="538" y1="150" x2="592" y2="150" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <polygon points="590,145 600,150 590,155" fill="var(--diagram-accent)"/>
+    <line x1="538" y1="190" x2="592" y2="234" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <polygon points="590,226 596,238 586,236" fill="var(--diagram-accent)"/>
+
+    <!-- Views -->
+    <rect x="600" y="36" width="160" height="56" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="680" y="59" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-stroke)">Booking status</text>
+    <text x="680" y="77" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">per-attendee view</text>
+
+    <rect x="600" y="122" width="160" height="56" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="680" y="145" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-stroke)">Dashboard charts</text>
+    <text x="680" y="163" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">seats left, revenue</text>
+
+    <rect x="600" y="208" width="160" height="56" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="680" y="231" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-stroke)">Badge printer file</text>
+    <text x="680" y="249" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">derived export</text>
+
+    <text x="448" y="258" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">source of truth</text>
+    <text x="680" y="296" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">delete a view, replay the log,</text>
+    <text x="680" y="312" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">get the same view back</text>
+  </svg>
+</Diagram>

@@ -1,0 +1,60 @@
+---
+import Diagram from '../Diagram.astro';
+---
+
+<Diagram caption="One synchronous and one asynchronous follower: the leader waits for follower 1's acknowledgment before confirming the write, but follower 2 applies the change whenever it gets around to it." wide>
+  <svg viewBox="0 0 760 300" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="sva-title">
+    <title id="sva-title">Timeline of a write replicated synchronously to follower 1 and asynchronously to follower 2</title>
+
+    <!-- Lifeline labels -->
+    <text x="20" y="64" font-size="12" font-weight="600" fill="var(--diagram-stroke)">client</text>
+    <text x="20" y="129" font-size="12" font-weight="600" fill="var(--diagram-stroke)">leader</text>
+    <text x="20" y="194" font-size="12" font-weight="600" fill="var(--diagram-stroke)">follower 1</text>
+    <text x="20" y="211" font-size="11" fill="var(--diagram-muted)">(sync)</text>
+    <text x="20" y="259" font-size="12" font-weight="600" fill="var(--diagram-stroke)">follower 2</text>
+    <text x="20" y="276" font-size="11" fill="var(--diagram-muted)">(async)</text>
+
+    <!-- Lifelines -->
+    <line x1="100" y1="60" x2="740" y2="60" stroke="var(--diagram-muted)" stroke-width="1.5"/>
+    <line x1="100" y1="125" x2="740" y2="125" stroke="var(--diagram-muted)" stroke-width="1.5"/>
+    <line x1="100" y1="190" x2="740" y2="190" stroke="var(--diagram-muted)" stroke-width="1.5"/>
+    <line x1="100" y1="255" x2="740" y2="255" stroke="var(--diagram-muted)" stroke-width="1.5"/>
+
+    <!-- Waiting interval on leader line (accent) -->
+    <line x1="180" y1="125" x2="330" y2="125" stroke="var(--diagram-accent)" stroke-width="3"/>
+
+    <!-- client -> leader: write -->
+    <line x1="140" y1="60" x2="178" y2="121" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <polygon points="172,119 180,125 178,113" fill="var(--diagram-stroke)"/>
+    <text x="140" y="46" font-size="11" fill="var(--diagram-stroke)">write</text>
+
+    <!-- leader -> follower 1: data change -->
+    <line x1="190" y1="125" x2="238" y2="186" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <polygon points="232,184 240,190 238,178" fill="var(--diagram-stroke)"/>
+    <text x="200" y="160" font-size="11" fill="var(--diagram-muted)">data change</text>
+
+    <!-- follower 1 -> leader: ack -->
+    <line x1="280" y1="190" x2="328" y2="129" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <polygon points="322,130 330,125 329,137" fill="var(--diagram-stroke)"/>
+    <text x="306" y="170" font-size="11" fill="var(--diagram-muted)">ack</text>
+
+    <!-- leader -> client: ok -->
+    <line x1="340" y1="125" x2="388" y2="64" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <polygon points="382,65 390,60 389,72" fill="var(--diagram-stroke)"/>
+    <text x="380" y="46" font-size="11" fill="var(--diagram-stroke)">ok</text>
+
+    <!-- leader -> follower 2: data change, long delay -->
+    <line x1="190" y1="128" x2="600" y2="251" stroke="var(--diagram-stroke)" stroke-width="1.5" stroke-dasharray="6 4"/>
+    <polygon points="592,250 602,255 596,244" fill="var(--diagram-stroke)"/>
+    <text x="470" y="225" font-size="11" fill="var(--diagram-muted)">data change (no guarantee when it arrives)</text>
+
+    <!-- annotation for accent wait -->
+    <text x="255" y="106" text-anchor="middle" font-size="11" fill="var(--diagram-accent)">leader blocks until the</text>
+    <text x="255" y="120" text-anchor="middle" font-size="11" fill="var(--diagram-accent)">sync follower confirms</text>
+
+    <!-- time arrow -->
+    <line x1="100" y1="290" x2="700" y2="290" stroke="var(--diagram-muted)" stroke-width="1.5"/>
+    <polygon points="700,285 710,290 700,295" fill="var(--diagram-muted)"/>
+    <text x="730" y="294" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">time</text>
+  </svg>
+</Diagram>

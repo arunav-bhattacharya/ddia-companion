@@ -1,0 +1,58 @@
+[
+  {
+    "title": "Consistency Models (clickable map)",
+    "url": "https://jepsen.io/consistency",
+    "type": "docs",
+    "author": "Kyle Kingsbury (Jepsen)",
+    "note": "A rigorous map of how isolation and consistency models relate, showing exactly where read committed, snapshot isolation, and serializability sit relative to each other."
+  },
+  {
+    "title": "Transactions: Myths, Surprises and Opportunities",
+    "url": "https://martin.kleppmann.com/2015/09/26/transactions-at-strange-loop.html",
+    "type": "video",
+    "author": "Martin Kleppmann",
+    "note": "Kleppmann's 41-minute Strange Loop talk (video + slides) covering what ACID really means, weak-isolation race conditions, and modern serializable algorithms — a direct companion to this chapter."
+  },
+  {
+    "title": "CMU 15-445 Lecture 17: Two-Phase Locking (Fall 2024)",
+    "url": "https://15445.courses.cs.cmu.edu/fall2024/notes/17-twophaselocking.pdf",
+    "type": "course",
+    "author": "Andy Pavlo (Carnegie Mellon University)",
+    "note": "Lecture notes walking through 2PL's growing/shrinking phases, strict 2PL, deadlock detection and prevention, and lock hierarchies — the textbook mechanics behind serializability via locking."
+  },
+  {
+    "title": "Serializable Isolation for Snapshot Databases",
+    "url": "https://people.eecs.berkeley.edu/~kubitron/courses/cs262a-F13/handouts/papers/p729-cahill.pdf",
+    "type": "paper",
+    "author": "Michael J. Cahill, Uwe Rohm, Alan D. Fekete",
+    "note": "The SIGMOD 2008 paper that introduced SSI: detect dangerous pairs of rw-antidependency edges at runtime and abort one transaction, getting serializability without 2PL's blocking."
+  },
+  {
+    "title": "Serializable Snapshot Isolation in PostgreSQL",
+    "url": "https://www.drkp.net/papers/ssi-vldb12.pdf",
+    "type": "paper",
+    "author": "Dan R. K. Ports, Kevin Grittner",
+    "note": "VLDB 2012 account of making SSI production-ready in PostgreSQL 9.1, including how predicate locks handle phantoms and how safe retry works after serialization failures."
+  },
+  {
+    "title": "PostgreSQL Documentation: Transaction Isolation",
+    "url": "https://www.postgresql.org/docs/current/transaction-iso.html",
+    "type": "docs",
+    "author": "PostgreSQL Global Development Group",
+    "note": "Official reference for how a real MVCC database maps the SQL-standard levels: read committed per-statement snapshots, repeatable read as snapshot isolation, and serializable via SSI."
+  },
+  {
+    "title": "Hermitage: Testing Transaction Isolation Levels",
+    "url": "https://github.com/ept/hermitage",
+    "type": "docs",
+    "author": "Martin Kleppmann",
+    "note": "Kleppmann's runnable test suite (built as research for DDIA) showing exactly which anomalies — dirty reads, lost updates, write skew, phantoms — each database's isolation levels actually prevent."
+  },
+  {
+    "title": "Two-Phase Commit (Patterns of Distributed Systems)",
+    "url": "https://martinfowler.com/articles/patterns-of-distributed-systems/two-phase-commit.html",
+    "type": "article",
+    "author": "Unmesh Joshi (martinfowler.com)",
+    "note": "Step-by-step walkthrough of 2PC's prepare and commit phases with diagrams and code, including why participants must log decisions durably to survive coordinator crashes."
+  }
+]

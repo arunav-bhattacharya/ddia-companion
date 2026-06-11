@@ -1,0 +1,109 @@
+questions:
+  - id: ch01-q01
+    prompt: "A business analyst starts running monthly-revenue aggregation queries directly against the production orders database, and checkout latency spikes. What is the chapter's standard remedy?"
+    options:
+      - "Add more indexes to the orders database so the aggregations run faster"
+      - "Restrict analysts to running their queries only at night"
+      - "ETL the data into a separate data warehouse and let analysts query that copy"
+      - "Shard the orders database so analytical queries hit only one shard"
+    answerIndex: 2
+    explanation: "OLTP and analytics have conflicting access patterns: point queries vs scans over millions of rows. A warehouse gives analysts a read-only copy reshaped for analysis, so they can query freely without endangering production. Indexes or night runs only soften the conflict; they don't remove it, and sharding doesn't change the query shape at all."
+  - id: ch01-q02
+    prompt: "Which pair correctly characterizes OLTP vs OLAP?"
+    options:
+      - "OLTP: aggregate scans over history; OLAP: point queries on current state"
+      - "OLTP: point queries on current state; OLAP: aggregate scans over a history of events"
+      - "OLTP: few heavyweight queries; OLAP: vast numbers of tiny queries"
+      - "OLTP: bulk imports via ETL; OLAP: individual record updates from user input"
+    answerIndex: 1
+    explanation: "Operational systems fetch and modify a few records by key and represent the latest state; analytical systems scan huge numbers of records to compute aggregates over the history of events. The other options swap the two sides — a common mix-up because both can speak SQL."
+  - id: ch01-q03
+    prompt: "Your product-search index is corrupted by a bad deployment. According to the system-of-record vs derived-data distinction, why is this survivable?"
+    options:
+      - "Search indexes are replicated, so another copy always exists"
+      - "The index is derived data — it can be rebuilt from the authoritative product database"
+      - "Search indexes are immutable, so corruption is impossible by design"
+      - "The index is the system of record for search, so the database must be restored from it"
+    answerIndex: 1
+    explanation: "An index is derived data: the result of transforming data whose authoritative version lives in the system of record. Losing derived data costs you a rebuild, not the truth. Replication may or may not exist, and option D inverts the flow — the database is authoritative, not the index."
+  - id: ch01-q04
+    prompt: "A vendor pitches an HTAP database that handles transactions and analytics in one engine, claiming you can retire your data warehouse. What is the strongest counterargument from the chapter?"
+    options:
+      - "HTAP systems cannot run SQL, so analysts would lose their tools"
+      - "HTAP only works for datasets under a gigabyte"
+      - "Analytics on current data is impossible; warehouses are required by regulation"
+      - "An enterprise has many separate operational databases, and the warehouse is the one place their data can be combined"
+    answerIndex: 3
+    explanation: "Good practice gives each operational service its own database — potentially hundreds of them — while the company keeps a single warehouse so analysts can join data across all of them. HTAP shines when one application needs both patterns at once (e.g., fraud detection), but it doesn't solve cross-system integration."
+  - id: ch01-q05
+    prompt: "A company runs steady, predictable workloads, and its team has years of experience operating PostgreSQL and Elasticsearch. They are evaluating a move to managed cloud equivalents. What does the chapter suggest?"
+    options:
+      - "Move to the cloud — managed services are always cheaper at any scale"
+      - "Self-hosting on their own machines is often the cheaper option in exactly this situation"
+      - "The cloud is mandatory for compliance with privacy regulation"
+      - "Self-hosting is only viable for companies that manufacture their own hardware"
+    answerIndex: 1
+    explanation: "Cloud elasticity pays for itself when load fluctuates or when you lack operating experience. With predictable load and an experienced team, buying your own machines is often cheaper — the 37signals exit from the cloud is the famous worked example. The cloud is a trade-off, not a default."
+  - id: ch01-q06
+    prompt: "Why do cloud native databases avoid building on virtual disks (like EBS) and use purpose-built storage services instead?"
+    options:
+      - "Block-device emulation adds overhead and makes every I/O a network call, sensitive to network glitches"
+      - "Virtual disks are limited to 4 KiB of total capacity"
+      - "Virtual disks cannot be attached to more than one instance over their lifetime"
+      - "Object stores are faster than local disks for every workload"
+    answerIndex: 0
+    explanation: "A virtual disk is a separate service impersonating a local block device, so each I/O secretly crosses the network with emulation overhead on top. Systems designed for the cloud skip the impersonation: large blocks go to object storage, small values to a dedicated service. Option D overclaims — object stores are built for large files, not universal speed."
+  - id: ch01-q07
+    prompt: "Your team adopts a cloud data warehouse with metered billing. Which operations responsibility, according to the chapter, disappears entirely?"
+    options:
+      - "None — operations work changes shape but does not go away"
+      - "Monitoring load and diagnosing performance problems"
+      - "Securing the application and its libraries"
+      - "Knowing about resource quotas and service limits"
+    answerIndex: 0
+    explanation: "The cloud changed what operations does, not whether you need it. Capacity planning becomes financial planning, machine toil becomes service choice and integration — but security, monitoring, troubleshooting, and quota awareness all remain with you. Each of the other options names work the chapter explicitly says cannot be outsourced."
+  - id: ch01-q08
+    prompt: "Service A calls service B to charge a customer's card. The request times out. What does the chapter say about A's situation?"
+    options:
+      - "The charge definitely failed, so A should retry immediately"
+      - "A cannot know whether B processed the charge, so a blind retry might charge the customer twice"
+      - "Timeouts only occur when the network is down, so B never saw the request"
+      - "TCP guarantees delivery, so the charge definitely succeeded and only the reply was lost"
+    answerIndex: 1
+    explanation: "A timeout tells you nothing: the request may have been lost, or B may have processed it and the reply got lost, or B may be slow. That ambiguity is the defining headache of distributed systems — retrying is not automatically safe. Options A, C, and D each assume knowledge the timeout does not give you."
+  - id: ch01-q09
+    prompt: "A 12-person startup with one product team is debating splitting its monolith into 15 microservices 'to be ready for scale.' What is the chapter's verdict?"
+    options:
+      - "Do it — microservices are the modern standard and migrating later is impossible"
+      - "Do it, but share one database among all services to reduce complexity"
+      - "Microservices mainly solve inter-team coordination; with one team the overhead buys nothing, so keep it simple"
+      - "Microservices are only legal in cloud deployments, so it depends on hosting"
+    answerIndex: 2
+    explanation: "Microservices are primarily a technical solution to a people problem — letting many teams progress independently. One team gains nothing and inherits per-service deployment, monitoring, testing, and API-evolution costs. Sharing one database is a known anti-pattern: it makes the schema part of every service's API."
+  - id: ch01-q10
+    prompt: "A node fails mid-computation. A supercomputer and a cloud service respond very differently. Which pairing is correct?"
+    options:
+      - "Supercomputer: stop the whole cluster, repair, restart from a checkpoint; cloud: keep serving users with minimal interruption"
+      - "Supercomputer: keep serving users; cloud: halt everything until the node is repaired"
+      - "Both stop entirely — there is no other way to handle node failure"
+      - "Both continue seamlessly — checkpointing makes failures invisible in both worlds"
+    answerIndex: 0
+    explanation: "HPC runs long batch jobs that checkpoint to disk, so stopping the cluster and resuming from the last checkpoint is acceptable. A cloud service must keep answering user requests, so it tolerates node loss while running. This difference in priorities drives their different networks, security models, and geography."
+  - id: ch01-q11
+    prompt: "A user invokes their GDPR right to erasure, but their data sits in an append-only log and was used to train an ML model. Why does the chapter call this a live engineering problem?"
+    options:
+      - "GDPR specifies exactly which storage technologies are compliant, and logs are banned"
+      - "Erasure requests only apply to relational databases, so logs are exempt"
+      - "Deleting from a log is easy; the only difficulty is verifying the user's identity"
+      - "Immutable structures are designed never to change, and derived datasets like trained models have already absorbed the data"
+    answerIndex: 3
+    explanation: "Many data systems are deliberately built on immutable, append-only constructs, and deletion must also reach derived data — including models trained on it. The regulation states technology-neutral principles rather than blessing particular architectures, so translating law into design is genuinely unsolved engineering, not a checkbox."
+  - id: ch01-q12
+    prompt: "Which consideration does the chapter say belongs in the cost-benefit calculation for storing data, beyond the storage bill?"
+    options:
+      - "Only the engineering salary cost of building the pipeline"
+      - "Nothing — stored data is always a net asset because it may be useful later"
+      - "Liability if the data leaks, fines if processing is non-compliant, and the risk of compelled disclosure to authorities"
+      - "The electricity cost of the disks, which usually exceeds all other costs"
+    answerIndex: 2
+    explanation: "The true cost of data includes breach liability, reputational damage, legal fines, and the danger that governments compel disclosure — which can create real safety risks where behavior is criminalized. That is why data minimization sometimes makes deleting (or never collecting) data the rational choice, against the big-data hoarding instinct."

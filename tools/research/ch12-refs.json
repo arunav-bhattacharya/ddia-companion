@@ -1,0 +1,58 @@
+[
+  {
+    "title": "The Log: What every software engineer should know about real-time data's unifying abstraction",
+    "url": "https://engineering.linkedin.com/distributed-systems/log-what-every-software-engineer-should-know-about-real-time-datas-unifying",
+    "type": "article",
+    "author": "Jay Kreps",
+    "note": "The Kafka co-creator's classic essay framing the append-only, totally-ordered log as the unifying abstraction behind data integration, replication, and stream processing."
+  },
+  {
+    "title": "Apache Kafka Documentation: Design",
+    "url": "https://kafka.apache.org/42/design/design/",
+    "type": "docs",
+    "author": "Apache Kafka project",
+    "note": "Official design rationale for Kafka's log-based broker: filesystem persistence, the consumer pull model, single-integer offsets, and at-most/at-least/exactly-once delivery semantics."
+  },
+  {
+    "title": "Streaming 101: The world beyond batch",
+    "url": "https://www.oreilly.com/radar/the-world-beyond-batch-streaming-101/",
+    "type": "article",
+    "author": "Tyler Akidau",
+    "note": "Freely readable foundation on unbounded data processing, including the crucial distinction between event time and processing time and why their skew matters."
+  },
+  {
+    "title": "Streaming 102: The world beyond batch",
+    "url": "https://www.oreilly.com/radar/the-world-beyond-batch-streaming-102/",
+    "type": "article",
+    "author": "Tyler Akidau",
+    "note": "The sequel digs into watermarks as a notion of input completeness, windowing strategies, triggers, and handling late (straggler) data with accumulation modes."
+  },
+  {
+    "title": "Debezium Architecture",
+    "url": "https://debezium.io/documentation/reference/stable/architecture.html",
+    "type": "docs",
+    "author": "Debezium project",
+    "note": "Official docs showing how CDC connectors tail database transaction logs (e.g. MySQL binlog, Postgres logical replication) and stream row-level changes into Kafka topics."
+  },
+  {
+    "title": "Turning the database inside out with Apache Samza",
+    "url": "https://martin.kleppmann.com/2014/09/18/turning-database-inside-out-at-strange-loop.html",
+    "type": "video",
+    "author": "Martin Kleppmann",
+    "note": "Kleppmann's Strange Loop 2014 talk reimagining the database as an immutable event log with materialized views maintained by stream processors; page links video, slides, and transcript."
+  },
+  {
+    "title": "Timely Stream Processing (Apache Flink Documentation)",
+    "url": "https://nightlies.apache.org/flink/flink-docs-stable/docs/concepts/time/",
+    "type": "docs",
+    "author": "Apache Flink project",
+    "note": "Flink's concepts page defines event time vs processing time and explains watermarks, lateness, and tumbling/sliding/session windows in a production stream processor."
+  },
+  {
+    "title": "Event Sourcing",
+    "url": "https://martinfowler.com/eaaDev/EventSourcing.html",
+    "type": "article",
+    "author": "Martin Fowler",
+    "note": "Fowler's original pattern write-up: capture all state changes as a sequence of events, enabling complete rebuilds, temporal queries, and event replay."
+  }
+]

@@ -1,0 +1,109 @@
+questions:
+  - id: ch06-q01
+    prompt: "Your fully asynchronous single-leader database confirms a write to the client, and the leader's disk dies a second later, before any follower received the change. What happened to the write?"
+    options:
+      - "It is safe — confirmation implies at least one follower has it"
+      - "It is lost — confirmation did not mean durability in this configuration"
+      - "It will be recovered automatically during failover from the replication log"
+      - "The client library replays it against the new leader"
+    answerIndex: 1
+    explanation: "Asynchronous replication confirms before followers receive the change, so an unrecoverable leader failure loses it — a confirmed write was not durable. Semi-synchronous replication exists precisely to guarantee the data on at least two nodes before confirming."
+  - id: ch06-q02
+    prompt: "Why is making every follower synchronous a bad idea for availability?"
+    options:
+      - "Followers would receive writes in different orders"
+      - "It doubles the storage cost of each write"
+      - "Any single unreachable follower blocks all writes, and more nodes mean more chances of that"
+      - "Synchronous replication only works between two nodes"
+    answerIndex: 2
+    explanation: "A synchronous follower must acknowledge before the write completes, so one crashed or slow follower halts the system — and the probability of at least one being down grows with every node. Hence semi-synchronous: exactly one sync follower, swapped out if it misbehaves."
+  - id: ch06-q03
+    prompt: "During an automatic failover, a follower that lagged behind the old leader gets promoted. The old leader's autoincrement counter was ahead, and primary keys it issued were also cached in Redis. What is the realistic worst case, as happened at GitHub in 2012?"
+    options:
+      - "The new leader refuses writes until the counter is resynchronized"
+      - "The new leader reissues already-used primary keys, and the Redis mismatch exposes data to the wrong users"
+      - "Redis detects the inconsistency and invalidates the affected keys"
+      - "Duplicate keys cause a crash, which safely halts the system"
+    answerIndex: 1
+    explanation: "The promoted follower's counter was behind, so it handed out primary keys the old leader had already assigned. Nothing detected it: the keys also lived in Redis, and the inconsistency disclosed private data to the wrong users. Discarding unreplicated writes is extra dangerous when external systems hold derived state."
+  - id: ch06-q04
+    prompt: "Your failover timeout is 5 seconds. During a traffic spike, the leader's response times climb past 5 seconds and a failover triggers. What does the chapter say about this situation?"
+    options:
+      - "Short timeouts are correct — fast detection minimizes data loss"
+      - "The failover is needless and adds disruption exactly when the system is least able to absorb it"
+      - "The timeout should be removed entirely in favor of manual failover"
+      - "The system should fail over to two leaders to share the load"
+    answerIndex: 1
+    explanation: "The leader wasn't dead — it was slow under load. A too-short timeout converts load spikes and network glitches into unnecessary failovers, piling disruption onto an already struggling system. Too-long timeouts mean slower recovery from real failures; there is no perfect setting."
+  - id: ch06-q05
+    prompt: "Why can't WAL shipping usually support a zero-downtime database version upgrade, while logical (row-based) replication can?"
+    options:
+      - "WAL shipping is too slow to keep followers caught up during an upgrade"
+      - "The WAL describes byte-level disk blocks, so leader and follower must run compatible storage engine versions"
+      - "Logical replication skips index updates, making it faster"
+      - "WAL shipping requires locking the database during upgrades"
+    answerIndex: 1
+    explanation: "A WAL records which bytes changed in which disk blocks — tied to the storage engine's physical format, which changes across versions. Logical logs describe row-level changes independent of storage internals, so followers can run a newer version and be promoted via failover, upgrading with minimal downtime."
+  - id: ch06-q06
+    prompt: "A user updates their shipping address, the page reloads, and the old address is displayed. The write definitely committed on the leader. What is the most likely cause and the targeted fix?"
+    options:
+      - "The write was lost in failover; restore from backup"
+      - "The reload read from a lagging asynchronous follower; provide read-after-write consistency (e.g., read your own data from the leader)"
+      - "A split-brain scenario; fence the old leader"
+      - "The browser cached the page; force-refresh solves it"
+    answerIndex: 1
+    explanation: "This is the classic read-your-writes anomaly: the read raced the replication stream and won. The guarantee to add is read-after-write consistency — serve a user's own potentially-modified data from the leader, use freshness heuristics, or have the client carry a logical timestamp the serving replica must meet."
+  - id: ch06-q07
+    prompt: "A user refreshes a feed and sees a comment appear, then refreshes again and it's gone. Which guarantee is being violated?"
+    options:
+      - "Read-after-write consistency"
+      - "Consistent prefix reads"
+      - "Monotonic reads"
+      - "Strong eventual consistency"
+    answerIndex: 2
+    explanation: "Successive reads hit replicas with different amounts of lag, so the user saw newer state and then older state — time moved backward. Monotonic reads forbids exactly that, e.g., by hashing the user ID to a consistent replica. Read-after-write concerns your own writes; consistent prefix concerns causal order of different writers."
+  - id: ch06-q08
+    prompt: "Two leaders in different regions concurrently update the same wiki page title using last-write-wins with wall-clock timestamps. Which statement is true?"
+    options:
+      - "The write that physically happened later is guaranteed to win"
+      - "One write is effectively chosen at random and the other is silently discarded, despite both being confirmed"
+      - "Both writes are kept as siblings for the application to merge"
+      - "LWW rejects the second write with a conflict error"
+    answerIndex: 1
+    explanation: "For concurrent writes 'last' is undefined — neither knew about the other — so timestamp order is arbitrary, and clock skew makes it worse. LWW achieves convergence by discarding confirmed writes silently. Sibling storage is what manual/CRDT resolution does instead; LWW never raises an error."
+  - id: ch06-q09
+    prompt: "Amazon's early shopping cart merged concurrent sibling carts by taking the set union, and deleted items kept reappearing. What was the actual flaw?"
+    options:
+      - "Set union is too slow for large carts"
+      - "The merge tracked insertions but not deletions, so a removal in one sibling was overridden by the item's presence in another"
+      - "The siblings were merged in nondeterministic order"
+      - "Version numbers were compared instead of timestamps"
+    answerIndex: 1
+    explanation: "Union preserves everything present in any sibling — including items the user deliberately removed in one of them. Correct merge algorithms record deletions explicitly (tombstones), so 'Book was deleted' survives the merge. This is exactly what CRDT set/list types do."
+  - id: ch06-q10
+    prompt: "Your leaderless cluster has n = 5, w = 3, r = 3. How many replicas can be unavailable while both reads and writes continue, and why?"
+    options:
+      - "One — quorums require all but one node"
+      - "Two — three reachable replicas still satisfy both w and r"
+      - "Three — any majority of the cluster suffices"
+      - "Zero — leaderless systems need all replicas for writes"
+    answerIndex: 1
+    explanation: "Writes need 3 acks and reads need 3 responses, so 3 reachable replicas out of 5 keep both working — tolerating 2 down. And since 3 + 3 > 5, every read set overlaps every write set in at least one replica that has the newest value."
+  - id: ch06-q11
+    prompt: "With w + r > n satisfied, which of these can STILL cause a quorum read to return stale data?"
+    options:
+      - "A write succeeding on fewer than w replicas without being rolled back where it landed"
+      - "Read repair running too frequently"
+      - "Using an odd value of n"
+      - "Setting w equal to r"
+    answerIndex: 0
+    explanation: "A failed write isn't undone on the replicas that accepted it, and restores from stale backups, rebalancing, clock-skewed LWW, and read/write races all erode the overlap guarantee. Quorums make staleness unlikely, not impossible. The other options are normal, harmless configurations."
+  - id: ch06-q12
+    prompt: "In the version-number cart algorithm, a client writes value V citing version 3. The server holds values at versions 2, 3, and 4. What does the server do?"
+    options:
+      - "Overwrites everything — the incoming write is newest"
+      - "Rejects the write because version 4 exists"
+      - "Overwrites the version 2 and 3 values but keeps version 4 as a sibling alongside V"
+      - "Merges V with version 4 automatically and stores the result"
+    answerIndex: 2
+    explanation: "Citing version 3 proves the client saw (and merged) everything up to version 3, so those values are superseded. The version 4 value was written concurrently — the client couldn't have known it — so it must be kept as a sibling. The server never interprets values; it only compares versions."

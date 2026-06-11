@@ -1,0 +1,50 @@
+---
+import Diagram from '../Diagram.astro';
+---
+
+<Diagram caption="A many-to-many relationship in the relational model: each row of the positions join table associates one person with one organization.">
+  <svg viewBox="0 0 720 320" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="m2m-title">
+    <title id="m2m-title">Two users linked to two organizations through rows in a positions join table</title>
+
+    <!-- Users -->
+    <text x="110" y="30" text-anchor="middle" font-size="14" font-weight="600" fill="var(--diagram-stroke)">users</text>
+    <rect x="30" y="60" width="160" height="56" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="110" y="84" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-stroke)">251 · Priya</text>
+    <text x="110" y="103" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">two employers</text>
+
+    <rect x="30" y="200" width="160" height="56" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="110" y="224" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-stroke)">252 · Dev</text>
+    <text x="110" y="243" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">one employer</text>
+
+    <!-- Join table -->
+    <text x="360" y="30" text-anchor="middle" font-size="14" font-weight="600" fill="var(--diagram-stroke)">positions (join table)</text>
+    <rect x="270" y="60" width="180" height="196" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <text x="360" y="86" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">user_id · org_id</text>
+    <line x1="282" y1="96" x2="438" y2="96" stroke="var(--diagram-muted)" stroke-width="1"/>
+    <text x="360" y="124" text-anchor="middle" font-size="13" fill="var(--diagram-stroke)">251 · 513</text>
+    <text x="360" y="168" text-anchor="middle" font-size="13" fill="var(--diagram-stroke)">251 · 514</text>
+    <text x="360" y="226" text-anchor="middle" font-size="13" fill="var(--diagram-stroke)">252 · 514</text>
+
+    <!-- Organizations -->
+    <text x="610" y="30" text-anchor="middle" font-size="14" font-weight="600" fill="var(--diagram-stroke)">organizations</text>
+    <rect x="530" y="60" width="160" height="56" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="610" y="84" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-stroke)">513 · Helix Labs</text>
+    <text x="610" y="103" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">one past employee</text>
+
+    <rect x="530" y="200" width="160" height="56" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="610" y="224" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-stroke)">514 · Northwind</text>
+    <text x="610" y="243" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">two past employees</text>
+
+    <!-- Lines: user side -->
+    <line x1="190" y1="88" x2="296" y2="120" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <line x1="190" y1="92" x2="296" y2="164" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <line x1="190" y1="226" x2="296" y2="222" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+
+    <!-- Lines: org side -->
+    <line x1="424" y1="120" x2="530" y2="88" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <line x1="424" y1="164" x2="530" y2="222" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <line x1="424" y1="222" x2="530" y2="226" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+
+    <text x="360" y="296" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">index user_id to ask “where did Priya work?” — index org_id to ask “who worked at Northwind?”</text>
+  </svg>
+</Diagram>

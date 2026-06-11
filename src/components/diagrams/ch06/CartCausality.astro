@@ -1,0 +1,60 @@
+---
+import Diagram from '../Diagram.astro';
+---
+
+<Diagram caption="The causal history of two clients editing one shopping cart: an arrow means the later write knew about the earlier one. Versions 4 and 5 have no path between them — they are concurrent, so the server keeps both as siblings.">
+  <svg viewBox="0 0 720 330" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="cart-title">
+    <title id="cart-title">Happens-before graph of five shopping cart writes, ending in two concurrent sibling values</title>
+
+    <!-- Column headers -->
+    <text x="180" y="30" text-anchor="middle" font-size="12" font-weight="600" fill="var(--diagram-muted)">client 1</text>
+    <text x="540" y="30" text-anchor="middle" font-size="12" font-weight="600" fill="var(--diagram-muted)">client 2</text>
+
+    <!-- v1 [milk] -->
+    <rect x="100" y="45" width="160" height="48" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="180" y="65" text-anchor="middle" font-size="12" font-weight="600" fill="var(--diagram-stroke)">v1 · [milk]</text>
+    <text x="180" y="83" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">first write to the key</text>
+
+    <!-- v2 [eggs] -->
+    <rect x="460" y="45" width="160" height="48" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="540" y="65" text-anchor="middle" font-size="12" font-weight="600" fill="var(--diagram-stroke)">v2 · [eggs]</text>
+    <text x="540" y="83" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">didn’t know about milk</text>
+
+    <!-- v3 [milk, flour] -->
+    <rect x="100" y="150" width="160" height="48" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="180" y="170" text-anchor="middle" font-size="12" font-weight="600" fill="var(--diagram-stroke)">v3 · [milk, flour]</text>
+    <text x="180" y="188" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">based on v1</text>
+
+    <!-- v4 [eggs, milk, ham] -->
+    <rect x="450" y="150" width="180" height="48" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <text x="540" y="170" text-anchor="middle" font-size="12" font-weight="600" fill="var(--diagram-stroke)">v4 · [eggs, milk, ham]</text>
+    <text x="540" y="188" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">merged v1 + v2, added ham</text>
+
+    <!-- v5 [milk, flour, eggs, bacon] -->
+    <rect x="60" y="255" width="240" height="48" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <text x="180" y="275" text-anchor="middle" font-size="12" font-weight="600" fill="var(--diagram-stroke)">v5 · [milk, flour, eggs, bacon]</text>
+    <text x="180" y="293" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">merged v3 + v2, added bacon</text>
+
+    <!-- Arrows (happens-before) -->
+    <!-- v1 -> v3 -->
+    <line x1="180" y1="93" x2="180" y2="140" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <polygon points="175,140 180,150 185,140" fill="var(--diagram-stroke)"/>
+    <!-- v1 -> v4 -->
+    <line x1="260" y1="85" x2="455" y2="148" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <polygon points="447,148 457,152 451,141" fill="var(--diagram-stroke)"/>
+    <!-- v2 -> v4 -->
+    <line x1="540" y1="93" x2="540" y2="140" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <polygon points="535,140 540,150 545,140" fill="var(--diagram-stroke)"/>
+    <!-- v2 -> v5 -->
+    <line x1="470" y1="93" x2="240" y2="252" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <polygon points="244,243 235,255 251,251" fill="var(--diagram-stroke)"/>
+    <!-- v3 -> v5 -->
+    <line x1="180" y1="198" x2="180" y2="245" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <polygon points="175,245 180,255 185,245" fill="var(--diagram-stroke)"/>
+
+    <!-- Concurrency annotation -->
+    <line x1="305" y1="279" x2="445" y2="200" stroke="var(--diagram-accent)" stroke-width="1.5" stroke-dasharray="4 4"/>
+    <text x="430" y="262" text-anchor="middle" font-size="12" font-weight="600" fill="var(--diagram-accent)">v4 ∥ v5: concurrent —</text>
+    <text x="430" y="280" text-anchor="middle" font-size="12" fill="var(--diagram-accent)">kept as siblings until merged</text>
+  </svg>
+</Diagram>

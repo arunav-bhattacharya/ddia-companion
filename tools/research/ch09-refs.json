@@ -1,0 +1,58 @@
+[
+  {
+    "title": "How to do distributed locking",
+    "url": "https://martin.kleppmann.com/2016/02/08/how-to-do-distributed-locking.html",
+    "type": "article",
+    "author": "Martin Kleppmann",
+    "note": "Shows why Redlock is unsafe under process pauses and clock skew, and introduces fencing tokens — monotonically increasing counters the storage service checks to reject stale lock holders."
+  },
+  {
+    "title": "The network is reliable",
+    "url": "https://aphyr.com/posts/288-the-network-is-reliable",
+    "type": "article",
+    "author": "Kyle Kingsbury and Peter Bailis",
+    "note": "Informal survey of real-world network partitions at Microsoft, Google, Amazon and others (also in ACM Queue), including GC pauses and NIC firmware bugs that mimic partitions."
+  },
+  {
+    "title": "Spanner: Google's Globally-Distributed Database",
+    "url": "https://research.google.com/archive/spanner-osdi2012.pdf",
+    "type": "paper",
+    "author": "James C. Corbett et al. (Google)",
+    "note": "The OSDI 2012 paper introducing TrueTime, which exposes clock uncertainty as an explicit interval (using GPS and atomic clocks) to provide externally consistent distributed transactions."
+  },
+  {
+    "title": "Navigating the 8 fallacies of distributed computing",
+    "url": "https://ably.com/blog/8-fallacies-of-distributed-computing",
+    "type": "article",
+    "author": "Alex Diaconu (Ably)",
+    "note": "Walks through all eight of Peter Deutsch's fallacies — the network is reliable, latency is zero, bandwidth is infinite, etc. — with concrete engineering mitigations for each."
+  },
+  {
+    "title": "Jepsen Analyses",
+    "url": "https://jepsen.io/analyses",
+    "type": "article",
+    "author": "Kyle Kingsbury (Jepsen, LLC)",
+    "note": "In-depth safety analyses of dozens of databases and coordination services under network partitions, process crashes, and clock skew, documenting stale reads, split brain, and data loss."
+  },
+  {
+    "title": "Testing Distributed Systems w/ Deterministic Simulation",
+    "url": "https://www.youtube.com/watch?v=4fFDFbi3toc",
+    "type": "video",
+    "author": "Will Wilson (Strange Loop 2014)",
+    "note": "Explains how FoundationDB runs its entire distributed database in a deterministic simulator, injecting network, disk, and machine failures so any bug-triggering schedule can be replayed exactly."
+  },
+  {
+    "title": "Learn TLA+",
+    "url": "https://learntla.com/",
+    "type": "course",
+    "author": "Hillel Wayne",
+    "note": "Free, beginner-friendly guide to Lamport's TLA+ formal specification language, with a linear core track plus examples of model-checking concurrency and distributed protocol designs."
+  },
+  {
+    "title": "MIT 6.5840: Distributed Systems",
+    "url": "https://pdos.csail.mit.edu/6.824/",
+    "type": "course",
+    "author": "MIT PDOS (Robert Morris, Frans Kaashoek et al.)",
+    "note": "Graduate course (formerly 6.824) with open lectures, readings, and Go programming labs building MapReduce, Raft, and a sharded fault-tolerant key-value store."
+  }
+]

@@ -1,0 +1,121 @@
+questions:
+  - id: ch04-q01
+    prompt: "A key-value store appends every write to a file and scans the whole file on every read. As data grows, what happens to write and read costs?"
+    options:
+      - "Both writes and reads slow down proportionally to data size"
+      - "Writes stay fast (append is O(1)); reads degrade linearly (O(n) scan)"
+      - "Reads stay fast thanks to the filesystem cache; writes degrade"
+      - "Both stay constant until the file no longer fits in memory"
+    answerIndex: 1
+    explanation: |
+      Appending to a file is about the cheapest write possible and doesn't depend on file size, but finding a key means scanning everything — double the records, double the lookup time. That asymmetry is why indexes exist, and why every index then taxes the formerly free writes.
+  - id: ch04-q02
+    prompt: "In an LSM storage engine, a read for key X checks the memtable, finds nothing, and must continue. In what order does it proceed?"
+    options:
+      - "All SSTable segments in parallel, merging the results"
+      - "The oldest segment first, since old data is most likely settled there"
+      - "The newest segment first, then progressively older ones, stopping at the first hit"
+      - "The write-ahead log, then the segments in any order"
+    answerIndex: 2
+    explanation: |
+      Newer segments contain newer values, and the most recent write for a key is the truth, so the search goes newest to oldest and stops at the first match. Parallel merge-scanning all segments is what range queries must do — and the WAL exists only to rebuild the memtable after a crash, never to serve reads.
+  - id: ch04-q03
+    prompt: "Your LSM engine's Bloom filter says key K is not in segment S. What should the engine do?"
+    options:
+      - "Check S anyway, since Bloom filters can be wrong in both directions"
+      - "Skip S entirely — a Bloom filter never produces false negatives"
+      - "Check S's sparse index to confirm before skipping"
+      - "Return 'key not found' to the client immediately"
+    answerIndex: 1
+    explanation: |
+      A Bloom filter errs in only one direction: all-bits-set may be a false positive, but any zero bit proves the key was never added, so the segment can be skipped safely. Skipping is the entire point — the filter saves the I/O of checking. The engine still must check other segments before declaring the key absent.
+  - id: ch04-q04
+    prompt: "You run a sensor platform that is ~95% writes. Which compaction strategy fits, and why?"
+    options:
+      - "Leveled compaction, because it keeps SSTable counts low for reads"
+      - "Size-tiered compaction, because data is rewritten only a few times in large sequential merges"
+      - "No compaction — with so few reads, merging is wasted work"
+      - "Leveled compaction, because it uses less temporary disk space"
+    answerIndex: 1
+    explanation: |
+      Size-tiered compaction minimizes how often each piece of data gets rewritten, which is exactly what a write-dominated workload needs; its costs (large temporary disk use, more SSTables to check per read) hurt least when reads are rare. Disabling compaction isn't viable — segments would multiply without bound and space from overwritten values would never be reclaimed. Leveled compaction's advantages are read-side.
+  - id: ch04-q05
+    prompt: "A database crashes midway through a B-tree page split, after writing one child page but before updating the parent. How does the database recover a consistent tree?"
+    options:
+      - "It rebuilds the whole tree from the leaf pages upward"
+      - "It replays the write-ahead log, which recorded every intended modification before any page was touched"
+      - "It cannot — page splits are why B-trees are unsuitable for crash-prone systems"
+      - "The orphan page is detected by checksums and silently reused"
+    answerIndex: 1
+    explanation: |
+      Every B-tree modification is appended to the WAL before being applied to the pages themselves, so after a crash the database replays the log to bring the tree back to consistency. That's precisely the danger of multi-page operations like splits — and the irony that update-in-place engines still depend on an append-only log.
+  - id: ch04-q06
+    prompt: "Why can a B-tree holding hundreds of terabytes still answer a point lookup in three or four page reads?"
+    options:
+      - "Pages are cached in memory, so depth doesn't matter"
+      - "The branching factor is in the hundreds, so depth grows only as O(log n)"
+      - "B-trees keep all keys in the root page for fast scanning"
+      - "Leaf pages are laid out sequentially, eliminating seeks"
+    answerIndex: 1
+    explanation: |
+      Each page references several hundred children, so capacity multiplies by the branching factor at every level — a four-level tree of 4 KiB pages with branching factor 500 reaches about 250 TB. Caching helps but isn't the structural reason, and sequential leaf layout speeds range scans, not point lookups.
+  - id: ch04-q07
+    prompt: "Point reads on your LSM-backed service are fast, but range scans are much slower than on the old B-tree system. Why?"
+    options:
+      - "Range queries must merge-scan all segments, and Bloom filters can't pre-filter a key range"
+      - "SSTables are unsorted, so ranges require full scans"
+      - "The memtable locks during range queries"
+      - "Compaction pauses all reads while a range query runs"
+    answerIndex: 0
+    explanation: |
+      Each SSTable is sorted, so scanning within one is easy — but the range's keys may be spread across every segment, so all of them are scanned in parallel and merged. Bloom filters rescue point reads by ruling segments out per key, but you can't hash every possible key in a range, so they're useless here. B-trees serve ranges directly from one sorted structure.
+  - id: ch04-q08
+    prompt: "A benchmark fills an empty LSM database for five minutes and reports spectacular write throughput. What's the flaw?"
+    options:
+      - "Five minutes isn't enough time for the memtable to fill even once"
+      - "A young LSM-tree hasn't started compacting, so writes aren't yet sharing disk bandwidth with compaction"
+      - "The OS page cache absorbs all writes during short benchmarks"
+      - "Bloom filters aren't built until the first compaction, skewing results"
+    answerIndex: 1
+    explanation: |
+      Write amplification reveals itself only over time: once the database grows, every incoming write competes with compaction rewriting older data, and sustained throughput drops. An empty tree gives compaction nothing to do, so the disk is briefly all yours. Run write benchmarks long enough for compaction to reach steady state.
+  - id: ch04-q09
+    prompt: "Your hottest query reads only the columns (order_id, status) but currently does an index lookup plus a fetch from the heap file for every row. What change eliminates the heap fetch?"
+    options:
+      - "Replace the B-tree index with an LSM-tree index"
+      - "A covering index that includes the status column alongside the indexed key"
+      - "A clustered index on status"
+      - "An in-memory cache of the heap file"
+    answerIndex: 1
+    explanation: |
+      A covering index stores selected extra columns inside the index, so queries needing only those columns are answered by the index alone — it "covers" them. The cost is duplicated data and slower writes. Clustering on status would reorder the whole table around the wrong key, and swapping the index's storage engine doesn't change what the index contains.
+  - id: ch04-q10
+    prompt: "A vendor claims their in-memory database is fast 'because it never reads from disk.' Per this chapter, what's wrong with that claim?"
+    options:
+      - "Nothing — eliminating disk reads is exactly the advantage"
+      - "In-memory databases do read from disk, via their append-only durability log"
+      - "A disk-based engine with enough RAM also rarely reads disk (the OS caches blocks); the real win is skipping disk-format encoding"
+      - "In-memory databases are not actually faster than disk-based ones"
+    answerIndex: 2
+    explanation: |
+      With enough RAM, a conventional engine serves most reads from the operating system's cache of disk blocks, so 'no disk reads' isn't the differentiator. The measured advantage comes from never having to encode in-memory data structures into a disk-friendly format and back. The durability log is write-only in normal operation.
+  - id: ch04-q11
+    prompt: "An analytics query aggregates 3 columns of a 120-column fact table over two billion rows, and your row-oriented replica takes hours. Why does a columnar engine transform this workload?"
+    options:
+      - "Columnar engines automatically build data cubes for every query"
+      - "It reads only the 3 referenced columns — and those compress so well via bitmap/run-length encoding that I/O shrinks by orders of magnitude"
+      - "Columnar storage keeps the whole table in RAM"
+      - "Columnar engines skip the JOIN and GROUP BY phases"
+    answerIndex: 1
+    explanation: |
+      Row storage drags all 120 columns off disk to use 3 of them; column storage reads exactly the columns named in the query. Repetitive same-typed values compress aggressively (bitmaps, RLE — and sorting boosts it further), multiplying the I/O savings, while vectorized or compiled execution keeps the CPU side cheap. Nothing about the layout removes joins or requires the data in RAM.
+  - id: ch04-q12
+    prompt: "Your product search must find semantically similar items among 100 million embedding vectors in under 50 ms. Which approach fits?"
+    options:
+      - "A flat index, because correctness requires comparing against every vector"
+      - "An R-tree over the embedding dimensions"
+      - "A concatenated B-tree index over the first few vector dimensions"
+      - "An approximate index like HNSW or IVF, trading a little recall for orders-of-magnitude speed"
+    answerIndex: 3
+    explanation: |
+      A flat scan of 100M high-dimensional vectors can't meet 50 ms, and R-trees (like other spatial structures) break down in thousand-dimensional spaces — sorted one-dimensional indexes are even less applicable. ANN indexes are built for exactly this: IVF probes only nearby partitions, HNSW walks layered proximity graphs, and both let you tune the recall-versus-latency dial.

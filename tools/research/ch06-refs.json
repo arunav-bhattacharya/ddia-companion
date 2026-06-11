@@ -1,0 +1,58 @@
+[
+  {
+    "title": "Dynamo: Amazon's Highly Available Key-value Store (SOSP 2007)",
+    "url": "https://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf",
+    "type": "paper",
+    "author": "Giuseppe DeCandia et al., Amazon",
+    "note": "The original paper behind leaderless replication: quorums, sloppy quorums, hinted handoff, vector clocks, and anti-entropy with Merkle trees, straight from the system that inspired Cassandra and Riak."
+  },
+  {
+    "title": "Local-first software: You own your data, in spite of the cloud",
+    "url": "https://www.inkandswitch.com/essay/local-first/",
+    "type": "article",
+    "author": "Martin Kleppmann, Adam Wiggins, Peter van Hardenberg, Mark McGranaghan (Ink & Switch)",
+    "note": "Motivates multi-leader replication with offline clients: seven ideals for local-first apps and why CRDTs are the enabling technology, illustrated with real Ink & Switch prototypes."
+  },
+  {
+    "title": "PostgreSQL Documentation: High Availability, Load Balancing, and Replication",
+    "url": "https://www.postgresql.org/docs/current/high-availability.html",
+    "type": "docs",
+    "author": "PostgreSQL Global Development Group",
+    "note": "Production-grade reference for single-leader replication: WAL shipping, streaming and cascading replication, replication slots, synchronous commit options, failover, and hot standby."
+  },
+  {
+    "title": "Jepsen: Amazon RDS for PostgreSQL 17.4",
+    "url": "https://jepsen.io/analyses/amazon-rds-for-postgresql-17.4",
+    "type": "article",
+    "author": "Kyle Kingsbury (Jepsen)",
+    "note": "Shows how replication weakens isolation in practice: multi-AZ read replicas let primaries and secondaries disagree on transaction order, producing Long Fork anomalies that violate snapshot isolation."
+  },
+  {
+    "title": "GitHub: October 21 post-incident analysis",
+    "url": "https://github.blog/2018-10-30-oct21-post-incident-analysis/",
+    "type": "article",
+    "author": "GitHub Engineering",
+    "note": "A real failover gone wrong: a 43-second network partition triggered automated MySQL failover, split-brain writes on two coasts, and 24 hours of recovery prioritizing data integrity."
+  },
+  {
+    "title": "About CRDTs - Conflict-free Replicated Data Types",
+    "url": "https://crdt.tech/",
+    "type": "docs",
+    "author": "Martin Kleppmann, Annette Bieniusa, Marc Shapiro",
+    "note": "Curated hub for conflict resolution in multi-leader systems: explains state-based vs operation-based CRDTs and indexes the key papers, implementations, and a glossary."
+  },
+  {
+    "title": "CRDTs: The Hard Parts (Hydra conference talk)",
+    "url": "https://martin.kleppmann.com/2020/07/06/crdt-hard-parts-hydra.html",
+    "type": "video",
+    "author": "Martin Kleppmann",
+    "note": "Goes beyond CRDT basics: why naive implementations have anomalies and terrible performance, with concrete algorithms for list moves, text editing, and metadata reduction."
+  },
+  {
+    "title": "MIT 6.5840 (6.824): Distributed Systems Engineering",
+    "url": "https://pdos.csail.mit.edu/6.824/",
+    "type": "course",
+    "author": "MIT PDOS (Robert Morris, Frans Kaashoek et al.)",
+    "note": "A full graduate course on fault tolerance, replication, and consistency, with free lecture notes, classic papers, and labs where you build a replicated key-value store yourself."
+  }
+]

@@ -1,0 +1,55 @@
+assignments:
+  - id: ch05-a01
+    title: "Pick an encoding for fleet telemetry"
+    scenario: |
+      RoadRunner Logistics operates 40,000 delivery trucks. Each truck reports a telemetry record (position, speed, fuel, fault codes) every 2 seconds over a metered cellular link — about 20,000 records/second fleet-wide, flowing through Kafka into long-term archival files that data scientists query for years. Today the records are JSON: a typical record is 410 bytes, of which about 60% is repeated field names. Truck firmware is updated over-the-air in waves that take up to 9 months to reach the whole fleet, and the analytics team adds 2–3 new sensor fields per quarter. Last quarter an analyst's job silently misread engine_hours (a 64-bit counter) after it passed through a JavaScript-based enrichment service.
+    tasks:
+      - "Recommend an encoding format for the telemetry pipeline and justify it against JSON, MessagePack, and Protocol Buffers using the chapter's criteria (size, schema evolution, dynamically generated vs. hand-maintained schemas)."
+      - "The firmware fleet spans 9 months of versions. Spell out which compatibility direction is needed where: new collector reading old trucks' records, and old enrichment services reading new trucks' records."
+      - "Explain the engine_hours corruption and how your chosen format prevents it."
+      - "Describe how a consumer learns the schema that encoded any given record, for both the Kafka path and the archival files."
+    hints:
+      - "Where does the writer's schema live when records are written individually vs. in one big immutable file?"
+      - "What does 2^53 have to do with a 64-bit counter?"
+    modelAnswer: |
+      Avro with a schema registry fits best. JSON spends ~60% of every metered byte on field names and is vague about numbers; MessagePack trims little (field names stay in the data) and adds nothing for evolution. Protobuf would halve the size, but its field tags must be hand-assigned and never reused — awkward when analytics adds fields quarterly and schemas are best generated mechanically. Avro is the most compact (no names, no tags, just values), and schema resolution matches fields by name, so regenerated schemas keep working.
+
+      Compatibility runs both ways. The collector (deployed weekly) reads records from trucks running firmware up to 9 months old: backward compatibility — new reader, old writer's schema, defaults filling absent fields. Meanwhile old enrichment services read records from newly updated trucks: forward compatibility — unknown fields ignored, which Avro's rule (only add/remove fields with defaults) guarantees, provided every new sensor field ships with a default.
+
+      The engine_hours bug is the 2^53 problem: JSON doesn't distinguish integer from float or specify precision, and the JavaScript service parsed the 64-bit counter into an IEEE 754 double, rounding large values. Avro's schema declares the field a long, and the binary encoding preserves it exactly — there is no lossy intermediate number type.
+
+      For the writer's-schema question: on the Kafka path each record carries a small schema version ID, resolved against the registry (which also rejects incompatible schema changes before deployment). Archival files are Avro object container files — written once, immutable, with the writer's schema embedded once at the head, so files remain self-describing years later.
+  - id: ch05-a02
+    title: "Make claim payouts survive crashes"
+    scenario: |
+      MeadowSure, an agricultural insurance company, pays out crop-damage claims automatically using satellite imagery. Approving one claim involves four service calls in sequence: verify the policy, assess damage from imagery, transfer money via a third-party banking API, and record the payout in the ledger service. Last month a worker VM was preempted after the bank transfer succeeded but before the ledger write, and a retry-from-scratch paid the farmer twice — €18,400 gone. The team is adopting a durable execution framework (Temporal-style) to get effectively-once payouts. A senior engineer objects: "We redeploy workflow code weekly; won't replay break every in-flight claim?"
+    tasks:
+      - "Explain how durable execution would have prevented the double payout, walking through what the framework logs and what happens on re-execution after the crash."
+      - "The banking API is third-party. What property must it offer, and what must MeadowSure's developers do on every call to get it?"
+      - "Answer the senior engineer: identify the determinism constraint, give two examples of innocent-looking code changes that violate it, and describe the safe deployment practice."
+    hints:
+      - "Replay returns recorded results instead of re-issuing calls — but only if the code asks for the same calls in the same order."
+      - "What should happen if the same transfer request is sent twice with the same unique ID?"
+    modelAnswer: |
+      Durable execution logs every RPC and state change to durable storage, write-ahead-log style. When the preempted worker's claim is re-executed, replay walks the recorded history: policy check and damage assessment return their logged results without re-running, and crucially the bank transfer — already logged as succeeded — is not re-issued; the framework returns the recorded response and the workflow proceeds to the ledger write it never reached. The farmer is paid once.
+
+      That guarantee leans on the third-party API being idempotent: the same request submitted twice must execute once. MeadowSure's code must pass a unique request ID (e.g., the claim ID plus attempt-independent transfer key) on every banking call so the bank can deduplicate — the framework can't conjure idempotence out of an API that lacks it, since a crash can still happen after the bank acted but before the log records it.
+
+      The engineer's worry is real but solvable. Replay assumes deterministic workflow code: the same inputs must produce the same sequence of calls in the same order. Innocent violations: reordering the policy check and damage assessment (history no longer lines up), or reading the system clock / a random number to decide a branch (different value on replay, different path). The discipline: use the framework's deterministic time/random stand-ins, run static checks like Workflow Check, and never edit a deployed workflow in place — ship changes as a new workflow version so in-flight claims finish on the code that started them, and only new claims take the new path.
+  - id: ch05-a03
+    title: "Ship a season update without bricking old game clients"
+    scenario: |
+      PixelForge runs a mobile game with 6 million players. The backend is 30 services deployed by rolling upgrade several times a day; the iOS/Android client updates whenever players feel like it — 15% of players are on versions more than a year old. The Season 9 update adds a 'guild_banner' field to player profiles and a new optional 'emote' parameter to the chat-send API. Profiles are stored as encoded blobs in the player database; old client versions call an API gateway that reads and writes those profiles. During the beta, a tester on an old client edited their loadout and their newly earned guild banner disappeared from their profile.
+    tasks:
+      - "Diagnose the vanishing guild banner: name the dataflow, the compatibility direction involved, and the specific coding mistake."
+      - "For the chat-send change, state which side needs which compatibility (requests vs. responses) given that servers always update before clients, and judge whether adding an optional parameter is safe under REST/JSON conventions."
+      - "Propose a versioning strategy for the public API, given that some clients will stay a year out of date, and say what tooling should gate every profile-schema change before deploy."
+    hints:
+      - "Read-modify-write by old code is the trap from Figure 5-1 of the book."
+      - "Stripe pins an API version per client — why does that help here?"
+    modelAnswer: |
+      The banner vanished in database dataflow: a new-version writer stored the profile with guild_banner, then the old client's loadout edit made old code read, modify, and rewrite the blob. That's the forward-compatibility round-trip trap — the old code decoded the profile into a model object that dropped the unknown field and wrote back a record without it. The fix is to preserve unknown fields through the read-modify-write cycle (protobuf's skip-by-wire-type makes this natural if model objects retain unknowns), or route profile writes through a service that merges rather than replaces.
+
+      For chat-send, servers update first, so the new server must accept old-format requests — backward compatibility on requests — and old clients must tolerate new-format responses — forward compatibility on responses. Adding an optional request parameter and new response fields are exactly the changes REST/JSON convention treats as compatible, so the emote parameter is safe provided the server defaults it when absent and old clients ignore unknown response fields.
+
+      Because 15% of clients are a year old, compatibility must hold essentially indefinitely; a breaking change means running multiple API versions side by side. A pinned per-client version (Stripe-style: stored server-side against the client's key, upgradable explicitly) beats sprinkling versions in URLs, since players never opt into upgrades. Finally, every profile-schema change should pass a schema-registry compatibility check in CI — backward and forward — so an incompatible field change is rejected at review time, not discovered as vanished banners in production.

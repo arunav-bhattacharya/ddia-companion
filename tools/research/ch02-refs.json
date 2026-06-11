@@ -1,0 +1,58 @@
+[
+  {
+    "title": "Timelines at Scale",
+    "url": "https://www.infoq.com/presentations/Twitter-Timeline-Scalability/",
+    "type": "video",
+    "author": "Raffi Krikorian (Twitter)",
+    "note": "First-hand account of Twitter's fan-out architecture and materialized home timelines, the exact case study the chapter opens with, including the read/write asymmetry numbers."
+  },
+  {
+    "title": "The Tail at Scale",
+    "url": "https://research.google/pubs/the-tail-at-scale/",
+    "type": "paper",
+    "author": "Jeffrey Dean and Luiz André Barroso (Google)",
+    "note": "The canonical paper on tail latency amplification: why p99 dominates user experience when one request fans out to many backends, plus tail-tolerant techniques like hedged requests."
+  },
+  {
+    "title": "How NOT to Measure Latency",
+    "url": "https://www.youtube.com/watch?v=lJ8ydIuPFeU",
+    "type": "video",
+    "author": "Gil Tene (Azul Systems)",
+    "note": "Explains coordinated omission and why averages and naive percentile math mislead, motivating HdrHistogram and correct response-time (vs service-time) measurement under queueing."
+  },
+  {
+    "title": "Service Level Objectives (Site Reliability Engineering, Chapter 4)",
+    "url": "https://sre.google/sre-book/service-level-objectives/",
+    "type": "docs",
+    "author": "Chris Jones, John Wilkes, and Niall Murphy (Google)",
+    "note": "Defines SLIs, SLOs, and SLAs with concrete guidance on choosing percentile-based targets, directly grounding the chapter's discussion of performance promises."
+  },
+  {
+    "title": "Exponential Backoff and Jitter",
+    "url": "https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/",
+    "type": "article",
+    "author": "Marc Brooker (AWS)",
+    "note": "Shows with simulations why retrying clients cause contention spikes and how adding jitter to exponential backoff tames retry storms, a key defense against metastable failures."
+  },
+  {
+    "title": "Blameless PostMortems and a Just Culture",
+    "url": "https://www.etsy.com/codeascraft/blameless-postmortems",
+    "type": "article",
+    "author": "John Allspaw (Etsy)",
+    "note": "The foundational essay on blameless postmortems: why investigating the situational causes of failure instead of punishing operators makes systems more reliable."
+  },
+  {
+    "title": "Metastable Failures in Distributed Systems",
+    "url": "https://sigops.org/s/conferences/hotos/2021/papers/hotos21-s11-bronson.pdf",
+    "type": "paper",
+    "author": "Nathan Bronson, Abutalib Aghayev, Aleksey Charapko, and Timothy Zhu",
+    "note": "Names and dissects the failure mode where a system stays overloaded after the trigger is gone (e.g. retry storms), giving readers a vocabulary for the chapter's hardest reliability concept."
+  },
+  {
+    "title": "Principles of Chaos Engineering",
+    "url": "https://principlesofchaos.org/",
+    "type": "docs",
+    "author": "Chaos Engineering community (originating at Netflix)",
+    "note": "Concise manifesto on deliberately injecting real-world faults as controlled experiments to verify fault tolerance, formalizing the practice the chapter attributes to Netflix's Chaos Monkey."
+  }
+]

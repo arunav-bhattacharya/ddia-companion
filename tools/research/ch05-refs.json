@@ -1,0 +1,58 @@
+[
+  {
+    "title": "Schema evolution in Avro, Protocol Buffers and Thrift",
+    "url": "https://martin.kleppmann.com/2012/12/05/schema-evolution-in-avro-protocol-buffers-thrift.html",
+    "type": "article",
+    "author": "Martin Kleppmann",
+    "note": "The DDIA author's byte-level walkthrough of how the same example record is encoded in Thrift, Protobuf, and Avro, and why each format's design dictates its schema evolution rules."
+  },
+  {
+    "title": "Language Guide (proto 3)",
+    "url": "https://protobuf.dev/programming-guides/proto3/",
+    "type": "docs",
+    "author": "Protocol Buffers team, Google",
+    "note": "The authoritative proto3 reference; its 'Updating A Message Type' section codifies which changes are wire-safe and why deleted field numbers must be reserved, never reused."
+  },
+  {
+    "title": "Apache Avro 1.11.1 Specification",
+    "url": "https://avro.apache.org/docs/1.11.1/specification/",
+    "type": "docs",
+    "author": "Apache Avro project",
+    "note": "The official spec whose 'Schema Resolution' section defines the exact matching rules for reconciling a writer's schema with a reader's schema, including default values and union handling."
+  },
+  {
+    "title": "Schema Evolution and Compatibility for Schema Registry",
+    "url": "https://docs.confluent.io/platform/current/schema-registry/fundamentals/schema-evolution.html",
+    "type": "docs",
+    "author": "Confluent",
+    "note": "Defines backward, forward, full, and transitive compatibility modes with per-format matrices for Avro, Protobuf, and JSON Schema, plus how each mode constrains producer/consumer upgrade order."
+  },
+  {
+    "title": "Introduction to gRPC",
+    "url": "https://grpc.io/docs/what-is-grpc/introduction/",
+    "type": "docs",
+    "author": "gRPC project",
+    "note": "Official primer on gRPC's service-definition model: clients call methods on a generated stub while Protocol Buffers serve as both the IDL and the wire format."
+  },
+  {
+    "title": "gRPC vs REST: Understanding gRPC, OpenAPI and REST and when to use them in API design",
+    "url": "https://cloud.google.com/blog/products/api-management/understanding-grpc-openapi-and-rest-and-when-to-use-them",
+    "type": "article",
+    "author": "Martin Nally (Google Cloud / Apigee)",
+    "note": "A clear-eyed comparison from an Apigee API designer arguing that REST, gRPC, and OpenAPI embody three distinct API models, with concrete guidance on when each trade-off wins."
+  },
+  {
+    "title": "The definitive guide to Durable Execution",
+    "url": "https://temporal.io/blog/what-is-durable-execution",
+    "type": "article",
+    "author": "Tom Wheeler (Temporal)",
+    "note": "Explains durable execution as 'crash-proof' execution that virtualizes a workflow across processes and machines, so a crash mid-flow resumes from recorded history rather than losing state."
+  },
+  {
+    "title": "Deserialization Cheat Sheet",
+    "url": "https://cheatsheetseries.owasp.org/cheatsheets/Deserialization_Cheat_Sheet.html",
+    "type": "docs",
+    "author": "OWASP",
+    "note": "Security backdrop for the chapter's warning about language-built-in serialization: deserializing untrusted native formats (Java, Python pickle, etc.) can yield remote code execution."
+  }
+]

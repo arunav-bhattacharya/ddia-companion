@@ -1,0 +1,109 @@
+questions:
+  - id: ch05-q01
+    prompt: "Mid-rolling-upgrade, a new-version instance writes a user record with a new 'pronouns' field. An old-version instance then reads the record, updates the email address, and writes it back. The pronouns field vanishes. What was the missing safeguard?"
+    options:
+      - "Backward compatibility — the new code should have written the old format"
+      - "Old code must preserve unknown fields when it decodes, updates, and re-encodes a record"
+      - "A database trigger to reject writes from outdated application versions"
+      - "Pessimistic locking so old and new versions never touch the same row"
+    answerIndex: 1
+    explanation: "This is the classic forward-compatibility round-trip trap: old code decoded the record into a model object that silently dropped the field it didn't recognize. The fix is to carry unknown fields through intact (as protobuf's skip-by-wire-type or careful model design allows) — not to forbid concurrent versions, which rolling upgrades make unavoidable."
+  - id: ch05-q02
+    prompt: "Your analytics API returns event IDs as JSON numbers. They are 64-bit integers. A customer's JavaScript dashboard reports that some IDs are off by a few units. Why?"
+    options:
+      - "JSON's maximum number size is 32 bits, so the IDs overflow"
+      - "HTTP compression corrupts long numeric literals"
+      - "Integers above 2^53 can't be exactly represented in an IEEE 754 double, so the JS parser rounds them"
+      - "JavaScript reverses byte order when parsing large numbers"
+    answerIndex: 2
+    explanation: "JSON itself allows arbitrary numbers but doesn't specify precision, and JavaScript parses numbers as double-precision floats with 53 bits of mantissa — larger integers get silently rounded to a nearby representable value. X works around exactly this by returning post IDs both as a number and as a decimal string."
+  - id: ch05-q03
+    prompt: "A teammate tidies a protobuf schema: renames user_name to username (keeping tag 1) and renumbers favorite_number from tag 2 to tag 4 'for spacing'. What happens to existing encoded data?"
+    options:
+      - "Both changes are safe — protobuf matches fields by name and by tag"
+      - "The rename breaks decoding; the renumbering is harmless"
+      - "The rename is harmless; the renumbering silently misinterprets every existing record's field 2"
+      - "Both changes break decoding of all existing data"
+    answerIndex: 2
+    explanation: "Encoded protobuf data never contains field names, only tags, so renames are free. But tags ARE the meaning of the bytes: after renumbering, old records still carry tag 2, which new code no longer maps to favorite_number — data is lost or misread. Tags must never change, and retired tags should be marked reserved."
+  - id: ch05-q04
+    prompt: "Why can't an Avro byte sequence be decoded without knowing the exact writer's schema?"
+    options:
+      - "The bytes are encrypted with a key derived from the schema"
+      - "The encoding is just values concatenated — no field names, tags, or type markers — so only the schema says what each byte means"
+      - "Avro compresses records, and the schema doubles as the compression dictionary"
+      - "It can be — Avro embeds a tag byte before every field, like protobuf"
+    answerIndex: 1
+    explanation: "Avro achieves the most compact encoding (32 bytes for the example record) precisely by putting nothing in the data that identifies fields or datatypes. You walk the writer's schema field by field to know what to parse next — any schema mismatch yields garbage, which is why the writer's schema must travel via container files, registries, or connection negotiation."
+  - id: ch05-q05
+    prompt: "You add a required 'region' field with no default to an Avro schema and start writing records with it. Consumers reading with the OLD schema keep working, but a newly deployed reader fails on historical data. Which compatibility did you break?"
+    options:
+      - "Forward compatibility — old readers can no longer parse new records"
+      - "Backward compatibility — new readers can't fill in the field when reading old records"
+      - "Both directions at once"
+      - "Neither — Avro always tolerates added fields"
+    answerIndex: 1
+    explanation: "Old readers ignore the unknown field, so forward compatibility survives. But a new reader expecting 'region' has no default to fall back on when the writer's schema lacks the field, so it cannot read old data — backward compatibility is broken. Avro's rule: only add or remove fields that have default values."
+  - id: ch05-q06
+    prompt: "A nightly job dumps 400 relational tables to binary files, regenerating the encoding schema from each table's columns on every run. Why does the chapter recommend Avro over protobuf here?"
+    options:
+      - "Avro files are always smaller than protobuf files"
+      - "Avro schemas have no tag numbers, so regenerated schemas still match old readers by field name; protobuf would need a hand-maintained, never-reused column-to-tag mapping"
+      - "Protobuf cannot represent nullable columns"
+      - "Avro is the only format Hadoop can read"
+    answerIndex: 1
+    explanation: "Dynamically generated schemas were an Avro design goal: column names become field names, and schema resolution matches by name across versions, so the export job never notices schema changes. With protobuf, someone must keep tag assignments stable forever and never reuse a retired tag — exactly the kind of manual bookkeeping a generated schema can't do safely."
+  - id: ch05-q07
+    prompt: "Your payment client calls a charge API, the request times out, and you retry. The customer is charged twice. What property was missing from the protocol?"
+    options:
+      - "Location transparency"
+      - "Idempotence — a deduplication mechanism so retries don't repeat the action"
+      - "Forward compatibility on the response"
+      - "A faster timeout so the retry happens sooner"
+    answerIndex: 1
+    explanation: "A timeout is the network call's fourth outcome: you learn nothing, including whether the first request succeeded before its response was lost. Retrying is only safe if the operation is idempotent — e.g., the client sends a unique request ID the server uses to deduplicate. Faster timeouts make duplicate execution more likely, not less."
+  - id: ch05-q08
+    prompt: "In service dataflow the book assumes servers are updated before clients. Which compatibility requirements follow from that assumption?"
+    options:
+      - "Backward compatibility on requests, forward compatibility on responses"
+      - "Forward compatibility on requests, backward compatibility on responses"
+      - "Backward compatibility in both directions"
+      - "Forward compatibility in both directions"
+    answerIndex: 0
+    explanation: "After the server upgrades, old clients still send requests in the old format — the new server must read old data (backward compatibility on requests). Those old clients must also read the new server's responses (forward compatibility on responses). Across organizational boundaries you can't force client upgrades, so these guarantees may need to hold indefinitely."
+  - id: ch05-q09
+    prompt: "A Temporal workflow has been running in production. You hotfix the deployed workflow code, swapping the order of two activity calls. In-flight workflow executions start behaving unpredictably. Why?"
+    options:
+      - "Temporal requires a database migration for every code change"
+      - "Replay matches the logged history of calls in order; reordered code diverges from the recorded sequence, causing undefined behavior"
+      - "The activities lost their idempotency keys during the deploy"
+      - "Workflow code may never be changed once any execution has started"
+    answerIndex: 1
+    explanation: "Durable execution replays logged RPCs in order and returns recorded results instead of re-calling. If the code now makes different calls in a different order, replay no longer lines up with history. The safe practice isn't 'never change' but 'deploy changes as a new version' so existing invocations finish on the old code while new ones use the new."
+  - id: ch05-q10
+    prompt: "An e-commerce checkout calls an email service directly via RPC; when the email service is down, checkouts fail. The team inserts a message broker between them. Which benefit is NOT something the broker provides?"
+    options:
+      - "Buffering messages while the email service is unavailable"
+      - "Redelivering messages to a consumer that crashed mid-processing"
+      - "A guarantee that the email service processes each message synchronously before checkout completes"
+      - "Decoupling — checkout no longer needs the email service's address or even to know who consumes"
+    answerIndex: 2
+    explanation: "Broker communication is asynchronous by design: the sender publishes and forgets, which is exactly why checkout stops depending on the email service's availability. Buffering, redelivery after crashes, no service discovery, and sender/recipient decoupling are the broker's selling points — synchronous confirmation is what you gave up."
+  - id: ch05-q11
+    prompt: "Why does location transparency work better in distributed actor frameworks (Akka, Orleans, Erlang/OTP) than in RPC?"
+    options:
+      - "Actor frameworks use faster network protocols than RPC frameworks"
+      - "The actor model already assumes messages may be lost even within one process, so local and remote communication differ far less fundamentally"
+      - "Actors never need to encode messages as bytes"
+      - "Actor frameworks guarantee exactly-once message delivery"
+    answerIndex: 1
+    explanation: "RPC fails because it pretends an unreliable network call is a reliable local function call. Actors make no such promise locally — delivery isn't guaranteed and each actor processes asynchronous messages one at a time — so going remote mostly just adds latency. Rolling upgrades still require forward/backward-compatible message encodings, though."
+  - id: ch05-q12
+    prompt: "Your team runs Kafka with protobuf messages and is debating adding Confluent's schema registry. Which argument best reflects the chapter's 'merits of schemas'?"
+    options:
+      - "A registry encrypts schemas so competitors can't reverse-engineer message formats"
+      - "A registry lets you mechanically check that a proposed schema change is forward and backward compatible before anything deploys"
+      - "A registry removes the need for consumers to have any schema at all"
+      - "A registry converts protobuf messages to JSON automatically for debugging"
+    answerIndex: 1
+    explanation: "Keeping a database of schema versions doubles as always-accurate documentation and — the operational win — lets compatibility be verified at change time rather than discovered as a production incident. Consumers still need schemas; the registry is how they (and your CI) know which versions are valid."

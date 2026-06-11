@@ -1,0 +1,109 @@
+questions:
+  - id: ch03-q01
+    prompt: "Your page lists 50 product reviews, each showing its author's name. The ORM-backed endpoint issues 51 database queries. What happened, and what's the fix?"
+    options:
+      - "The N+1 query problem — configure the ORM to fetch authors eagerly, so the database performs one join"
+      - "An impedance mismatch — switch from an ORM to raw SQL for all queries"
+      - "Schema-on-read overhead — add an explicit schema so the ORM can plan queries"
+      - "A missing secondary index — index the author_id column to merge the queries"
+    answerIndex: 0
+    explanation: "One query fetched the 50 reviews, then one more per review resolved each author: N+1 round trips for what a single join could do. Indexes speed up individual queries but don't reduce their number, and abandoning the ORM entirely is overkill — eager fetching solves it."
+  - id: ch03-q02
+    prompt: "A profile page stores a person's jobs, education, and contact info, and the whole profile is read and rendered together. Why does the chapter suggest a document representation here?"
+    options:
+      - "Documents compress better than rows, reducing storage costs"
+      - "The data is a self-contained tree of one-to-many relationships, so one document read beats multiple queries or a multiway join"
+      - "Document databases are faster than relational databases for all workloads"
+      - "Trees cannot be represented in relational tables at all"
+    answerIndex: 1
+    explanation: "Tree-shaped one-to-many data loaded as a unit benefits from locality: everything arrives in one read, and the JSON mirrors the application's objects. Relational shredding works fine — it's just clunkier — and no model is universally faster; the win is specific to this data shape."
+  - id: ch03-q03
+    prompt: "Your job-board copies each employer's logo URL into every listing document. The employer rebrands. What does this incident illustrate?"
+    options:
+      - "A locality failure — the documents were too large to update"
+      - "The cost of denormalization — duplicated facts must all be found and updated, risking inconsistency"
+      - "The N+1 query problem applied to writes"
+      - "Schema-on-write enforcement rejecting the new logo"
+    answerIndex: 1
+    explanation: "The logo was denormalized: copied into every record instead of stored once and referenced by ID. Updates now require hunting down every copy, and any missed copy leaves the data disagreeing with itself. A normalized employers entity holding the logo once makes the rebrand a one-row update."
+  - id: ch03-q04
+    prompt: "X's precomputed timelines store only post IDs and sender IDs, not post text or like counts. Why?"
+    options:
+      - "Storing text would exceed the maximum document size of the timeline cache"
+      - "IDs make the timeline easier to shard across machines"
+      - "Like counts and profile details change rapidly, so they're hydrated at read time rather than denormalized into millions of cached copies"
+      - "Posts are encrypted and can only be resolved at read time"
+    answerIndex: 2
+    explanation: "A hot post's like count changes several times a second, and users rename themselves — denormalizing that into every follower's cached timeline would mean constant mass updates plus huge storage. Hydrating IDs is a read-time join that parallelizes well, showing joins aren't inherently unscalable."
+  - id: ch03-q05
+    prompt: "In a grocery retailer's star schema, what does one row of the fact table represent?"
+    options:
+      - "One product in the catalog, with all its attributes"
+      - "A single event — one customer's purchase of one product at one store at one moment"
+      - "A daily rollup of sales per store"
+      - "One customer and their full purchase history"
+    answerIndex: 1
+    explanation: "Facts are captured as individual events at maximum granularity, because you can't predict which slice analysts will need later — hence petabyte fact tables. Products and customers live in dimension tables; rollups are computed by queries, not stored as facts."
+  - id: ch03-q06
+    prompt: "A document database is described as 'schemaless.' What's the accurate version of that claim?"
+    options:
+      - "The data genuinely has no structure, so any code can read it safely"
+      - "The schema is implicit and enforced at read time by application code — schema-on-read, like dynamic typing"
+      - "The database infers and enforces a schema automatically from the first document written"
+      - "Documents have schemas, but only for indexed fields"
+    answerIndex: 1
+    explanation: "Code reading the documents absolutely assumes a structure; the database just doesn't enforce it on write. That's schema-on-read, analogous to dynamic type checking, versus relational schema-on-write's static checking. Nothing is inferred or enforced for you — your read paths carry that burden."
+  - id: ch03-q07
+    prompt: "Why is 'find people whose residence is within Europe' painful in plain SQL over vertices/edges tables?"
+    options:
+      - "SQL cannot join a table to itself"
+      - "The number of WITHIN hops — and therefore joins — isn't known in advance, requiring a recursive common table expression"
+      - "Relational databases cannot store graph-shaped data"
+      - "SQL lacks string matching to find the Europe vertex"
+    answerIndex: 1
+    explanation: "Each traversed edge is a join, and a residence may sit any number of WITHIN levels below Europe — a city, district, or country. SQL's answer is WITH RECURSIVE, which works but turns a four-line Cypher query into roughly thirty lines. Storing graph data relationally is easy; querying it is the hard part."
+  - id: ch03-q08
+    prompt: "In the triple (priya, marriedTo, marco), what is the predicate marriedTo?"
+    options:
+      - "A property key on the priya vertex, with marco as its value string"
+      - "The label of an edge connecting two vertices: priya (tail) to marco (head)"
+      - "A virtual table derived by a rule"
+      - "A foreign-key constraint between two tables"
+    answerIndex: 1
+    explanation: "When a triple's object is another vertex, the predicate acts as an edge between them. Only when the object is a primitive value — as in (priya, birthYear, 1990) — does the predicate-object pair behave like a property. RDF deliberately uses one mechanism for both."
+  - id: ch03-q09
+    prompt: "What feature of Datalog makes variable-length graph traversals expressible?"
+    options:
+      - "Rules can refer to themselves, so a derived table is built recursively until no new rows appear"
+      - "Its ASCII-art arrow syntax for matching edges"
+      - "Built-in shortest-path and PageRank operators"
+      - "It stores data natively as vertices and edges"
+    answerIndex: 0
+    explanation: "Datalog's data model is actually relational — facts are rows. Its power comes from rules deriving virtual tables, where a rule like in_place referring to itself walks a hierarchy to any depth, the same job as Cypher's *0... Arrows belong to Cypher, and graph algorithms aren't built into the language."
+  - id: ch03-q10
+    prompt: "Your mobile team asks the GraphQL API for 'every user born in India now living in Europe,' and it can't be expressed. Why is GraphQL built this way?"
+    options:
+      - "GraphQL only works over document databases, which can't do joins"
+      - "Queries come from untrusted client devices, so anything expensive — recursion, arbitrary search conditions — is excluded to prevent denial-of-service"
+      - "The GraphQL specification forbids filtering on more than one field"
+      - "GraphQL responses must be smaller than the query, ruling out searches"
+    answerIndex: 1
+    explanation: "GraphQL's restraint is a security and stability feature: a public endpoint accepting recursive or arbitrarily complex queries invites accidental or malicious overload. Servers expose only declared fields and joins. It runs over any database — the limitation is the contract, not the storage."
+  - id: ch03-q11
+    prompt: "Your event-sourced billing system converts payouts to euros inside the view-maintenance code, using the live exchange rate. A view rebuild next quarter produces different totals. What's the lesson?"
+    options:
+      - "Materialized views should never be rebuilt after their first construction"
+      - "Event processing must be deterministic — embed the rate in the event or query the rate as-of the event's timestamp"
+      - "Currency amounts cannot be stored in immutable events"
+      - "The event log should be sorted by amount rather than time"
+    answerIndex: 1
+    explanation: "Rebuildability is a core promise of event sourcing: replaying the same events through the same code must reproduce the same view. Fetching fluctuating external data during processing breaks that. Capturing the rate inside the event (or a reproducible historical lookup) restores determinism; never rebuilding would forfeit the pattern's main benefit."
+  - id: ch03-q12
+    prompt: "A data scientist pivots a (user_id, movie_id, rating) table into a users-by-movies matrix with 40,000 columns, most cells empty. Why leave the relational model here?"
+    options:
+      - "Relational databases cannot store ratings as integers"
+      - "ML algorithms expect matrix input for linear algebra, and sparse arrays handle thousands of mostly-empty columns that relational tables tolerate poorly"
+      - "Matrices use less storage than the equivalent rows in all cases"
+      - "SQL has no GROUP BY, so aggregation requires a DataFrame"
+    answerIndex: 1
+    explanation: "The pivot serves the consumer: recommender algorithms run linear algebra over a numeric matrix, and sparse-array libraries like NumPy handle the emptiness and column count gracefully — a 40,000-column relational table would be unworkable. DataFrames exist to steer data between these two shapes; SQL aggregates fine but doesn't produce matrices."

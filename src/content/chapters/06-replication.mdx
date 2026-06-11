@@ -1,0 +1,308 @@
+---
+title: "Replication"
+chapter: 6
+description: "Three ways to copy data across machines — single-leader, multi-leader, and leaderless — and what replication lag, failover, write conflicts, quorums, and version vectors do to your guarantees."
+readingMinutes: 30
+keyTakeaways:
+  - "Replication serves five goals: high availability, durability, disconnected operation, lower latency by placing data near users, and read scalability. All the difficulty is in replicating changes, not static data."
+  - "Single-leader replication funnels every write through one node, which streams changes to followers in a fixed order. It is the easiest model to reason about and offers the strongest consistency of the three."
+  - "Synchronous replication guarantees an up-to-date follower but blocks writes when that follower is down; asynchronous replication keeps accepting writes but can lose confirmed data. Semi-synchronous — one sync follower, the rest async — is the common compromise."
+  - "Failover is the dangerous moment of single-leader systems: a too-short timeout, a stale follower promoted to leader, or split brain (two nodes both accepting writes) can lose or corrupt data, which is why some teams still fail over by hand."
+  - "Replication lag turns one logical database into many slightly different ones. Read-after-write, monotonic reads, and consistent prefix reads are the guarantees that paper over the most confusing anomalies."
+  - "Multi-leader replication lets every region — or every device — accept writes locally, which is why it powers geo-distributed databases, offline-first apps, sync engines, and real-time collaboration. The price is write conflicts."
+  - "Last-write-wins resolves conflicts by silently discarding all but one concurrent write. CRDTs and operational transformation instead merge concurrent updates so that no edit is lost and all replicas converge to the same state."
+  - "Leaderless systems accept writes at any replica and rely on quorums (w + r > n) plus read repair, hinted handoff, and anti-entropy to converge. Quorum overlap makes reads probably fresh — not provably fresh."
+  - "Two writes are concurrent if neither knew about the other; wall-clock time is irrelevant. Version vectors capture this happens-before relation, letting the database distinguish a deliberate overwrite from a genuine conflict."
+references:
+  - title: "Dynamo: Amazon's Highly Available Key-value Store (SOSP 2007)"
+    url: "https://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf"
+    type: paper
+    author: "Giuseppe DeCandia et al., Amazon"
+    note: "The original paper behind leaderless replication: quorums, sloppy quorums, hinted handoff, vector clocks, and anti-entropy, straight from the system that inspired Cassandra and Riak."
+  - title: "PostgreSQL Documentation: High Availability, Load Balancing, and Replication"
+    url: "https://www.postgresql.org/docs/current/high-availability.html"
+    type: docs
+    author: "PostgreSQL Global Development Group"
+    note: "Production-grade detail on single-leader replication: WAL shipping, streaming and cascading replication, synchronous commit options, failover, and hot standby."
+  - title: "GitHub: October 21 post-incident analysis"
+    url: "https://github.blog/2018-10-30-oct21-post-incident-analysis/"
+    type: article
+    author: "GitHub Engineering"
+    note: "A real failover gone wrong: a 43-second network partition triggered automated MySQL failover, split-brain writes on two coasts, and 24 hours of recovery prioritizing data integrity."
+  - title: "Jepsen: Amazon RDS for PostgreSQL 17.4"
+    url: "https://jepsen.io/analyses/amazon-rds-for-postgresql-17.4"
+    type: article
+    author: "Kyle Kingsbury (Jepsen)"
+    note: "Shows replication weakening guarantees in a managed cloud database: read replicas let primaries and secondaries disagree on transaction order, violating snapshot isolation."
+  - title: "Local-first software: You own your data, in spite of the cloud"
+    url: "https://www.inkandswitch.com/essay/local-first/"
+    type: article
+    author: "Martin Kleppmann, Adam Wiggins, Peter van Hardenberg, Mark McGranaghan (Ink & Switch)"
+    note: "The essay behind this chapter's sync-engine section: seven ideals for local-first apps and why CRDTs are the enabling technology, with real prototypes."
+  - title: "CRDTs: The Hard Parts (Hydra conference talk)"
+    url: "https://martin.kleppmann.com/2020/07/06/crdt-hard-parts-hydra.html"
+    type: video
+    author: "Martin Kleppmann"
+    note: "Goes beyond CRDT basics: why naive merge implementations produce anomalies and poor performance, with concrete algorithms for text editing and metadata reduction."
+  - title: "MIT 6.5840 (6.824): Distributed Systems Engineering"
+    url: "https://pdos.csail.mit.edu/6.824/"
+    type: course
+    author: "MIT PDOS (Robert Morris, Frans Kaashoek et al.)"
+    note: "A full graduate course on fault tolerance, replication, and consistency, with free lecture notes, classic papers, and labs where you build a replicated key-value store yourself."
+---
+
+import Callout from '../../components/mdx/Callout.astro';
+import SingleLeaderFlow from '../../components/diagrams/ch06/SingleLeaderFlow.astro';
+import SyncVsAsync from '../../components/diagrams/ch06/SyncVsAsync.astro';
+import ReadYourWritesViolation from '../../components/diagrams/ch06/ReadYourWritesViolation.astro';
+import MultiLeaderConflict from '../../components/diagrams/ch06/MultiLeaderConflict.astro';
+import QuorumOverlap from '../../components/diagrams/ch06/QuorumOverlap.astro';
+import CartCausality from '../../components/diagrams/ch06/CartCausality.astro';
+
+**Replication** means keeping a copy of the same data on several machines connected by a network. Why bother? To keep data geographically close to users (lower latency), to keep the system running when machines fail (availability and durability), and to spread read traffic across more machines (read throughput). This chapter assumes the whole dataset fits on each machine; Chapter 7 drops that assumption.
+
+If the data never changed, replication would be a one-time copy job and this chapter would be a paragraph. Every interesting problem comes from replicating *changes*: who accepts a write, in what order changes propagate, and what readers see meanwhile. Nearly every distributed database answers with one of three designs — **single-leader**, **multi-leader**, or **leaderless** replication — and the trade-offs have barely changed since the 1970s, because unreliable networks haven't either.
+
+<Callout type="note" title="Replication is not a backup">
+Replicas mirror writes within seconds — including the one where you accidentally delete the customers table. A backup is a snapshot of the past you can return to; a replica is the present, copied. The two intertwine in practice: backups seed new replicas, and archived replication logs can double as backups.
+</Callout>
+
+## Single-Leader Replication
+
+Each node holding a copy of the database is a **replica**. The most common way to keep replicas in sync is **leader-based replication** (also primary/backup or active/passive; the older term *master–slave* means the same but is widely avoided today). One replica is the **leader**: all writes must go to it. The others are **followers**: the leader streams every change to them through a **replication log**, and each follower applies the changes in the order the leader processed them. Reads can go to any replica; writes only to the leader.
+
+<SingleLeaderFlow />
+
+This design is everywhere: PostgreSQL, MySQL, Oracle Data Guard, SQL Server's Always On groups, MongoDB, DynamoDB, Kafka, the DRBD replicated block device, and Raft-based systems like CockroachDB, TiDB, and etcd, where consensus adds automatic leader election on top. If the database is sharded, each shard gets its own leader — but every shard has exactly one.
+
+### Synchronous versus asynchronous replication
+
+Suppose a user updates their profile photo. The write goes to the leader, which applies it and forwards it to the followers. The question: does the leader wait?
+
+<SyncVsAsync />
+
+With a **synchronous** follower, the leader doesn't confirm the write until that follower confirms receipt. The upside is a guarantee: if the leader dies right now, the data survives on the follower. The downside is the same coin, flipped: if the synchronous follower crashes or its network hiccups, the leader must block *all writes* until it's reachable. One flaky machine halts the system.
+
+That's why all-synchronous configurations are impractical — they get less reliable with every node added. The usual setup is **semi-synchronous**: one synchronous follower, the rest asynchronous, with an asynchronous follower promoted whenever the synchronous one becomes slow or unavailable. The data always lives on at least two nodes without being hostage to any single follower. Some systems instead wait for a majority of replicas (say three of five) — a **quorum**, an idea that returns later in this chapter and in Chapter 10. Another variant, **chain replication**, arranges synchronous replicas in a chain: writes enter at the head and propagate to the tail, which serves reads — used in Microsoft Azure Storage.
+
+Fully **asynchronous** replication is the other extreme: the leader confirms writes immediately and replicates in the background. If it fails unrecoverably, writes that hadn't reached any follower are gone — the client was told "saved" and the system didn't mean it. Yet asynchronous replication is widely used, especially with many or far-flung followers, because the leader never waits on a slow link. Followers normally lag well under a second; under load or network trouble, minutes.
+
+### Setting up new followers
+
+New followers get added all the time — for redundancy, or to replace dead nodes — and you can't just `rsync` the leader's data files, because clients keep writing while you copy: you'd get different parts of the database from different moments, stitched into nonsense. Locking the database would make the copy consistent and the users furious.
+
+The standard no-downtime recipe:
+
+1. Take a consistent snapshot of the leader's database, ideally without locking it (most databases can; backups use the same machinery).
+2. Copy the snapshot to the new node.
+3. The follower connects to the leader and requests every change since the exact log position the snapshot corresponds to — the log sequence number in PostgreSQL; binlog coordinates or global transaction identifiers (GTIDs) in MySQL.
+4. Once the follower has chewed through the backlog, it has **caught up** and rides the live change stream.
+
+A nice refinement: archive snapshots and replication logs to an object store — WAL-G (PostgreSQL, MySQL, SQL Server) and Litestream (SQLite) do this — giving disaster recovery and a follower-bootstrap path in one mechanism.
+
+<Callout type="note" title="Databases that live in object storage">
+Object stores like S3 are no longer just archives — many databases serve live data from them. They're cheap, multi-zone replicated with very high durability, and their conditional-write (compare-and-set) operation can implement transactions and leader election. The costs: high latency, per-call fees that force batching, immutable objects, missing POSIX features. Some systems tier storage (hot data on NVMe, cold in the object store); the boldest go **zero-disk** — all persistent state in object storage, disks purely cache — the architecture behind WarpStream, SlateDB, and most cloud data warehouses.
+</Callout>
+
+### Handling node outages
+
+Nodes go down — by surprise, or for a planned kernel patch. The goal is for the system as a whole to shrug.
+
+**Follower failure** is the easy case. Each follower logs the changes it has applied, so after a crash or network blip it asks the leader for everything since the last transaction it processed — the bootstrap catch-up trick, minus the snapshot. The catch is operational: a follower gone for hours has a lot to catch up on, loading both the recovering node and the leader. And the leader can't keep its log forever; a follower gone past the log retention must be rebuilt from a backup.
+
+**Leader failure** is the hard case. Some follower must be promoted, clients must redirect writes to it, and the other followers must consume changes from it. This is **failover**, run manually or automatically, in three parts: *detect* that the leader is dead (usually a timeout — no response for, say, 30 seconds), *choose* a new leader (by election or appointment by a controller node — ideally the most up-to-date replica), and *reconfigure* so everyone follows the new leader, including forcing the old leader to step down if it comes back.
+
+Everything in that paragraph can go wrong:
+
+- With asynchronous replication, the new leader may be missing writes the old leader confirmed. The usual resolution is to discard them — writes you told clients were committed simply evaporate. Durability, asterisk.
+- Discarding writes is worse when other systems hold derived state. In a 2012 GitHub incident, a lagging MySQL follower was promoted; its autoincrement counter was behind, so it reissued primary keys the old leader had already handed out. Those keys also lived in a Redis cache, and the mismatch showed some users' private data to the wrong people.
+- Two nodes can both believe they're the leader — **split brain**. If both accept writes and nothing resolves the conflicts, data gets lost or corrupted. Mechanisms that shut down one of the two (**fencing**, treated properly in Chapter 9) must themselves be designed carefully; one badly built safety catch famously shut down *both* nodes.
+- The timeout is a dial with no good setting. Too long, and every real failure means a long outage. Too short, and a load spike or network glitch triggers a needless failover — exactly when extra disruption hurts most.
+
+There are no clean solutions here, only trade-offs, which is why some operations teams keep failover manual even when the software could do it alone. One rule survives contact with reality: promote the most up-to-date follower, because losing half a second of writes might be tolerable and losing half a day is a career event.
+
+### How the replication log is implemented
+
+Four main techniques decide what actually flows from leader to followers.
+
+**Statement-based replication** ships the SQL text itself: every `INSERT`, `UPDATE`, `DELETE` is re-executed on each follower. Compact, but fragile. `NOW()` and `RAND()` evaluate differently on every replica; statements that read existing state (an `UPDATE` with a `WHERE` clause, an autoincrement) must run in exactly the same order everywhere; triggers and stored procedures diverge unless perfectly deterministic. MySQL used this before 5.1 and now switches to row-based replication for nondeterministic statements; VoltDB makes it safe by *requiring* deterministic transactions. Executing deterministic statements in a fixed order is called **state machine replication**.
+
+**Write-ahead log (WAL) shipping** reuses the crash-recovery log from Chapter 4: the WAL contains everything needed to reconstruct the database, so the leader streams the very same bytes to followers, which rebuild identical files. PostgreSQL and Oracle do this. The weakness: a WAL describes bytes in disk blocks, welding replication to the storage engine version. That sounds like trivia until upgrade day — if followers can't run a newer version than the leader, the upgrade-followers-first, then-fail-over trick is off the table, and you take an outage instead.
+
+**Logical (row-based) replication** decouples the log format from the storage engine. The log becomes row-level records: an insert carries all column values; a delete carries enough to identify the row (usually the primary key); an update carries identity plus new values; a transaction ends with a commit record. MySQL's binlog (row mode) works this way; PostgreSQL decodes its physical WAL into row events. Leader and followers can now run different versions — minimal-downtime upgrades — and external systems can parse the log too, feeding warehouses, caches, and search indexes. That technique, **change data capture**, returns in Chapter 12.
+
+**Trigger-based replication** moves the job into application space: triggers record every change into a separate table, from which an external process replicates it. Flexible — replicate a subset, or between different products — but slower and buggier than built-in mechanisms; a last resort.
+
+### Problems with replication lag
+
+Tolerating node failure is only one reason to replicate. The other big one is read scaling: in a mostly-read workload (most web workloads), add followers and spread reads across them. This realistically requires asynchronous replication — synchronously replicating to dozens of followers means any one dead node blocks all writes.
+
+But an asynchronous follower answers from the past. Run the same query on the leader and a follower simultaneously and you may get different answers; wait a moment and the follower catches up. This is **eventual consistency**: stop writing, wait an unspecified time, and all replicas converge. "Eventual" is doing a lot of work there — **replication lag** is usually a fraction of a second, but nothing stops it becoming minutes when the system runs near capacity or the network misbehaves. (The term became the NoSQL era's rallying cry — but a lagging Postgres read replica is exactly as eventually consistent as any NoSQL store.)
+
+Three anomalies show up so reliably that they have names, each with a corresponding guarantee.
+
+#### Reading your own writes
+
+You post a comment; the write goes to the leader. You reload the page; the read goes to a follower that hasn't received your comment yet. Your comment is gone — or so it appears, and users do not file calm bug reports about this.
+
+<ReadYourWritesViolation />
+
+**Read-after-write consistency** (read-your-writes) is the fix: a guarantee that *you* always see *your own* updates. It promises nothing about other people's writes — fine, since you don't know when someone else posts, but you definitely know what you just typed. Implementations, in rough order of effort:
+
+- Read potentially-self-modified data from the leader. Works when the editable set is predictable: only you can edit your profile, so your own profile comes from the leader, everyone else's from followers.
+- If most data is user-editable, that rule sends everything to the leader. Use heuristics instead: serve a user's reads from the leader for one minute after their last write, or stop routing to followers more than a minute behind.
+- Have the client remember a logical timestamp of its latest write (a log sequence number works), and require the replica serving the read to be at least that current — otherwise wait, or pick another replica.
+
+Cross-device access makes this harder: write on your phone, read on your laptop, and the laptop has no idea the phone wrote anything. The "last write" metadata must live server-side, and all of a user's devices may need routing to the same region — phone and desktop otherwise arrive via entirely different network paths.
+
+<Callout type="note" title="Regions and availability zones">
+A **region** is a geographic location containing several datacenters; each datacenter is an **availability zone**. Zones within a region are linked by networks fast enough to treat them as one. Multi-zone deployment survives a zone outage; only multi-*region* deployment survives a regional outage — at the cost of latency and steeper networking bills.
+</Callout>
+
+#### Monotonic reads
+
+Refresh a page and each request may hit a different replica. The first lands on a barely-lagged follower and shows a fresh comment; the second lands on a *more* lagged follower where that comment doesn't exist yet. You watched data appear and then un-happen. **Monotonic reads** guarantees against this time travel: a user who has seen some state never sees an earlier state. You may read stale data, but never *increasingly* stale data. One easy implementation: hash the user ID to pick a consistent replica per user, rerouting only if that replica dies.
+
+#### Consistent prefix reads
+
+The third anomaly breaks **causality**. Picture a chat: Priya asks "Did the deploy go out?" and Marco answers "Yes, ten minutes ago." If Priya's message travels through a heavily lagged shard and Marco's through a fast one, an observer sees the *answer before the question* — Marco apparently replying to nothing, with impressive foresight.
+
+**Consistent prefix reads** guarantees that writes are seen in the order they happened. A single-leader database gets this for free — one global write order, applied faithfully. It becomes a real problem in sharded systems, where shards apply writes independently and there is no global ordering. One fix: keep causally related writes (a question and its answer) on the same shard — not always feasible. More general solutions track causal dependencies explicitly, a thread picked up in "Detecting concurrent writes" below.
+
+### Solutions for replication lag
+
+Before reaching for machinery, ask the product question: what breaks if a follower is an hour behind? Sometimes the honest answer is "nothing," and you're done. If the answer is "users see their data vanish," the application needs a stronger guarantee — pretending replication is synchronous when it isn't is a slow-motion incident.
+
+Hand-building read-after-write and friends in application code is fiddly and easy to get subtly wrong. The simplest programming model is a database with strong guarantees — linearizability (Chapter 10) plus ACID transactions (Chapter 8) — that pretends to be a single node on your behalf. The early-2010s NoSQL movement declared such guarantees unscalable; a wave of databases since (the trend gets called NewSQL) has delivered strong consistency *and* distribution. Still, weaker-consistency designs survive for honest reasons: better resilience to network interruptions, lower coordination overhead. The rest of this chapter is about them.
+
+## Multi-Leader Replication
+
+Single-leader replication has one structural weakness: can't reach the leader, can't write. Period.
+
+The natural extension is to let more than one node accept writes — **multi-leader replication** (also active/active or bidirectional). Each leader applies its own clients' writes and forwards them to every other leader; every leader is simultaneously a follower of the others. A synchronous variant exists but collapses into single-leader behavior (if leader A must wait for leader B on every write, B is effectively *the* leader), so multi-leader in practice means asynchronous: each leader keeps accepting writes even when it can't reach its peers.
+
+That independence is the whole appeal — and the whole problem.
+
+### Geographically distributed operation
+
+Within a single region, multi-leader is rarely worth its complexity. Across regions, the math changes. Put a leader in each region — ordinary leader–follower replication inside a region, asynchronous leader-to-leader replication between them — and compare against a single global leader:
+
+- **Write performance.** Single leader: every write crosses the planet and waits for the round trip. Multi-leader: writes complete locally and replicate in the background — inter-region latency leaves the critical path.
+- **Regional outages.** Single leader: the leader's region going dark forces a cross-region failover. Multi-leader: every other region keeps working; the missing one catches up later.
+- **Network problems.** Inter-region links are flakier than anything inside a region. Single-leader writes traverse that link synchronously and feel every wobble; multi-leader replication is asynchronous, so an interruption just queues changes.
+- **Consistency.** Here single-leader wins, decisively. It can give you serializable transactions; multi-leader fundamentally cannot enforce constraints like "this username is unique," because two leaders can each accept a write that is fine alone and violating together. If you need such constraints, use a single leader.
+
+Multi-leader support exists in MySQL, Oracle, SQL Server, and YugabyteDB, plus add-ons like EDB Postgres Distributed and pglogical. A warning: it's usually a retrofitted feature with surprising interactions around autoincrement keys, triggers, and integrity constraints — experienced operators treat it as dangerous territory.
+
+With more than two leaders, you also choose a **replication topology** — the paths writes travel. *All-to-all* (everyone sends to everyone) is the most general; *circular* forwards writes around a ring; a *star* routes everything through one root node. Ring and star save connections but add fragility: one dead node severs the flow between others until someone reconfigures things, usually by hand. (Forwarded writes carry the identifiers of nodes they've passed through, so loops die out.)
+
+All-to-all has its own failure mode: on links of different speeds, writes can overtake each other. Leader 2 might receive "update row X" *before* the "insert row X" it depends on. Timestamps don't save you — clocks on different machines can't be trusted to agree finely enough (Chapter 9). Ordering causally related writes needs version vectors or similar machinery, and many multi-leader products simply… don't. Read the documentation with suspicion and test the guarantees you think you have.
+
+### Sync engines and local-first software
+
+Now shrink each "region" down to a device in your pocket. A calendar app must show your meetings and accept new ones with or without connectivity; offline edits sync later. That's multi-leader replication at its extreme: every device is a write-accepting replica (a leader), with replication lag of hours or days — however long until you're back online.
+
+Real-time collaboration tools land in the same place from the other direction. Google Docs, Figma, and Linear feel instant because keystrokes apply to a local copy immediately, while changes replicate asynchronously to collaborators. People editing without waiting on a server *is* multi-leader replication — each browser tab is a replica.
+
+The library powering this pattern — capture local changes, ship them when connected, store them when not, merge collaborators' changes into the local copy — is a **sync engine**. An app that keeps working offline is **offline-first**; **local-first** raises the bar to apps that keep working even if the vendor's servers vanish forever, typically via an open sync protocol with multiple providers. Git is a good mental model: local-first collaboration (minus real-time), syncable via GitHub, GitLab, or a bare server in your closet.
+
+Compared with thin clients, sync engines offer UI updates fast enough to hit the next display frame (~16 ms), offline support for free (being offline is just very high network latency), and a simpler programming model — local reads and writes almost never fail, so you skip the error handling every RPC requires. The structural limit: the client must hold all data the user might touch. Your own documents, fine; an e-commerce catalog, no. The idea predates the buzz — Lotus Notes did it in the 1980s — and today spans proprietary backends (Firestore, Realm, Ditto) and open source ones suited to local-first (CouchDB/PouchDB, Automerge, Yjs). Multiplayer games solve a cousin of this problem under the name *netcode*.
+
+### Dealing with conflicting writes
+
+Everything above has been dancing around the elephant: concurrent writes on different leaders **conflict**. Two users each edit a wiki page title on their local leader — one changes A to B, the other A to C. Both local writes succeed; when they replicate, the system holds B and C with no idea which should win. A single-leader database would have serialized these. A multi-leader one cannot.
+
+<MultiLeaderConflict />
+
+A note on the word *concurrent*: it does not mean "at the same instant." The two edits might be hours apart if one user was offline. Writes are concurrent when neither happened in a state that included the other — neither writer knew of the other's change. How a database *detects* that comes later; for now, assume detection works and ask what to do with a conflict.
+
+**Conflict avoidance.** The cleanest conflict is the one that never forms. If all writes for a given record go through the same leader, that record effectively lives in a single-leader world: give each user a "home" region and route their requests there. (Useless for offline devices, workable for geo-replicated services.) Likewise, two leaders minting IDs can be assigned odd and even numbers so they never collide. But avoidance breaks the moment the designated leader must change — a region fails, or the user moves — because writes during the handover can conflict after all. It postpones the problem; it doesn't abolish it.
+
+**Last write wins** — the brutally simple option. Tag every write with a timestamp; highest timestamp wins; everything else is discarded (ties broken by comparing values). LWW makes replicas converge, but read the fine print: for *concurrent* writes, "last" is undefined, so LWW really means "pick one concurrent write at random and silently delete the rest, even though the database confirmed all of them." Harmless if you only insert under unique keys and never update; otherwise, decide consciously whether randomly lost updates are acceptable. Extra trap: with real-time clocks, a node whose clock runs fast wins arguments it should lose. Logical clocks (Chapter 9) avoid that failure.
+
+**Manual resolution.** If silently discarding writes offends you — good — the next option is keeping all concurrently written values, called **siblings**, and letting someone sort it out. You've done this in Git: a merge conflict is exactly this, paused for human judgment. A database can't pause replication for a human, so systems like CouchDB store the siblings and return *all* of them on the next read; the application (or user) merges them and writes back the result. The costs are real: the page title is no longer a string but a set of strings; conflict-resolution UI is work to build and baffling to use; and naive merges backfire. Amazon's shopping cart once merged sibling carts by set union, so a deleted item *came back from the dead* at checkout. Worse, two nodes resolving the same conflict concurrently can create a new conflict — and resolve it inconsistently (B/C versus C/B) unless ordered carefully.
+
+**Automatic convergent resolution.** The best answer for many apps is a merge *algorithm* with a convergence guarantee: all replicas that have seen the same writes reach the same state, regardless of arrival order. Eventual consistency plus guaranteed convergence is **strong eventual consistency**. Good merge algorithms exist per data type. Text: track which characters were inserted and deleted, preserving every sibling's edits. Lists and sets: track insertions *and deletions* — recording "Book was deleted" prevents the zombie cart item. Counters: sum each side's increments and decrements without double-counting. Maps: merge per key with a value-appropriate strategy. Limits exist — if a list may hold five items and concurrent inserts push it to seven, *something* must drop — but for collaborative and local-first apps, where conflicts are a certainty, automatic merging is usually the right default.
+
+Two algorithm families implement automatic merging. Take two replicas of the text `ice`: one user prepends `n` (making `nice`), another concurrently appends `!` (making `ice!`). Both should converge to `nice!`. **Operational transformation (OT)** describes edits by index — "insert `n` at index 0," "insert `!` at index 3" — and *transforms* remote indexes to account for concurrent edits already applied: the `!` shifts from index 3 to 4 because an `n` landed earlier. **Conflict-free replicated data types (CRDTs)** sidestep transformation by giving every character a unique immutable ID; an insertion says "place this character after the one with ID 3A," which stays correct no matter what else happened, and concurrent insertions at the same spot are ordered deterministically by ID. OT runs Google Docs; CRDTs ship in Redis Enterprise, Riak, and Azure Cosmos DB, and power sync engines like Automerge and Yjs (ShareDB does JSON sync with OT). Newer algorithms blend the strengths of both.
+
+One last subtlety: not every conflict is two writes to the same field. A meeting-room booking system *inserts* a record per booking and requires no overlapping bookings for the same room. Two bookings created concurrently — each checking availability, seeing the room free, inserting — conflict at the level of an application invariant, not a record. No general-purpose merge fixes that. Chapter 8 has more conflict stories; Chapter 13 covers conflict detection at scale.
+
+## Leaderless Replication
+
+Single-leader and multi-leader replication share a premise: a leader decides the order of writes, and everyone else applies that order. A third family discards the premise. In **leaderless replication**, any replica accepts writes directly from clients; there is no ordering authority at all. The idea is old, but returned to fashion when Amazon built its in-house Dynamo system on it in 2007; the stores it inspired (Riak, Cassandra, ScyllaDB) are called *Dynamo-style*. (Confusingly, Amazon's cloud database DynamoDB is a different system with single-leader replication under the hood.) Sometimes clients talk to several replicas themselves; sometimes a coordinator node does it for them — but unlike a leader, the coordinator enforces no write order.
+
+### Writing when a node is down
+
+Three replicas, one mid-reboot. A client sends its write to all three in parallel; the two healthy replicas accept it; two acknowledgments suffice, so the write succeeds. No failover, no drama — there is no leader to fail over *from*. The rebooted replica simply missed a write.
+
+And that's the rub: when it comes back, it serves stale data. So reads also go to several replicas in parallel; every written value carries a version number, and the client takes the response with the highest version. Stale replicas get caught in the act.
+
+Three mechanisms drag a lagging replica back toward current:
+
+- **Read repair.** When a read reveals that replica 3 returned version 6 while the others returned version 7, the client (or coordinator) writes version 7 back to replica 3 on the spot. Great for hot data; cold data never gets read, so never repaired this way.
+- **Hinted handoff.** While a replica is unreachable, another node stores its missed writes as *hints* and delivers them when it returns. This catches what read repair misses.
+- **Anti-entropy.** A background process compares replicas wholesale and copies differences — in no particular order, possibly with significant delay. The janitorial sweep, not the fast path.
+
+#### Quorums for reading and writing
+
+How many acknowledgments are enough? If every successful write reaches at least 2 of 3 replicas, at most one replica is stale — so a read consulting 2 replicas must touch a fresh copy. Generalizing: with **n** replicas, require **w** confirmations per write and consult **r** replicas per read. As long as **w + r > n**, the write set and read set must overlap, so every read should see the latest write. These are **quorum reads and writes** — w and r are the votes required for validity.
+
+<QuorumOverlap />
+
+Typically n is odd (3 or 5) and w = r = (n + 1) / 2, but the dials are yours: a read-heavy dataset might use w = n and r = 1 — blazing reads, but one dead node blocks all writes. With n = 3, w = 2, r = 2 you tolerate one unavailable node; with n = 5, w = 3, r = 3, two. Requests still go to all n replicas in parallel — w and r only say how many responses you *wait* for; below w or r reachable nodes, the operation returns an error. (The cluster may hold more than n nodes; n is the replicas per value — how leaderless databases shard, per Chapter 7.) You can also deliberately set w + r ≤ n: more stale reads, but lower latency and higher availability.
+
+#### What quorums don't promise
+
+Even with w + r > n, the guarantee has soft edges:
+
+- A node holding a new value can fail and be restored from a stale replica, quietly dropping the fresh-copy count below w.
+- During rebalancing (Chapter 7), nodes may disagree about *which* n nodes own a value, so read and write quorums can fail to overlap.
+- A read concurrent with a write may or may not see it — and one read can see the new value while a *later* read sees the old one (Chapter 10 dissects this).
+- A write that succeeded on fewer than w replicas reports failure — yet isn't rolled back where it landed. A "failed" write may haunt subsequent reads.
+- Stores using wall-clock LWW (Cassandra, ScyllaDB) can silently drop writes when clocks are skewed: the node with the fast clock wins.
+- Concurrent writes can arrive in different orders at different replicas — the conflict problem all over again, handled below.
+
+The honest summary: quorum overlap makes stale reads *unlikely*, not impossible — Dynamo-style stores suit applications that tolerate eventual consistency, not ones needing a hard freshness guarantee. Staleness is also hard to monitor: a leader-based system can subtract a follower's log position from the leader's and graph the lag, but with no write order there's no log position, only weak proxies like hint counts. "Eventual" is a vague promise, and quantifying it is genuinely difficult.
+
+### Single-leader versus leaderless performance
+
+Reading from a single leader gets you fresh data with three costs. Read throughput caps at what one node can serve. A leader failure means downtime until detection and failover finish — even fast failovers are user-visible. And the leader's bad days are everyone's bad days: any slowness there lands directly on response times.
+
+Leaderless systems are structurally calmer, because they don't distinguish the normal case from the failure case. Requests already go to several replicas in parallel; if one is slow or dead, the client uses the faster responses — **request hedging**, which does wonders for tail latency. There's no failover decision to agonize over, which especially helps with **gray failures**: nodes that aren't down, just mysteriously slow. A leader-based system must decide whether things are bad enough to fail over (itself disruptive); a leaderless system never faces that question.
+
+The calm isn't free. Detecting unavailable peers and storing hints adds load precisely when the system is strained, and the handoff burst when a node returns can itself overload it. Bigger quorums mean waiting on more responses, raising the odds of hitting a slow replica — in practice quorums rarely exceed four-of-seven or five-of-nine. And a network partition can make quorums unreachable. The escape hatch: accept the write on *any* reachable replica, even one that doesn't normally hold that key, and hand it off later — a **sloppy quorum** in Riak and Dynamo terms; consistency level ANY in Cassandra and ScyllaDB. It buys write availability at the price of reads possibly missing the value until handoff completes.
+
+Where does multi-leader sit? It tolerates network trouble best — each client needs only its co-located leader — but reads can be arbitrarily stale. Quorums are the middle path: good fault tolerance, high probability of fresh data.
+
+### Multi-region operation
+
+Leaderless replication also stretches across regions, since it was built to absorb conflicts, interruptions, and latency spikes anyway. In Cassandra and ScyllaDB, a client sends its write to a local **coordinator node**, which forwards it to all local replicas but to just *one* replica per remote region, which fans out internally — one cross-region hop instead of many. Consistency levels decide what to wait for: a global quorum, a quorum per region, or a local-region quorum (fast, but more likely stale). Riak takes the other route: clients talk only to their local cluster (n counts replicas within one region), and clusters replicate to each other asynchronously, multi-leader style.
+
+### Detecting concurrent writes
+
+Leaderless databases accept concurrent writes to the same key, so conflicts happen — surfacing at write time or much later, during read repair, hinted handoff, or anti-entropy. Variable network delays mean replicas can receive the same two writes in different orders; if each replica took "latest write received" as truth, replicas would disagree *forever* — node 2 swears the value is B while the others swear it's A. Convergence needs the multi-leader toolkit: LWW (Cassandra, ScyllaDB), siblings with manual merging, or CRDTs (Riak). LWW is easy precisely because it refuses to distinguish concurrent writes from sequential ones; to *resolve* conflicts rather than discard writes, the system must detect concurrency properly.
+
+#### The happens-before relation
+
+Operation B **happens before** operation A if A knew about B, depends on B, or builds on B — an update happens after the insert that created the row. For any two operations there are exactly three possibilities: A happened before B, B happened before A, or *neither* knew about the other — they are **concurrent**. Happens-before tells you what to do: a later operation overwrites the earlier one it builds on; concurrent operations are a genuine conflict needing resolution.
+
+<Callout type="insight" title="Concurrency has nothing to do with clocks">
+Two operations are concurrent if each was made in ignorance of the other — physical timing is irrelevant. Offline edits made days apart are concurrent; writes microseconds apart are not, if the second saw the first. There's an echo of special relativity — events that can't exchange information can't affect each other — except distributed systems are stricter: a slow network makes operations "causally distant" even when physics would have allowed communication.
+</Callout>
+
+#### Capturing happens-before with version numbers
+
+Here's an algorithm for a single replica that detects concurrency exactly, using a shopping-cart scenario (if groceries feel low-stakes, make it two air-traffic controllers adding aircraft to a sector). The server keeps a version number per key, incremented on every write. Clients must read before writing; reads return *all* current siblings plus the latest version number; writes must carry the version from the client's last read, with a value merging all siblings the client saw. On a write with version v, the server overwrites every value with version ≤ v (provably seen and merged) but keeps higher-versioned values as siblings (the client couldn't have known about them — concurrent).
+
+Concretely: client 1 writes [milk], getting version 1. Client 2, unaware, writes [eggs] — no version attached, so the server stores both as siblings and returns both with version 2. Client 1 adds flour, writing [milk, flour] citing version 1: that overwrites [milk] but is concurrent with [eggs], so both remain. Client 2 merges what it saw and adds ham — [eggs, milk, ham], citing version 2 — overwriting [eggs] but concurrent with [milk, flour]. Client 1 merges *its* known siblings and adds bacon, citing version 3. Final state: two genuinely concurrent siblings awaiting a proper merge. No write was lost, and the server never interpreted the values — only compared version numbers.
+
+<CartCausality />
+
+#### Version vectors
+
+With multiple replicas accepting writes, one counter isn't enough — there's no single place to increment it. The fix: a version number *per replica* per key. Each replica increments its own counter on its own writes and tracks the highest counters it has seen from every other replica. This bundle is a **version vector**, and comparing two answers the key question: if one vector dominates the other (every counter ≥), its value supersedes; if each is ahead somewhere, the values are concurrent — keep both as siblings. Version vectors travel to clients on reads and return on writes (Riak calls the encoding a *causal context*; its modern variant is the *dotted version vector*). They make it safe to read from one replica and write to another: you might create siblings, but you never lose data, provided siblings are merged sensibly. Terminology landmine: version vectors are often called *vector clocks*, but the structures differ subtly — for comparing replica states, version vectors are the right tool.
+
+<Callout type="insight" title="Where this chapter points">
+This chapter assumed every node holds the entire dataset — Chapter 7 removes that assumption with sharding, and the two compose: shards are replicated, replicas are sharded. The conflicts we resolved reappear inside transactions in Chapter 8; the unreliable clocks and networks we kept blaming get their full treatment in Chapter 9; and the question we dodged during failover — how do nodes *agree* on a new leader? — is Chapter 10's consensus problem.
+</Callout>

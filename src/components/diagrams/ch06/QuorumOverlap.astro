@@ -1,0 +1,54 @@
+---
+import Diagram from '../Diagram.astro';
+
+const replicas = [
+  { x: 90, written: true, read: false },
+  { x: 230, written: true, read: false },
+  { x: 370, written: true, read: true },
+  { x: 510, written: false, read: true },
+  { x: 650, written: false, read: true },
+];
+---
+
+<Diagram caption="Quorum overlap with n = 5, w = 3, r = 3: because w + r > n, the set of replicas that confirmed the write and the set you read from must share at least one node — and that node has the latest value.">
+  <svg viewBox="0 0 720 290" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="quorum-title">
+    <title id="quorum-title">Five replicas where a write quorum of three and a read quorum of three overlap at one replica holding the newest value</title>
+
+    <!-- Write bracket -->
+    <line x1="60" y1="50" x2="400" y2="50" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <line x1="60" y1="50" x2="60" y2="62" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <line x1="400" y1="50" x2="400" y2="62" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="230" y="38" text-anchor="middle" font-size="12" font-weight="600" fill="var(--diagram-stroke)">write succeeded on w = 3 replicas</text>
+
+    <!-- Replica circles -->
+    {
+      replicas.map((r, i) => (
+        <g>
+          <circle
+            cx={r.x}
+            cy="140"
+            r="42"
+            fill={r.written && r.read ? 'var(--diagram-accent)' : 'var(--diagram-fill)'}
+            stroke={r.written && r.read ? 'var(--diagram-accent)' : 'var(--diagram-stroke)'}
+            stroke-width="1.5"
+          />
+          <text x={r.x} y="134" text-anchor="middle" font-size="12" font-weight="600" fill={r.written && r.read ? 'var(--bg)' : 'var(--diagram-stroke)'}>
+            {`replica ${i + 1}`}
+          </text>
+          <text x={r.x} y="153" text-anchor="middle" font-size="11" fill={r.written && r.read ? 'var(--bg)' : 'var(--diagram-muted)'}>
+            {r.written ? 'v7 (new)' : 'v6 (stale)'}
+          </text>
+        </g>
+      ))
+    }
+
+    <!-- Read bracket -->
+    <line x1="340" y1="230" x2="680" y2="230" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <line x1="340" y1="218" x2="340" y2="230" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <line x1="680" y1="218" x2="680" y2="230" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="510" y="250" text-anchor="middle" font-size="12" font-weight="600" fill="var(--diagram-stroke)">read queries r = 3 replicas</text>
+
+    <!-- Overlap annotation -->
+    <text x="370" y="278" text-anchor="middle" font-size="12" fill="var(--diagram-accent)">the overlap: at least one replica in every read has seen the write</text>
+  </svg>
+</Diagram>

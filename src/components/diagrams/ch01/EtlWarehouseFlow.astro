@@ -1,0 +1,62 @@
+---
+import Diagram from '../Diagram.astro';
+---
+
+<Diagram caption="ETL feeds a data warehouse: data is extracted from many independent OLTP systems, reshaped and cleaned, then loaded into one read-only analytical copy." wide>
+  <svg viewBox="0 0 760 330" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="etl-flow-title">
+    <title id="etl-flow-title">Extract, transform, load pipeline from operational databases into a data warehouse</title>
+
+    <!-- Source systems -->
+    <rect x="20" y="30" width="170" height="52" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="105" y="52" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-stroke)">Website DB</text>
+    <text x="105" y="70" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">OLTP</text>
+
+    <rect x="20" y="100" width="170" height="52" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="105" y="122" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-stroke)">Point-of-sale DB</text>
+    <text x="105" y="140" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">OLTP</text>
+
+    <rect x="20" y="170" width="170" height="52" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="105" y="192" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-stroke)">Inventory DB</text>
+    <text x="105" y="210" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">OLTP</text>
+
+    <rect x="20" y="240" width="170" height="52" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="105" y="262" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-stroke)">SaaS CRM</text>
+    <text x="105" y="280" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">vendor API only</text>
+
+    <!-- Converging arrows into Extract -->
+    <line x1="190" y1="56" x2="252" y2="150" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <line x1="190" y1="126" x2="252" y2="156" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <line x1="190" y1="196" x2="252" y2="168" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <line x1="190" y1="266" x2="252" y2="176" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <polygon points="250,142 262,152 250,158" fill="var(--diagram-stroke)"/>
+
+    <!-- ETL chain -->
+    <rect x="262" y="134" width="88" height="56" rx="6" fill="var(--diagram-accent)" fill-opacity="0.12" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <text x="306" y="166" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-stroke)">Extract</text>
+
+    <line x1="350" y1="162" x2="372" y2="162" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <polygon points="370,157 380,162 370,167" fill="var(--diagram-accent)"/>
+
+    <rect x="380" y="134" width="100" height="56" rx="6" fill="var(--diagram-accent)" fill-opacity="0.12" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <text x="430" y="160" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-stroke)">Transform</text>
+    <text x="430" y="178" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">reshape, clean</text>
+
+    <line x1="480" y1="162" x2="502" y2="162" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <polygon points="500,157 510,162 500,167" fill="var(--diagram-accent)"/>
+
+    <rect x="510" y="134" width="72" height="56" rx="6" fill="var(--diagram-accent)" fill-opacity="0.12" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <text x="546" y="166" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-stroke)">Load</text>
+
+    <line x1="582" y1="162" x2="604" y2="162" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <polygon points="602,157 612,162 602,167" fill="var(--diagram-accent)"/>
+
+    <!-- Warehouse -->
+    <rect x="612" y="114" width="130" height="96" rx="8" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="677" y="148" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-stroke)">Data</text>
+    <text x="677" y="164" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-stroke)">warehouse</text>
+    <text x="677" y="184" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">read-only copy,</text>
+    <text x="677" y="198" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">analytics schema</text>
+
+    <text x="430" y="318" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">ELT variant: load the raw data first, transform it inside the warehouse</text>
+  </svg>
+</Diagram>

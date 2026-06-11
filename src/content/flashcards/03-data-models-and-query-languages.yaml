@@ -1,0 +1,61 @@
+cards:
+  - id: ch03-f01
+    front: "What is the object-relational impedance mismatch?"
+    back: "The awkward translation layer needed between object-oriented application code and the relational model of tables, rows, and columns. The term is borrowed from electronics, where mismatched impedances between connected circuits cause signal reflections and power loss."
+  - id: ch03-f02
+    front: "What is the N+1 query problem?"
+    back: "An ORM trap: one query fetches N comments, then one extra query per comment resolves each author — N+1 round trips for what a single SQL join could do. Fix: tell the ORM to fetch the related data eagerly."
+  - id: ch03-f03
+    front: "When does the document model fit data better than relational tables?"
+    back: "When the data is a tree of one-to-many relationships typically loaded as a whole — like a résumé. One document read replaces several queries or a multiway join (locality), and the JSON maps closely to application objects. Shredding such a tree across tables breeds clunky schemas."
+  - id: ch03-f04
+    front: "Normalized vs. denormalized data — definitions and the core trade-off?"
+    back: "Normalized: each human-meaningful fact stored once, everything else references it by an ID that never needs to change — cheap consistent writes, reads need joins. Denormalized: facts copied into every record that uses them — faster reads, but writes cost more and copies can drift apart."
+  - id: ch03-f05
+    front: "What is 'hydrating' IDs, and what does X's timeline design prove about joins?"
+    back: "Resolving stored IDs (post, sender) into displayable content at read time — a join done in application code. It proves joins are not inherently unscalable: hydration parallelizes well, and fast-changing data (like counts, usernames) should stay normalized rather than be denormalized into caches."
+  - id: ch03-f06
+    front: "How are many-to-many relationships represented, and how are they queried in both directions?"
+    back: "Relationally, with an associative (join) table pairing the two IDs, e.g. positions linking user_id and org_id. Query both directions either by storing references on both sides (denormalized, can drift) or by storing the relationship once with secondary indexes on both columns."
+  - id: ch03-f07
+    front: "In a star schema, what are the fact table and dimension tables?"
+    back: "The fact table holds one row per event (a purchase, a click) at maximum granularity, with attribute columns plus foreign keys. Dimension tables carry the who/what/where/when/how/why — product, store, customer, even date. Drawn out, the fact table is the center of a star."
+  - id: ch03-f08
+    front: "Star vs. snowflake vs. one big table (OBT)?"
+    back: "Snowflake: dimensions split into subdimensions — more normalized, more joins. Star: flat dimensions — simpler for analysts. OBT: dimension columns folded into the fact table — fully denormalized, more storage, sometimes faster. Safe in analytics because the data is immutable history."
+  - id: ch03-f09
+    front: "Schema-on-read vs. schema-on-write?"
+    back: "Schema-on-read: structure is implicit and interpreted by application code when reading (document databases) — like dynamic typing. Schema-on-write: the database enforces an explicit schema on every write (traditional relational) — like static typing. 'Schemaless' really means implicit schema."
+  - id: ch03-f10
+    front: "What are the caveats of document data locality?"
+    back: "Locality pays only if you need most of the document: the database loads the whole thing even for one field, and updates usually rewrite it entirely. Keep documents small; avoid frequent tiny updates. Spanner's interleaved tables and Bigtable's column families offer locality without documents."
+  - id: ch03-f11
+    front: "What does each vertex and each edge carry in a property graph?"
+    back: "Vertex: unique ID, a label naming its type, sets of incoming and outgoing edges, and key-value properties. Edge: unique ID, tail (start) vertex, head (end) vertex, a relationship label, and properties. No schema restricts which vertices may connect."
+  - id: ch03-f12
+    front: "What does Cypher's [:WITHIN*0..] express, and what is SQL's equivalent?"
+    back: "Follow a WITHIN edge zero or more times — a variable-length traversal, like a regex star. SQL needs a recursive common table expression (WITH RECURSIVE) that grows a set until nothing new appears; a four-line Cypher query becomes roughly thirty lines of SQL."
+  - id: ch03-f13
+    front: "How does a triple store represent properties and edges?"
+    back: "Everything is a (subject, predicate, object) statement. If the object is a primitive value, the triple is a property on the subject vertex. If the object is another vertex, the predicate is an edge from subject (tail) to object (head)."
+  - id: ch03-f14
+    front: "Why does RDF use URIs for subjects, predicates, and objects?"
+    back: "RDF was built for internet-wide data exchange: URIs namespace each term so your 'within' cannot collide with someone else's. The URIs need not resolve to anything. SPARQL is RDF's query language — it predates Cypher, which borrowed its pattern matching."
+  - id: ch03-f15
+    front: "How does Datalog build queries, and what makes it strong at graph traversal?"
+    back: "You define rules that derive virtual tables from stored facts, composing small rules the way functions call functions. Rules can refer to themselves, so recursion handles variable-length traversals — the job done by Cypher's *0.. and SQL's WITH RECURSIVE."
+  - id: ch03-f16
+    front: "Why is GraphQL deliberately less powerful than Cypher, SPARQL, or SQL?"
+    back: "Its queries come from untrusted client devices, so it forbids recursion and arbitrary search conditions that could overload the server. It's a contract letting clients fetch exactly the UI-shaped JSON they need — implementable over any database, relational, document, or graph."
+  - id: ch03-f17
+    front: "Define event sourcing and CQRS."
+    back: "Event sourcing: the source of truth is an append-only log of immutable, past-tense events; every state change is recorded as an event. CQRS: keep the write-optimized log separate from read-optimized materialized views (projections) that are derived from it."
+  - id: ch03-f18
+    front: "Command vs. event in an event-sourced system?"
+    back: "A command is a user request that may still be rejected during validation (are there seats left?). Once accepted it becomes a fact, appended as an event — and consumers building views may not reject events, because they record things that already happened."
+  - id: ch03-f19
+    front: "What threatens determinism and compliance in event sourcing?"
+    back: "External data (e.g. live exchange rates) makes replays non-reproducible — capture it in the event or query it as-of the event's timestamp. GDPR deletion clashes with immutability — keep personal data outside events or crypto-shred its encryption key. And replays must not repeat side effects like emails."
+  - id: ch03-f20
+    front: "How do DataFrames bridge relational data and machine learning, and what is one-hot encoding?"
+    back: "DataFrames support relational-style operations but are wrangled stepwise into matrices — e.g. pivoting user/movie/rating rows into a sparse users-by-movies matrix. One-hot encoding turns a categorical value into one column per possible value, 1 for the match and 0 elsewhere."

@@ -1,0 +1,62 @@
+---
+import Diagram from '../Diagram.astro';
+---
+
+<Diagram caption="Traditional servers couple storage to the machine that computes on it; cloud native systems treat storage as a separate shared service that outlives any compute node." wide>
+  <svg viewBox="0 0 760 330" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="storage-compute-title">
+    <title id="storage-compute-title">Comparison of coupled storage and compute with disaggregated cloud native storage</title>
+
+    <!-- Left: traditional -->
+    <text x="190" y="26" text-anchor="middle" font-size="14" font-weight="600" fill="var(--diagram-stroke)">Traditional: coupled</text>
+
+    <rect x="60" y="44" width="260" height="216" rx="8" fill="none" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="190" y="68" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">one machine</text>
+
+    <rect x="90" y="82" width="200" height="56" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="190" y="106" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-stroke)">CPU + RAM</text>
+    <text x="190" y="124" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">compute</text>
+
+    <line x1="190" y1="138" x2="190" y2="170" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+
+    <rect x="90" y="170" width="200" height="56" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="190" y="194" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-stroke)">Local disks</text>
+    <text x="190" y="212" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">storage (RAID for disk faults)</text>
+
+    <text x="190" y="290" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">machine dies → its storage</text>
+    <text x="190" y="306" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">goes down with it</text>
+
+    <!-- Right: disaggregated -->
+    <text x="566" y="26" text-anchor="middle" font-size="14" font-weight="600" fill="var(--diagram-stroke)">Cloud native: disaggregated</text>
+
+    <rect x="410" y="50" width="96" height="66" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="458" y="74" text-anchor="middle" font-size="12" font-weight="600" fill="var(--diagram-stroke)">Compute node</text>
+    <text x="458" y="92" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">local disk =</text>
+    <text x="458" y="105" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">just a cache</text>
+
+    <rect x="518" y="50" width="96" height="66" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="566" y="74" text-anchor="middle" font-size="12" font-weight="600" fill="var(--diagram-stroke)">Compute node</text>
+    <text x="566" y="92" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">local disk =</text>
+    <text x="566" y="105" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">just a cache</text>
+
+    <rect x="626" y="50" width="96" height="66" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="674" y="74" text-anchor="middle" font-size="12" font-weight="600" fill="var(--diagram-stroke)">Compute node</text>
+    <text x="674" y="92" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">local disk =</text>
+    <text x="674" y="105" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">just a cache</text>
+
+    <line x1="458" y1="116" x2="458" y2="186" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <polygon points="453,186 458,196 463,186" fill="var(--diagram-accent)"/>
+    <line x1="566" y1="116" x2="566" y2="186" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <polygon points="561,186 566,196 571,186" fill="var(--diagram-accent)"/>
+    <line x1="674" y1="116" x2="674" y2="186" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <polygon points="669,186 674,196 679,186" fill="var(--diagram-accent)"/>
+
+    <text x="740" y="158" text-anchor="end" font-size="11" fill="var(--diagram-muted)">network</text>
+
+    <rect x="410" y="196" width="312" height="64" rx="8" fill="var(--diagram-accent)" fill-opacity="0.12" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <text x="566" y="222" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-stroke)">Shared storage service</text>
+    <text x="566" y="242" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">object store (e.g. S3) — data outlives any node</text>
+
+    <text x="566" y="290" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">compute scales and restarts freely;</text>
+    <text x="566" y="306" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">storage is someone else’s well-run problem</text>
+  </svg>
+</Diagram>

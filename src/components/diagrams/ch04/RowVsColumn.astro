@@ -1,0 +1,56 @@
+---
+import Diagram from '../Diagram.astro';
+---
+
+<Diagram wide caption="The same table stored two ways. Row-oriented storage keeps each row's hundred columns together; column-oriented storage keeps each column in its own file, so a query reads only the three columns it touches.">
+  <svg viewBox="0 0 760 330" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="rowcol-title">
+    <title id="rowcol-title">Row-oriented storage compared with column-oriented storage for an analytics query</title>
+
+    <text x="380" y="22" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">query needs date, product, and quantity — 3 of 100 columns</text>
+
+    <!-- Row-oriented panel -->
+    <text x="190" y="52" text-anchor="middle" font-size="14" font-weight="600" fill="var(--diagram-stroke)">Row-oriented</text>
+
+    {[0, 1, 2].map((i) => {
+      const y = 66 + i * 54;
+      return (
+        <g>
+          <rect x="30" y={y} width="320" height="44" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+          <line x1="95" y1={y} x2="95" y2={y + 44} stroke="var(--diagram-muted)" stroke-width="1"/>
+          <line x1="150" y1={y} x2="150" y2={y + 44} stroke="var(--diagram-muted)" stroke-width="1"/>
+          <line x1="195" y1={y} x2="195" y2={y + 44} stroke="var(--diagram-muted)" stroke-width="1"/>
+          <text x="62" y={y + 27} text-anchor="middle" font-size="12" fill="var(--diagram-stroke)">{['01-05', '01-05', '01-06'][i]}</text>
+          <text x="122" y={y + 27} text-anchor="middle" font-size="12" fill="var(--diagram-stroke)">{['31', '68', '31'][i]}</text>
+          <text x="172" y={y + 27} text-anchor="middle" font-size="12" fill="var(--diagram-stroke)">{['3', '1', '5'][i]}</text>
+          <text x="272" y={y + 27} text-anchor="middle" font-size="11" fill="var(--diagram-muted)">… 97 more columns</text>
+        </g>
+      );
+    })}
+    <text x="62" y="248" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">date</text>
+    <text x="122" y="248" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">product</text>
+    <text x="172" y="248" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">qty</text>
+    <text x="190" y="282" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">each row is contiguous: the query</text>
+    <text x="190" y="298" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">still loads all 100 columns per row</text>
+
+    <!-- Column-oriented panel -->
+    <text x="570" y="52" text-anchor="middle" font-size="14" font-weight="600" fill="var(--diagram-stroke)">Column-oriented</text>
+
+    <rect x="410" y="66" width="320" height="40" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <text x="470" y="91" font-size="12" font-weight="600" fill="var(--diagram-stroke)" text-anchor="middle">date file</text>
+    <text x="620" y="91" font-size="12" fill="var(--diagram-stroke)" text-anchor="middle">01-05, 01-05, 01-06, …</text>
+
+    <rect x="410" y="116" width="320" height="40" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <text x="470" y="141" font-size="12" font-weight="600" fill="var(--diagram-stroke)" text-anchor="middle">product file</text>
+    <text x="620" y="141" font-size="12" fill="var(--diagram-stroke)" text-anchor="middle">31, 68, 31, …</text>
+
+    <rect x="410" y="166" width="320" height="40" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <text x="470" y="191" font-size="12" font-weight="600" fill="var(--diagram-stroke)" text-anchor="middle">qty file</text>
+    <text x="620" y="191" font-size="12" fill="var(--diagram-stroke)" text-anchor="middle">3, 1, 5, …</text>
+
+    <rect x="410" y="216" width="320" height="40" rx="6" fill="none" stroke="var(--diagram-muted)" stroke-width="1.5" stroke-dasharray="5 4"/>
+    <text x="570" y="241" font-size="12" fill="var(--diagram-muted)" text-anchor="middle">97 other column files — never read</text>
+
+    <text x="570" y="282" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">columns keep rows in the same order:</text>
+    <text x="570" y="298" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">the kth entry of every file is row k</text>
+  </svg>
+</Diagram>
