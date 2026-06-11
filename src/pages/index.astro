@@ -81,11 +81,23 @@ const availableCount = entries.length;
   }
 
   .hero {
+    position: relative;
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: var(--space-6);
     margin-bottom: var(--space-8);
+  }
+
+  /* Soft accent bloom — sits behind the hero, fades to nothing. */
+  .hero::before {
+    content: '';
+    position: absolute;
+    inset: -6rem -4rem auto;
+    height: 22rem;
+    background: var(--gradient-hero);
+    pointer-events: none;
+    z-index: -1;
   }
 
   .hero-text {
@@ -113,6 +125,10 @@ const availableCount = entries.length;
   h1 em {
     font-style: italic;
     color: var(--accent-text);
+    background: var(--gradient-accent-text);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
   }
 
   .lede {

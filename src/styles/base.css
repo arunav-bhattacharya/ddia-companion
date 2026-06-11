@@ -17,6 +17,7 @@ html {
 
 body {
   background: var(--bg);
+  background: var(--gradient-page) fixed;
   color: var(--text);
   font-family: var(--font-body);
   font-size: var(--text-base);

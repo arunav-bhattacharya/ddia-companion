@@ -7,6 +7,12 @@
 <progress-overview class="ui" hidden>
   <div class="ring-wrap">
     <svg viewBox="0 0 44 44" width="56" height="56" aria-hidden="true">
+      <defs>
+        <linearGradient id="progress-ring-gradient" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stop-color="var(--accent)"></stop>
+          <stop offset="100%" stop-color="var(--accent-strong)"></stop>
+        </linearGradient>
+      </defs>
       <circle class="track" cx="22" cy="22" r="19" fill="none" stroke-width="4"></circle>
       <circle class="meter" cx="22" cy="22" r="19" fill="none" stroke-width="4" stroke-linecap="round"></circle>
     </svg>
@@ -29,7 +35,7 @@
     gap: var(--space-4);
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
-    background: var(--surface);
+    background: var(--gradient-surface);
     padding: var(--space-4) var(--space-5);
   }
 
@@ -45,7 +51,7 @@
   }
 
   .meter {
-    stroke: var(--accent);
+    stroke: url(#progress-ring-gradient);
     transform: rotate(-90deg);
     transform-origin: center;
     transition: stroke-dashoffset 400ms ease;

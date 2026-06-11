@@ -50,16 +50,17 @@ const { chapter, slug, title, description, readingMinutes, available } = Astro.p
     padding: var(--space-5);
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
-    background: var(--surface);
+    background: var(--gradient-surface);
     text-decoration: none;
     color: var(--text);
-    transition: border-color 120ms, transform 120ms;
+    transition: border-color 120ms, transform 120ms, background 160ms;
     height: 100%;
   }
 
   a.card:hover {
     border-color: var(--accent);
     transform: translateY(-1px);
+    background: var(--gradient-surface-hover);
   }
 
   .pending {
@@ -72,11 +73,17 @@ const { chapter, slug, title, description, readingMinutes, available } = Astro.p
     font-weight: 700;
     line-height: 1;
     color: var(--border-strong);
+    background: var(--gradient-numeral);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    opacity: 0.55;
+    transition: opacity 160ms;
     flex-shrink: 0;
   }
 
   a.card:hover .num {
-    color: var(--accent);
+    opacity: 1;
   }
 
   .body {

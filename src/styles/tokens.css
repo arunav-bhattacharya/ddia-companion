@@ -83,6 +83,17 @@
   --diagram-muted: #a59c8e;
 
   --selection: #f5dcc0;
+
+  /* Gradients — kept within one color family and a few % of lightness so they
+     read as soft depth, never decoration. */
+  --gradient-page: radial-gradient(115% 90% at 100% 0%, #fdf8ef 0%, #faf7f2 46%, #f5f0e6 100%);
+  --gradient-surface: linear-gradient(168deg, #ffffff 0%, #fcf8f1 100%);
+  --gradient-surface-hover: linear-gradient(168deg, #fffaf2 0%, #fdf2e3 100%);
+  --gradient-accent: linear-gradient(135deg, #b45309 0%, #c56a16 100%);
+  --gradient-accent-text: linear-gradient(120deg, #9a4607 0%, #c0691c 100%);
+  --gradient-accent-subtle: linear-gradient(152deg, #fff6ec 0%, #fcecd9 100%);
+  --gradient-hero: radial-gradient(58% 78% at 86% 8%, rgb(180 83 9 / 0.1) 0%, rgb(180 83 9 / 0) 60%);
+  --gradient-numeral: linear-gradient(158deg, #d8cfc0 0%, #b45309 135%);
 }
 
 :root[data-theme='dark'] {
@@ -115,4 +126,14 @@
   --diagram-muted: #595f68;
 
   --selection: #4a341f;
+
+  /* Gradients — soft slate depth with a faint amber bloom; same restraint. */
+  --gradient-page: radial-gradient(115% 90% at 100% 0%, #181d25 0%, #14171c 52%, #11141a 100%);
+  --gradient-surface: linear-gradient(168deg, #1e232b 0%, #1a1e25 100%);
+  --gradient-surface-hover: linear-gradient(168deg, #242a33 0%, #1e242c 100%);
+  --gradient-accent: linear-gradient(135deg, #e0964a 0%, #edaf6e 100%);
+  --gradient-accent-text: linear-gradient(120deg, #e0964a 0%, #f1b87f 100%);
+  --gradient-accent-subtle: linear-gradient(152deg, #2c2319 0%, #231a11 100%);
+  --gradient-hero: radial-gradient(58% 78% at 86% 8%, rgb(224 150 74 / 0.13) 0%, rgb(224 150 74 / 0) 62%);
+  --gradient-numeral: linear-gradient(158deg, #3c424b 0%, #e0964a 140%);
 }
