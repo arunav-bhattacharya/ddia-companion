@@ -20,6 +20,7 @@
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.9",
+    "@fontsource-variable/google-sans-flex": "^5.2.3",
     "@fontsource-variable/source-serif-4": "^5.2.9",
     "pagefind": "^1.5.2",
     "typescript": "^6.0.3"

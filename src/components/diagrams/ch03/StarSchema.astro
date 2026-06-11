@@ -6,12 +6,12 @@ import Diagram from '../Diagram.astro';
   <svg viewBox="0 0 720 420" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="star-title">
     <title id="star-title">A fact_sales table at the center connected to date, product, store, customer, and promotion dimension tables</title>
 
-    <!-- Spokes (drawn first, under the boxes) -->
-    <line x1="360" y1="210" x2="130" y2="80" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
-    <line x1="360" y1="210" x2="590" y2="80" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
-    <line x1="360" y1="210" x2="130" y2="345" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
-    <line x1="360" y1="210" x2="590" y2="345" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
-    <line x1="360" y1="210" x2="360" y2="55" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <!-- Spokes (clipped to run edge-to-edge between the boxes) -->
+    <line x1="255" y1="143" x2="180" y2="94" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <line x1="465" y1="143" x2="540" y2="94" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <line x1="255" y1="277" x2="180" y2="324" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <line x1="465" y1="277" x2="540" y2="324" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <line x1="360" y1="140" x2="360" y2="60" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
 
     <!-- Fact table (center) -->
     <rect x="255" y="140" width="210" height="140" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-accent)" stroke-width="1.5"/>

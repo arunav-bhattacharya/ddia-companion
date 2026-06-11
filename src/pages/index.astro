@@ -22,16 +22,20 @@ const availableCount = entries.length;
 >
   <div class="wrap">
     <section class="hero">
-      <p class="kicker ui">A study companion to the 2nd edition</p>
-      <h1>Designing Data&#8209;Intensive Applications, <em>explained for humans</em></h1>
-      <p class="lede">
-        Kleppmann &amp; Riccomini's book is the closest thing our field has to a canon — and at
-        600&nbsp;pages, it deserves better than skimming. Each chapter here is retold in plain
-        language with analogies and diagrams, covering <strong>every section of the original</strong>,
-        then capped with key takeaways, hand-picked further reading, flashcards, a quiz, and
-        design scenarios to make it stick.
-      </p>
-      <ProgressOverview />
+      <div class="hero-text">
+        <p class="kicker ui">A study companion to the 2nd edition</p>
+        <h1>Designing Data&#8209;Intensive Applications, <em>the beginner-friendly way</em></h1>
+        <p class="lede">
+          Kleppmann &amp; Riccomini's book is the closest thing our field has to a canon — and at
+          600&nbsp;pages, it deserves better than skimming. Each chapter here is retold in plain
+          language with analogies and diagrams, covering <strong>every section of the original</strong>,
+          then capped with key takeaways, hand-picked further reading, flashcards, a quiz, and
+          design scenarios to make it stick.
+        </p>
+      </div>
+      <div class="hero-aside">
+        <ProgressOverview />
+      </div>
     </section>
 
     <section id="chapters" class="chapters">
@@ -77,8 +81,20 @@ const availableCount = entries.length;
   }
 
   .hero {
-    max-width: 46rem;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-6);
     margin-bottom: var(--space-8);
+  }
+
+  .hero-text {
+    flex: 1 1 34rem;
+    max-width: 46rem;
+  }
+
+  .hero-aside {
+    flex: 0 1 21rem;
   }
 
   .kicker {

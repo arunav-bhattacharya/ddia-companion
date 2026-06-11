@@ -36,7 +36,8 @@ import Diagram from '../Diagram.astro';
 
     <!-- Reader B: vertical dashed line spanning replicas 2 and 3 -->
     <line x1="470" y1="140" x2="470" y2="250" stroke="var(--diagram-accent)" stroke-width="1.5" stroke-dasharray="5 4"/>
-    <text x="470" y="130" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-accent)">Reader B (r = 2), starts after A finished</text>
+    <text x="470" y="114" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-accent)">Reader B (r = 2),</text>
+    <text x="470" y="130" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-accent)">starts after A finished</text>
     <text x="470" y="268" text-anchor="middle" font-size="12" fill="var(--diagram-accent)">reads R2 = 0, R3 = 0 ⇒ returns 0 — stale!</text>
 
     <!-- Time axis -->

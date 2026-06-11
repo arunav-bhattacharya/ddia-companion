@@ -14,15 +14,17 @@ import Diagram from '../Diagram.astro';
 
     <!-- lanes -->
     <line x1="110" y1="52" x2="720" y2="52" stroke="var(--diagram-muted)" stroke-width="1.5"/>
-    <line x1="110" y1="132" x2="720" y2="132" stroke="var(--diagram-muted)" stroke-width="1.5"/>
+    <line x1="110" y1="132" x2="184" y2="132" stroke="var(--diagram-muted)" stroke-width="1.5"/>
+    <line x1="386" y1="132" x2="534" y2="132" stroke="var(--diagram-muted)" stroke-width="1.5"/>
+    <line x1="666" y1="132" x2="720" y2="132" stroke="var(--diagram-muted)" stroke-width="1.5"/>
     <line x1="110" y1="202" x2="720" y2="202" stroke="var(--diagram-muted)" stroke-width="1.5"/>
     <line x1="110" y1="272" x2="720" y2="272" stroke="var(--diagram-muted)" stroke-width="1.5"/>
 
     <!-- grant token 33 to client 1 -->
     <line x1="150" y1="52" x2="170" y2="126" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
     <path d="M 170 126 l -7 -4 l 5 -6 z" fill="var(--diagram-stroke)"/>
-    <rect x="118" y="64" width="92" height="20" rx="4" fill="var(--diagram-fill)" stroke="var(--diagram-muted)" stroke-width="1.5"/>
-    <text x="164" y="78" text-anchor="middle" font-size="11" fill="var(--diagram-stroke)">lease, token 33</text>
+    <rect x="174" y="64" width="92" height="20" rx="4" fill="var(--diagram-fill)" stroke="var(--diagram-muted)" stroke-width="1.5"/>
+    <text x="220" y="78" text-anchor="middle" font-size="11" fill="var(--diagram-stroke)">lease, token 33</text>
 
     <!-- client 1 pause -->
     <rect x="190" y="118" width="190" height="28" rx="6" fill="var(--diagram-accent)" opacity="0.25"/>
@@ -31,8 +33,8 @@ import Diagram from '../Diagram.astro';
     <!-- grant token 34 to client 2 -->
     <line x1="400" y1="52" x2="420" y2="196" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
     <path d="M 420 196 l -7 -4 l 5 -6 z" fill="var(--diagram-stroke)"/>
-    <rect x="368" y="64" width="92" height="20" rx="4" fill="var(--diagram-fill)" stroke="var(--diagram-muted)" stroke-width="1.5"/>
-    <text x="414" y="78" text-anchor="middle" font-size="11" fill="var(--diagram-stroke)">lease, token 34</text>
+    <rect x="424" y="64" width="92" height="20" rx="4" fill="var(--diagram-fill)" stroke="var(--diagram-muted)" stroke-width="1.5"/>
+    <text x="470" y="78" text-anchor="middle" font-size="11" fill="var(--diagram-stroke)">lease, token 34</text>
 
     <!-- client 2 write with token 34 -->
     <line x1="450" y1="202" x2="480" y2="266" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
@@ -45,7 +47,7 @@ import Diagram from '../Diagram.astro';
     <text x="600" y="136" text-anchor="middle" font-size="11" fill="var(--diagram-accent)">wakes up (zombie)</text>
     <line x1="630" y1="146" x2="655" y2="266" stroke="var(--diagram-accent)" stroke-width="1.5"/>
     <path d="M 655 266 l -7 -5 l 5 -6 z" fill="var(--diagram-accent)"/>
-    <text x="662" y="212" font-size="11" fill="var(--diagram-accent)">write (token 33)</text>
+    <text x="636" y="216" text-anchor="end" font-size="11" fill="var(--diagram-accent)">write (token 33)</text>
     <text x="660" y="290" font-size="11" font-weight="600" fill="var(--diagram-accent)" text-anchor="middle">rejected: 33 &#60; 34</text>
   </svg>
 </Diagram>

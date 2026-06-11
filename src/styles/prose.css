@@ -1,7 +1,7 @@
 /* Long-form article styling. Apply .prose to the chapter article body. */
 
 .prose {
-  max-width: var(--measure);
+  max-width: var(--measure-reading);
 }
 
 .prose > * + * {

@@ -1,0 +1,179 @@
+<display-settings class="ui">
+  <button id="display-settings-btn" type="button" aria-label="Display settings" aria-expanded="false">
+    <span aria-hidden="true" class="aa">Aa</span>
+  </button>
+  <div class="panel" hidden>
+    <fieldset>
+      <legend>Reading width</legend>
+      <div class="seg" role="group">
+        <button type="button" data-setting="measure" data-value="wide">Wide</button>
+        <button type="button" data-setting="measure" data-value="compact">Compact</button>
+      </div>
+    </fieldset>
+    <fieldset>
+      <legend>Font</legend>
+      <div class="seg" role="group">
+        <button type="button" data-setting="font" data-value="serif">Serif</button>
+        <button type="button" data-setting="font" data-value="sans">Google Sans</button>
+      </div>
+    </fieldset>
+  </div>
+</display-settings>
+
+<style>
+  display-settings {
+    position: relative;
+    display: block;
+  }
+
+  #display-settings-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    transition: color 120ms, border-color 120ms;
+  }
+
+  #display-settings-btn:hover,
+  #display-settings-btn[aria-expanded='true'] {
+    color: var(--text);
+    border-color: var(--border-strong);
+  }
+
+  .aa {
+    font-size: var(--text-sm);
+    font-weight: 600;
+    letter-spacing: 0.02em;
+  }
+
+  .panel {
+    position: absolute;
+    top: calc(100% + 0.5rem);
+    right: 0;
+    z-index: 60;
+    width: 15rem;
+    background: var(--surface);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 8px 28px rgb(0 0 0 / 0.14);
+    padding: var(--space-4);
+    display: grid;
+    gap: var(--space-4);
+  }
+
+  .panel[hidden] {
+    display: none;
+  }
+
+  fieldset {
+    border: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  legend {
+    font-size: var(--text-xs);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-faint);
+    padding: 0;
+    margin-bottom: var(--space-2);
+  }
+
+  .seg {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+  }
+
+  .seg button {
+    padding: var(--space-2) var(--space-2);
+    font-size: var(--text-sm);
+    color: var(--text-muted);
+    background: transparent;
+  }
+
+  .seg button + button {
+    border-left: 1px solid var(--border);
+  }
+
+  .seg button[aria-pressed='true'] {
+    background: var(--accent-subtle);
+    color: var(--accent-text);
+    font-weight: 600;
+  }
+</style>
+
+<script>
+  class DisplaySettings extends HTMLElement {
+    connectedCallback() {
+      const btn = this.querySelector<HTMLButtonElement>('#display-settings-btn')!;
+      const panel = this.querySelector<HTMLElement>('.panel')!;
+      const root = document.documentElement;
+
+      const current = (setting: string, fallback: string) =>
+        root.dataset[setting] ?? fallback;
+
+      const sync = () => {
+        this.querySelectorAll<HTMLButtonElement>('[data-setting]').forEach((b) => {
+          const active =
+            b.dataset.value ===
+            current(b.dataset.setting!, b.dataset.setting === 'font' ? 'serif' : 'wide');
+          b.setAttribute('aria-pressed', String(active));
+        });
+      };
+
+      btn.addEventListener('click', () => {
+        panel.hidden = !panel.hidden;
+        btn.setAttribute('aria-expanded', String(!panel.hidden));
+        sync();
+      });
+
+      document.addEventListener('click', (e) => {
+        if (!panel.hidden && !this.contains(e.target as Node)) {
+          panel.hidden = true;
+          btn.setAttribute('aria-expanded', 'false');
+        }
+      });
+
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && !panel.hidden) {
+          panel.hidden = true;
+          btn.setAttribute('aria-expanded', 'false');
+        }
+      });
+
+      this.querySelectorAll<HTMLButtonElement>('[data-setting]').forEach((b) => {
+        b.addEventListener('click', () => {
+          const setting = b.dataset.setting!; // 'measure' | 'font'
+          const value = b.dataset.value!;
+          const isDefault =
+            (setting === 'measure' && value === 'wide') ||
+            (setting === 'font' && value === 'serif');
+          if (isDefault) delete root.dataset[setting];
+          else root.dataset[setting] = value;
+          try {
+            if (isDefault) localStorage.removeItem(`ddia2:${setting}`);
+            else localStorage.setItem(`ddia2:${setting}`, value);
+          } catch {
+            /* session-only */
+          }
+          sync();
+        });
+      });
+
+      sync();
+    }
+  }
+
+  if (!customElements.get('display-settings')) {
+    customElements.define('display-settings', DisplaySettings);
+  }
+</script>

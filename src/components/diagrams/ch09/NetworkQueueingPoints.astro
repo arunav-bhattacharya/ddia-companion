@@ -2,10 +2,10 @@
 import Diagram from '../Diagram.astro';
 
 const stops = [
-  { x: 30, label1: 'sender OS', label2: 'TCP send buffer', note: 'congestion control rate-limits the sender' },
-  { x: 215, label1: 'network switch', label2: 'port queue', note: 'many senders, one outgoing link' },
-  { x: 400, label1: 'receiver OS', label2: 'socket buffer', note: 'all CPU cores busy' },
-  { x: 585, label1: 'VM monitor', label2: 'paused guest', note: 'VM suspended for tens of ms' },
+  { x: 30, label1: 'sender OS', label2: 'TCP send buffer', note: ['congestion control', 'rate-limits the sender'] },
+  { x: 215, label1: 'network switch', label2: 'port queue', note: ['many senders,', 'one outgoing link'] },
+  { x: 400, label1: 'receiver OS', label2: 'socket buffer', note: ['all CPU cores busy'] },
+  { x: 585, label1: 'VM monitor', label2: 'paused guest', note: ['VM suspended', 'for tens of ms'] },
 ];
 ---
 
@@ -26,7 +26,9 @@ const stops = [
           <rect x={s.x + 40} y="98" width="16" height="14" rx="3" fill="var(--diagram-accent)" opacity="0.7" />
           <rect x={s.x + 62} y="98" width="16" height="14" rx="3" fill="var(--diagram-accent)" opacity="0.45" />
           <rect x={s.x + 84} y="98" width="16" height="14" rx="3" fill="var(--diagram-accent)" opacity="0.25" />
-          <text x={s.x + 62} y="148" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">{s.note}</text>
+          {s.note.map((line, j) => (
+            <text x={s.x + 62} y={142 + j * 14} text-anchor="middle" font-size="11" fill="var(--diagram-muted)">{line}</text>
+          ))}
           {i < 3 && (
             <g>
               <line x1={s.x + 125} y1="87" x2={s.x + 185} y2="87" stroke="var(--diagram-stroke)" stroke-width="1.5" />

@@ -24,12 +24,12 @@ import Diagram from '../Diagram.astro';
     <!-- Arrows to DB -->
     <line x1="150" y1="100" x2="290" y2="172" stroke="var(--diagram-accent)" stroke-width="1.5"/>
     <polygon points="284,166 294,175 280,177" fill="var(--diagram-accent)"/>
-    <text x="172" y="148" font-size="11" fill="var(--diagram-accent)">writes v8 format</text>
+    <text x="218" y="148" text-anchor="end" font-size="11" fill="var(--diagram-accent)">writes v8 format</text>
 
     <line x1="570" y1="100" x2="430" y2="172" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
     <polygon points="440,177 426,175 436,166" fill="var(--diagram-stroke)"/>
-    <text x="548" y="148" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">reads — must ignore v8 fields</text>
-    <text x="548" y="163" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">(forward compatibility)</text>
+    <text x="592" y="148" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">reads — must ignore v8 fields</text>
+    <text x="592" y="163" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">(forward compatibility)</text>
 
     <!-- Database -->
     <rect x="180" y="180" width="360" height="116" rx="8" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>

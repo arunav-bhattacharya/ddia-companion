@@ -3,7 +3,7 @@ import Diagram from '../Diagram.astro';
 ---
 
 <Diagram wide caption="Two-phase commit: after voting yes, each participant is in doubt until it hears the coordinator's decision — and the decision becomes irrevocable the moment it is written to the coordinator's log (the commit point).">
-  <svg viewBox="0 0 860 340" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="twopc-title">
+  <svg viewBox="0 0 860 360" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="twopc-title">
     <title id="twopc-title">Message flow of two-phase commit between a coordinator and two database participants, showing prepare requests, yes votes, the commit point, and the in-doubt window</title>
 
     <!-- lifeline headers -->
@@ -28,28 +28,29 @@ import Diagram from '../Diagram.astro';
     <polygon points="143,95 153,90 152,100" fill="var(--diagram-stroke)"/>
     <line x1="430" y1="80" x2="717" y2="95" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
     <polygon points="717,95 707,90 708,100" fill="var(--diagram-stroke)"/>
-    <text x="430" y="72" text-anchor="middle" font-size="12" fill="var(--diagram-stroke)">phase 1: prepare?</text>
+    <text x="422" y="72" text-anchor="end" font-size="12" fill="var(--diagram-stroke)">phase 1: prepare?</text>
 
     <!-- yes votes -->
     <line x1="143" y1="120" x2="422" y2="140" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
     <polygon points="422,140 412,134 411,144" fill="var(--diagram-stroke)"/>
     <line x1="717" y1="110" x2="438" y2="135" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
     <polygon points="438,135 448,130 448,140" fill="var(--diagram-stroke)"/>
-    <text x="250" y="115" font-size="11" fill="var(--diagram-muted)">yes &#8212; promises to commit if asked</text>
+    <text x="422" y="115" text-anchor="end" font-size="11" fill="var(--diagram-muted)">yes &#8212; promises to commit if asked</text>
 
     <!-- commit point -->
     <circle cx="430" cy="170" r="7" fill="var(--diagram-accent)"/>
-    <text x="447" y="174" font-size="12" font-weight="600" fill="var(--diagram-accent)">commit point: decision written to coordinator&#8217;s log</text>
+    <text x="447" y="174" font-size="12" font-weight="600" fill="var(--diagram-accent)">commit point: decision written</text>
+    <text x="447" y="189" font-size="12" font-weight="600" fill="var(--diagram-accent)">to coordinator&#8217;s log</text>
 
     <!-- phase 2: commit -->
     <line x1="430" y1="200" x2="143" y2="262" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
     <polygon points="143,262 153,258 150,268" fill="var(--diagram-stroke)"/>
     <line x1="430" y1="200" x2="717" y2="233" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
     <polygon points="717,233 707,229 708,239" fill="var(--diagram-stroke)"/>
-    <text x="430" y="218" text-anchor="middle" font-size="12" fill="var(--diagram-stroke)">phase 2: commit (retried forever if lost)</text>
+    <text x="578" y="255" text-anchor="middle" font-size="12" fill="var(--diagram-stroke)">phase 2: commit (retried forever if lost)</text>
 
     <!-- in-doubt label -->
-    <text x="40" y="295" font-size="11" fill="var(--diagram-accent)">shaded: in doubt &#8212; voted yes, awaiting decision;</text>
-    <text x="40" y="310" font-size="11" fill="var(--diagram-accent)">cannot commit or abort on its own, locks held</text>
+    <text x="40" y="328" font-size="11" fill="var(--diagram-accent)">shaded: in doubt &#8212; voted yes, awaiting decision;</text>
+    <text x="40" y="343" font-size="11" fill="var(--diagram-accent)">cannot commit or abort on its own, locks held</text>
   </svg>
 </Diagram>

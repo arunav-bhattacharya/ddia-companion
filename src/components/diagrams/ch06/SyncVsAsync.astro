@@ -31,12 +31,12 @@ import Diagram from '../Diagram.astro';
     <!-- leader -> follower 1: data change -->
     <line x1="190" y1="125" x2="238" y2="186" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
     <polygon points="232,184 240,190 238,178" fill="var(--diagram-stroke)"/>
-    <text x="200" y="160" font-size="11" fill="var(--diagram-muted)">data change</text>
+    <text x="110" y="160" font-size="11" fill="var(--diagram-muted)">data change</text>
 
     <!-- follower 1 -> leader: ack -->
     <line x1="280" y1="190" x2="328" y2="129" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
     <polygon points="322,130 330,125 329,137" fill="var(--diagram-stroke)"/>
-    <text x="306" y="170" font-size="11" fill="var(--diagram-muted)">ack</text>
+    <text x="332" y="160" font-size="11" fill="var(--diagram-muted)">ack</text>
 
     <!-- leader -> client: ok -->
     <line x1="340" y1="125" x2="388" y2="64" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
@@ -46,7 +46,7 @@ import Diagram from '../Diagram.astro';
     <!-- leader -> follower 2: data change, long delay -->
     <line x1="190" y1="128" x2="600" y2="251" stroke="var(--diagram-stroke)" stroke-width="1.5" stroke-dasharray="6 4"/>
     <polygon points="592,250 602,255 596,244" fill="var(--diagram-stroke)"/>
-    <text x="470" y="225" font-size="11" fill="var(--diagram-muted)">data change (no guarantee when it arrives)</text>
+    <text x="478" y="210" font-size="11" fill="var(--diagram-muted)">data change (no guarantee when it arrives)</text>
 
     <!-- annotation for accent wait -->
     <text x="255" y="106" text-anchor="middle" font-size="11" fill="var(--diagram-accent)">leader blocks until the</text>

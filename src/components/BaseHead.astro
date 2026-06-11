@@ -1,5 +1,6 @@
 ---
 import '@fontsource-variable/source-serif-4/index.css';
+import '@fontsource-variable/google-sans-flex/index.css';
 import '../styles/tokens.css';
 import '../styles/base.css';
 import sourceSerifWoff2 from '@fontsource-variable/source-serif-4/files/source-serif-4-latin-wght-normal.woff2?url';
@@ -19,6 +20,7 @@ const canonical = new URL(Astro.url.pathname, Astro.site);
 {/* Theme must resolve before first paint — keep this above all stylesheets. */}
 <script is:inline>
   (() => {
+    const root = document.documentElement;
     let theme;
     try {
       const stored = localStorage.getItem('ddia2:theme');
@@ -31,7 +33,14 @@ const canonical = new URL(Astro.url.pathname, Astro.site);
     } catch {
       theme = 'light';
     }
-    document.documentElement.dataset.theme = theme;
+    root.dataset.theme = theme;
+    // Reader display settings — applied pre-paint to avoid layout/font shift.
+    try {
+      if (localStorage.getItem('ddia2:font') === 'sans') root.dataset.font = 'sans';
+      if (localStorage.getItem('ddia2:measure') === 'compact') root.dataset.measure = 'compact';
+    } catch {
+      /* defaults: serif + wide */
+    }
   })();
 </script>
 
