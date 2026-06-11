@@ -129,6 +129,12 @@ const availableCount = entries.length;
     -webkit-background-clip: text;
     background-clip: text;
     -webkit-text-fill-color: transparent;
+    /* Give the gradient box room for the rightward overhang of line-final
+       italic glyphs; clone so every wrapped line fragment gets the padding. */
+    padding-inline: 0.12em;
+    margin-inline: -0.12em;
+    -webkit-box-decoration-break: clone;
+    box-decoration-break: clone;
   }
 
   .lede {

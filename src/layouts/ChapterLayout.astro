@@ -123,7 +123,19 @@ const {
   }
 
   .hero {
+    position: relative;
     margin-bottom: var(--space-7);
+  }
+
+  /* Soft accent bloom behind the chapter title — mirrors the homepage hero. */
+  .hero::before {
+    content: '';
+    position: absolute;
+    inset: -5rem -6rem auto -6rem;
+    height: 18rem;
+    background: var(--gradient-hero);
+    pointer-events: none;
+    z-index: -1;
   }
 
   .eyebrow {
@@ -132,6 +144,11 @@ const {
     text-transform: uppercase;
     letter-spacing: 0.08em;
     color: var(--accent-text);
+    background: var(--gradient-accent-text);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    width: fit-content;
   }
 
   h1 {

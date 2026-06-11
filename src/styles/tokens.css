@@ -127,13 +127,14 @@
 
   --selection: #4a341f;
 
-  /* Gradients — soft slate depth with a faint amber bloom; same restraint. */
-  --gradient-page: radial-gradient(115% 90% at 100% 0%, #181d25 0%, #14171c 52%, #11141a 100%);
-  --gradient-surface: linear-gradient(168deg, #1e232b 0%, #1a1e25 100%);
-  --gradient-surface-hover: linear-gradient(168deg, #242a33 0%, #1e242c 100%);
-  --gradient-accent: linear-gradient(135deg, #e0964a 0%, #edaf6e 100%);
-  --gradient-accent-text: linear-gradient(120deg, #e0964a 0%, #f1b87f 100%);
-  --gradient-accent-subtle: linear-gradient(152deg, #2c2319 0%, #231a11 100%);
-  --gradient-hero: radial-gradient(58% 78% at 86% 8%, rgb(224 150 74 / 0.13) 0%, rgb(224 150 74 / 0) 62%);
-  --gradient-numeral: linear-gradient(158deg, #3c424b 0%, #e0964a 140%);
+  /* Gradients — slate depth with a warmer amber bloom. Stops are spread wider
+     than light mode because low-light surfaces need more delta to read. */
+  --gradient-page: radial-gradient(125% 95% at 100% 0%, #20272f 0%, #161a20 46%, #0e1116 100%);
+  --gradient-surface: linear-gradient(165deg, #232a34 0%, #181c22 100%);
+  --gradient-surface-hover: linear-gradient(165deg, #2b3340 0%, #1c2128 100%);
+  --gradient-accent: linear-gradient(135deg, #e0964a 0%, #f1b270 100%);
+  --gradient-accent-text: linear-gradient(118deg, #e89a4c 0%, #f6c089 100%);
+  --gradient-accent-subtle: linear-gradient(152deg, #342819 0%, #1f170e 100%);
+  --gradient-hero: radial-gradient(60% 80% at 86% 6%, rgb(224 150 74 / 0.2) 0%, rgb(224 150 74 / 0) 64%);
+  --gradient-numeral: linear-gradient(152deg, #515a66 0%, #e0964a 128%);
 }
