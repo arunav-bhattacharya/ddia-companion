@@ -1,0 +1,46 @@
+cards:
+  - id: ch14-f01
+    front: "Why does the chapter reject the idea of ethics as a checklist?"
+    back: "Ethical concepts aren't precisely defined; they require interpretation. Ethics is a participatory, iterative process of reflection — in dialog with the people affected, with accountability for the results — not a compliance form to tick through."
+  - id: ch14-f02
+    front: "What is an 'algorithmic prison'?"
+    back: "When stacked automated 'no' decisions exclude a person from jobs, flights, insurance, housing, and banking — with no proof of guilt and little chance of appeal. It inverts the presumption of innocence."
+  - id: ch14-f03
+    front: "Why do organizations' incentives bias automated decisions toward saying no?"
+    back: "Asymmetric costs: a missed opportunity (declining a good borrower) is cheap, while a bad loan, fraud, or bad hire is expensive. When in doubt, the rational choice for the organization is 'no' — at the rejected individual's expense."
+  - id: ch14-f04
+    front: "How can a model discriminate by race when race is not an input feature?"
+    back: "Through proxy variables. In a segregated city, postal code or even IP address strongly predicts race. The model learns the proxy, so removing the protected column does not remove the discrimination."
+  - id: ch14-f05
+    front: "What does the satire 'machine learning is like money laundering for bias' mean?"
+    back: "Biased historical decisions go in as training data; predictions come out looking mathematically neutral and objective. The bias is codified and amplified, but no step appears to discriminate."
+  - id: ch14-f06
+    front: "Credit score vs. predictive analytics — what question does each answer?"
+    back: "A credit score asks 'how did you behave in the past?' (your actual record, errors correctable). Predictive analytics asks 'how did people similar to you behave?' — stereotyping by construction, with near-impossible recourse if you're in the wrong bucket."
+  - id: ch14-f07
+    front: "Why can a statistically correct model still wrong an individual?"
+    back: "Predictions are probabilistic. A life expectancy of 80 doesn't schedule anyone's death at 80 — a distribution can be right in aggregate and say little about one person. Individual predictions may simply be wrong."
+  - id: ch14-f08
+    front: "Describe the credit-score hiring feedback loop."
+    back: "Misfortune causes missed payments, the score drops, employers screening by score reject you, joblessness deepens poverty, more payments are missed, the score drops further. Each pass confirms the original label."
+  - id: ch14-f09
+    front: "What happened when German gas stations adopted algorithmic pricing?"
+    back: "Competition fell and consumer prices rose: the algorithms learned to collude. No human conspired — the harm emerged from the feedback loop between independently optimizing systems."
+  - id: ch14-f10
+    front: "What is systems thinking, and what question does it tell you to ask of a data product?"
+    back: "Analyzing the whole system, including the people interacting with it, not just the computerized parts. Key question: does the system amplify existing differences between people, or counteract injustice?"
+  - id: ch14-f11
+    front: "When does tracking become surveillance?"
+    back: "When the person being tracked is no longer the customer. In advertising-funded services, advertisers pay, so tracking primarily serves them — more detail, longer retention, per-person profiles. Try the word swap: replace 'data' with 'surveillance.'"
+  - id: ch14-f12
+    front: "What does the GDPR require for consent to be valid?"
+    back: "Freely given, specific, informed, and unambiguous; requested in clear, plain language; withdrawable without detriment. Silence, inactivity, and pre-ticked boxes do not count. (Other lawful bases exist, e.g., legitimate interest for fraud prevention.)"
+  - id: ch14-f13
+    front: "Why isn't 'just don't use the service' a real choice?"
+    back: "Services regarded as essential for basic social participation are effectively mandatory; network effects add social cost to refusing, and platforms use gambling-style engagement mechanics. Opting out requires privilege most people don't have."
+  - id: ch14-f14
+    front: "What is privacy, properly defined — and what does surveillance do to it?"
+    back: "Not secrecy: the freedom to decide what to reveal to whom, situation by situation. Surveillance transfers that decision right from the individual to the company, which exercises it to maximize profit."
+  - id: ch14-f15
+    front: "Why is personal data called a 'toxic asset' or 'the new uranium', and what's the engineering response?"
+    back: "It attracts criminals, governments, and bankruptcy auctions, and it outlives today's intentions — including today's government. Minimize collection and purge when no longer needed: data you don't have can't be leaked, stolen, or compelled."

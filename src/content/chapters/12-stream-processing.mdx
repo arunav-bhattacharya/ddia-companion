@@ -1,0 +1,254 @@
+---
+title: "Stream Processing"
+chapter: 12
+description: "Events, brokers, and the log: how Kafka-style systems, change data capture, and windowed stream processors keep unbounded data flowing — and what time, joins, and crashes do to them."
+readingMinutes: 30
+keyTakeaways:
+  - "A stream is the unbounded counterpart of a batch input: events arrive forever, so a stream job never 'finishes' — which changes sorting, joins, fault tolerance, and the meaning of time."
+  - "AMQP/JMS-style brokers assign and delete individual messages on acknowledgment — good for task queues; log-based brokers append messages to a partitioned, durable log that consumers read at their own offsets — good for high-throughput, order-sensitive, replayable streams."
+  - "In a log-based broker, ordering is guaranteed only within a partition, parallelism is capped by the partition count, and a consumer's entire progress is one number: its offset."
+  - "Because reading a log is non-destructive, a consumer can be rewound to an old offset and rerun — bringing the experiment-and-recover workflow of batch processing to streams."
+  - "Dual writes to two systems race and half-fail, leaving them silently inconsistent forever. Change data capture fixes this by making one database the leader and every derived system an ordered follower of its changelog."
+  - "Log compaction keeps the latest value per key, so a compacted changelog doubles as a full copy of the database — new consumers can rebuild a search index or cache from offset 0, no snapshot required."
+  - "State and event log are two views of the same thing: state is the integral of the change stream. Immutable events enable auditing, richer analytics, recovery from buggy code, and many read-optimized views from one write path — at the price of asynchrony and hard deletes (GDPR) being genuinely hard."
+  - "Event time and processing time diverge whenever there is lag; windowing by the processor's clock invents traffic spikes that never happened, and straggler events force a choice between dropping data and publishing corrections."
+  - "All three stream join types — stream-stream, stream-table, table-table — keep state derived from one input and probe it from the other; cross-stream ordering makes joins time-dependent (the slowly changing dimension problem)."
+  - "Exactly-once is really effectively-once: microbatching, checkpointing, transactional commits of output-plus-offset, or idempotent writes ensure a fault's retries leave the same visible effect as one clean run."
+references:
+  - title: "The Log: What every software engineer should know about real-time data's unifying abstraction"
+    url: "https://engineering.linkedin.com/distributed-systems/log-what-every-software-engineer-should-know-about-real-time-datas-unifying"
+    type: article
+    author: "Jay Kreps"
+    note: "The Kafka co-creator's essay arguing that the append-only log unifies replication, data integration, and stream processing — the worldview behind this whole chapter."
+  - title: "Apache Kafka Documentation: Design"
+    url: "https://kafka.apache.org/42/design/design/"
+    type: docs
+    author: "Apache Kafka project"
+    note: "The design rationale straight from the source: why Kafka persists to the filesystem, pulls rather than pushes, and how offsets give at-least-once and exactly-once options."
+  - title: "Streaming 101: The world beyond batch"
+    url: "https://www.oreilly.com/radar/the-world-beyond-batch-streaming-101/"
+    type: article
+    author: "Tyler Akidau"
+    note: "A deeper treatment of unbounded data and the event-time versus processing-time skew, from the engineer behind Google's Dataflow model."
+  - title: "Streaming 102: The world beyond batch"
+    url: "https://www.oreilly.com/radar/the-world-beyond-batch-streaming-102/"
+    type: article
+    author: "Tyler Akidau"
+    note: "Picks up where this chapter's windowing section stops: watermarks as a completeness signal, triggers, and accumulation modes for handling late data."
+  - title: "Debezium Architecture"
+    url: "https://debezium.io/documentation/reference/stable/architecture.html"
+    type: docs
+    author: "Debezium project"
+    note: "Shows concretely how production CDC connectors tail MySQL binlogs and Postgres logical replication and turn row changes into Kafka events."
+  - title: "Turning the database inside out with Apache Samza"
+    url: "https://martin.kleppmann.com/2014/09/18/turning-database-inside-out-at-strange-loop.html"
+    type: video
+    author: "Martin Kleppmann"
+    note: "The author's Strange Loop talk that reframes a database as an event log plus materialized views — the 'state, streams, and immutability' section as a 45-minute argument."
+  - title: "Timely Stream Processing (Apache Flink Documentation)"
+    url: "https://nightlies.apache.org/flink/flink-docs-stable/docs/concepts/time/"
+    type: docs
+    author: "Apache Flink project"
+    note: "How a real stream processor implements event time, watermarks, and lateness — useful for seeing the chapter's time concepts as concrete API knobs."
+  - title: "Event Sourcing"
+    url: "https://martinfowler.com/eaaDev/EventSourcing.html"
+    type: article
+    author: "Martin Fowler"
+    note: "The original pattern write-up, with the application-developer's view: temporal queries, rebuilding state, and the practical costs of an event-first design."
+---
+
+import Callout from '../../components/mdx/Callout.astro';
+import Term from '../../components/mdx/Term.astro';
+import BrokerStyles from '../../components/diagrams/ch12/BrokerStyles.astro';
+import PartitionedLog from '../../components/diagrams/ch12/PartitionedLog.astro';
+import DualWriteVsCdc from '../../components/diagrams/ch12/DualWriteVsCdc.astro';
+import EventTimeSkew from '../../components/diagrams/ch12/EventTimeSkew.astro';
+import WindowTypes from '../../components/diagrams/ch12/WindowTypes.astro';
+import StreamTableJoin from '../../components/diagrams/ch12/StreamTableJoin.astro';
+
+Batch processing rests on one quiet assumption: the input is **bounded** — known, finite, so the job knows when it's done. A MapReduce sort *must* read everything before emitting anything, because the very last record might belong first. Most real data isn't like that. Users generated data yesterday, they're generating it now, and they'll keep going tomorrow; the dataset is never "complete." Batch systems cope by carving the flow into artificial chunks — a day's worth of data, processed at the end of each day — so the output lags reality by up to a day.
+
+If a day is too slow, shrink the chunk: an hour, a second — or abandon fixed chunks and process every event as it happens. That's **stream processing**. A **stream** is just data made available incrementally over time (Unix stdin, TCP connections, lazy lists — the idea is everywhere); this chapter treats event streams as a data-management tool: how they're transported, how they relate to databases, and what it takes to compute on something that never ends.
+
+## Transmitting Event Streams
+
+In streaming terminology, a record is called an **event**: a small, self-contained, immutable description of something that happened at a point in time — a page view, a purchase, a sensor reading — usually carrying a timestamp. Events are encoded the usual ways (JSON, the binary formats of Chapter 5); a **producer** generates an event once, potentially many **consumers** process it, and where a filename groups related records, a **topic** groups related events.
+
+In principle a plain database could connect producers to consumers: producers insert events, consumers poll for new ones. But the more often you poll, the larger the fraction of requests that come back empty-handed. Continual, low-latency processing wants the opposite: consumers *notified* when something new appears. Relational databases technically have triggers, but they're limited and bolted-on; purpose-built messaging systems do this job properly.
+
+### Messaging Systems
+
+The simplest messaging system is a direct channel like a Unix pipe — one sender, one recipient. Real systems generalize this to the **publish/subscribe** model: many producers sending to a topic, many consumers receiving from it. Within that model, designs differ wildly, and two questions cut through the marketing:
+
+1. **What happens when producers outpace consumers?** Three options: drop messages, buffer them in a queue, or apply <Term id="backpressure">backpressure</Term> (block the producer until the consumer catches up — what Unix pipes and TCP do). If the answer is "buffer," ask the follow-up: what happens as the queue grows? Does it spill to disk, and what does that do to throughput?
+2. **What happens when a node crashes — are messages lost?** Durability costs you writes to disk and/or replication. If occasional loss is fine (periodic sensor readings, where the next reading supersedes the lost one anyway), you can buy more throughput on the same hardware. If you're counting events, every lost message is a silently wrong counter.
+
+Some systems skip the middleman. **Direct messaging** connects producers straight to consumers: UDP multicast carries stock-market feeds where microseconds matter; brokerless libraries like ZeroMQ do pub/sub over TCP; StatsD collects metrics over fire-and-forget UDP; **webhooks** push events as HTTP requests to a registered callback URL. All of these quietly assume both ends are online: an unreachable consumer simply misses messages, and a producer that crashes holding a retry buffer takes those messages with it.
+
+The widely used alternative is a **message broker** — essentially a database specialized for message streams. Producers and consumers connect as clients; the broker takes custody of each message, so durability lands in one well-defined place and clients can connect, crash, and reconnect without anyone else caring. Faced with slow consumers, brokers generally choose unbounded queueing over dropping or backpressure, which makes delivery **asynchronous**: the producer moves on once the broker has buffered the message, without waiting for any consumer to process it.
+
+Brokers resemble databases — some even join two-phase commits — but the traditional broker differs on purpose: it deletes messages after successful delivery, assumes queues stay short (a backlog spilling to disk degrades throughput), offers topic-pattern subscription rather than rich queries, and — unlike a database query result that silently goes stale — notifies clients when new data arrives. This is the model standardized by **JMS** and **AMQP** and implemented by RabbitMQ, ActiveMQ, IBM MQ, Azure Service Bus, and Google Cloud Pub/Sub.
+
+With multiple consumers on one topic, two patterns matter:
+
+- **Load balancing**: each message goes to *one* consumer in a group, splitting the work. Use it when messages are expensive to process and you want to add machines.
+- **Fan-out**: each message goes to *every* consumer, so independent subscribers each get the full feed — the streaming analog of several batch jobs reading the same input file.
+
+The two compose: in Kafka's consumer-group model, each message reaches one consumer per group, and every subscribing group gets the whole stream.
+
+Consumers crash, so brokers use **acknowledgments**: a message is only removed from the queue once the client confirms it finished processing. No ack — consumer died, connection dropped — means redelivery to another consumer. (If the consumer actually finished and only the ack was lost, the message gets processed twice; fixing that properly needs atomic commit or idempotence, coming at the end of this chapter.) Redelivery plus load balancing has a subtle side effect: reordering. Consumer 2 crashes holding m3 while consumer 1 chews through m4; m3 is redelivered to consumer 1, which processes m4, m3, m5. Both JMS and AMQP nominally preserve order, but this combination inevitably breaks it — harmless for independent messages, a real problem for causally linked ones.
+
+<Callout type="warning" title="The poison message and the dead letter queue">
+A producer with a bug — say it omits a required field from a JSON payload — can emit a message that *crashes any consumer that touches it*. The consumer dies, never acks, the broker redelivers, the next consumer dies. Forever. With strict ordering, the whole stream wedges behind one bad message. The escape hatch is a **dead letter queue**: after some number of failed attempts, the message is shunted to a separate queue, unblocking the stream. Anything in a DLQ is by definition an error, so alert on it; a human then drops the message, repairs and re-emits it, or fixes the consumer. DLQs are table stakes in queueing systems and have spread to log-based systems like Pulsar and Kafka Streams.
+</Callout>
+
+### Log-Based Message Brokers
+
+AMQP/JMS-style brokers inherit a transient mindset from networking: deliver the message, then delete it. Databases and filesystems take the opposite stance — what's written stays until explicitly removed. The difference matters enormously for <Term id="derived-data">derived data</Term>. Batch processing's great trick is rerunning a job over the same read-only input at will; with a traditional broker, *receiving a message destroys it*, so there is no rerunning anything, and a new consumer only sees messages sent after it subscribed. The hybrid — durable storage plus low-latency notification — is the **log-based message broker**.
+
+<BrokerStyles />
+
+A <Term id="log">log</Term> is an append-only sequence of records on disk — the same structure that keeps appearing as the write-ahead log, the replication log, and the heart of consensus. Used as a broker: producers append to the end; consumers read sequentially and, on reaching the end, wait for the append notification (essentially `tail -f`). One disk has limited throughput, so the log is sharded into **partitions** on different machines; a topic is a group of partitions carrying the same kind of message. Within a partition the broker stamps every message with a monotonically increasing **offset**: total order inside a partition, no promises across them. Apache Kafka and Amazon Kinesis work exactly like this, and replication plus partitioning carries them to millions of messages per second.
+
+<PartitionedLog />
+
+Fan-out is free in this design — any number of consumers can read the log without stepping on each other, because reading deletes nothing. Load balancing works differently: the broker assigns whole partitions, not individual messages, to nodes in a consumer group, and each node reads its partitions sequentially, single-threaded. The coarse granularity has costs: parallelism is capped at the partition count, and one slow message holds up everything behind it in its partition — head-of-line blocking again. So the old style keeps a home: for expensive per-message work where ordering doesn't matter, JMS/AMQP-style brokers parallelize better; for high-throughput streams of fast, order-sensitive messages, the log wins. (The line is blurring — Kafka now offers queue-like consumer semantics too.) Partition-level ordering yields one practical rule: events that must stay ordered need the same partition key, e.g. key by user ID and each user's events stay in order.
+
+Offsets make consumer bookkeeping almost embarrassingly cheap: everything before your offset is processed, everything after is unseen, and the broker records one number per consumer group per partition — no per-message acks. This is the log sequence number from single-leader replication wearing a different hat: broker as leader, consumer as follower. A crashed consumer resumes from its last recorded offset; anything it processed beyond that gets processed twice — the same at-least-once wrinkle as ack loss, deferred to the fault-tolerance section.
+
+Append forever and you run out of disk, so the log is segmented and old segments are deleted or archived — effectively a giant ring buffer. Giant is the operative word: one 20 TB drive writing at a sustained 250 MB/s takes about 22 hours to fill, so even at maximum throughput you're buffering nearly a day, and realistic deployments hold days or weeks. Many brokers now push older segments to object storage (Kafka's tiered storage; systems like WarpStream keep *everything* there) — cheaper, and messages stored as Iceberg tables can be queried by warehouse jobs in place. In the drop/buffer/backpressure taxonomy, the log is a large, *bounded* buffer: a consumer that lags beyond the retention window silently loses the oldest messages, so monitor consumer lag. The operational gift is isolation — a lagging, crashed, or merely experimental consumer harms *nobody else*. Point a throwaway consumer at the production log for debugging and walk away; all it leaves behind is an offset. An abandoned queue on a traditional broker, by contrast, accumulates messages and eats memory until someone remembers to delete it.
+
+Best of all, the offset is under the *consumer's* control. Start a copy of yesterday's consumer at yesterday's offset, write its output somewhere new, and you've reprocessed a day of events — repeatable, with different code each time. That is the batch development loop, on a stream: immutable input, repeatable transformation, cheap mistakes.
+
+## Databases and Streams
+
+Log-based brokers got popular by borrowing database ideas for messaging. The reverse borrowing is at least as fruitful, because the connection runs deep: *every write to a database is itself an event*. A replication log is exactly that — a stream of write events from the leader, which followers apply in order to converge on the same state; the state-machine-replication principle from Chapter 10 is event streaming by another name. The radical version is **event sourcing**: make the event stream itself the <Term id="system-of-record">system of record</Term>, model every state change as an immutable event in an append-only log, and derive all read-optimized views from it. But even without going that far, streams solve a painfully common integration problem.
+
+### Keeping Systems in Sync
+
+No single system covers all needs: a typical application has an OLTP database for requests, a cache for hot reads, a full-text index for search, and a warehouse for analytics — each with its own copy of the data in its own optimized representation, and the copies must agree. Warehouses get periodic ETL dumps (a batch process); when that's too slow, teams reach for **dual writes**: application code writes the database, then the search index, then invalidates the cache.
+
+Dual writes fail in two ugly ways. First, a race: clients 1 and 2 both update item X; the database happens to process client 1 then client 2 (final value B), the index receives them in the opposite order (final value A). No error anywhere — the two systems just disagree, permanently. Second, partial failure: one write succeeds and the other doesn't, with the same result. Making both succeed-or-fail together is atomic commit across heterogeneous systems — expensive, as Chapter 8 made clear.
+
+<DualWriteVsCdc />
+
+The diagnosis is a Chapter 6 problem in disguise: two leaders, neither following the other. The cure: pick one leader and make everything else a follower.
+
+### Change Data Capture
+
+For decades the replication log was treated as a private implementation detail — clients query through the data model, thank you very much. **Change data capture (CDC)** breaks that taboo: observe every change committed to a database and extract it, ordered, as a stream other systems can consume. The database decides the write order, the changelog records it, and the search index — now just another consumer — applies the same changes in the same order. Need the data in the warehouse too? Add a consumer. A log-based broker is the natural transport, precisely because it preserves ordering.
+
+In practice, CDC means attaching to the database's logical replication log. Debezium does this for MySQL, PostgreSQL, Oracle, SQL Server, Cassandra, and others, normalizing changes into a standard event schema; Maxwell parses MySQL binlogs; Kafka Connect packages such connectors for the Kafka ecosystem. Most databases now expose change streams as a supported API rather than something you reverse-engineer — even quorum-based Cassandra, which, lacking a single leader to subscribe to, exposes per-node log segments and leaves merging to the consumer. Like messaging generally, CDC is asynchronous: the source commits without waiting for consumers. Slow consumers therefore can't drag down the system of record, but every replication-lag issue from Chapter 6 comes along for the ride.
+
+A changelog alone isn't enough to *build* a new derived system: a log of recent changes is missing every record that hasn't been touched recently. With limited retention you need a **consistent snapshot** of the database tied to a known log position, then apply changes from that position onward. Some tools build this in — Debezium borrows Netflix's DBLog watermarking algorithm to take incremental snapshots without locking the table.
+
+Or skip snapshots entirely with **log compaction**. The broker periodically scans for records with the same key and keeps only the most recent value for each (a null value — a **tombstone** — marks deletion and is eventually purged), so the compacted log's size tracks the database's *current contents*, not its write history. If every CDC event carries a key and the record's full new value, a compacted changelog is a complete copy of the database: start a fresh consumer at offset 0, scan to the end, and you have the latest value for every key — plus low-latency updates forever after. Kafka supports this directly, which is what lets it serve as durable storage, not just plumbing.
+
+<Callout type="warning" title="CDC quietly turns your schema into a public API">
+In a microservices world, a service's database schema is supposed to be private — that's why other teams go through the API. Wire that database into CDC and the schema becomes a contract: drop a column and some downstream consumer breaks, possibly one serving customers. The **outbox pattern** decouples this: the service writes events to a dedicated outbox table with its own deliberately stable schema, in the *same transaction* as its normal writes, and only the outbox feeds CDC. Yes, that's a dual write — but both writes hit one database atomically, which is exactly the case dual writes can handle. The costs: you maintain the internal-to-outbox translation, and the database does extra writing.
+</Callout>
+
+CDC and event sourcing rhyme — both persist all changes as a log — but operate at different levels. CDC works *underneath* a mutable database: the application updates and deletes at will, oblivious, while low-level row changes are extracted in commit order. Event sourcing works *above*: the application is deliberately built on immutable events recording user intent ("customer applied discount code SAVE10"), not the mechanical row updates that resulted. The level changes what compaction can do: a CDC update carries the record's complete new value, so older events for that key are disposable, whereas event-sourcing events capture actions that later events don't supersede — you need the full history, which is why event-sourced systems snapshot derived state as a performance shortcut while keeping every raw event. Adopting event sourcing reshapes your whole application; CDC can be bolted onto an existing database without the application even knowing.
+
+A useful distinction lurks here between a **command** and an event. An arriving request — "book this seat" — is a command: a wish, still rejectable (the seat may be taken). Only after validation does the system append the fact: "seat 14C booked by customer 7." Events are history, and history doesn't get vetoed after it's written, so validate *before* the append.
+
+### State, Streams, and Immutability
+
+Batch processing earns its power from immutable inputs; event sourcing and CDC earn theirs the same way. But databases hold mutable state — things change, that's the point. The resolution is that mutability and the immutable log aren't rivals; they're two faces of one thing. Whatever your current state is — available seats, an account balance, a response-time graph — it *got* that way through a sequence of events. State is what you get by integrating the change stream over time; the change stream is the derivative of state. Store the changelog durably and state becomes reproducible at any point. Gray and Reuter said it plainly back in 1992: the log contains all the information; the database is merely a performance optimization — a cache of the log's latest values. Log compaction is the bridge between the two: keep the newest value per key, discard the overwritten past.
+
+Treating the log as primary buys you what accountants discovered centuries ago. A ledger is append-only; a mistake isn't erased but *compensated* with a correcting entry, and the error stays visible for audit. Software wants the same property: deploy buggy code that writes garbage into a mutable database and recovery is forensic archaeology; do it against an append-only log and you can see exactly what happened and repair downstream. Immutable events also remember more than final state does. A shopper adds an item to the cart, hesitates, removes it — for fulfillment those events cancel out, but "considered and rejected" is analytics gold that a mutable cart table destroys on delete.
+
+Separating the write-optimized log from read-optimized state also dissolves an old design knot. Traditional schema design assumes data must be written in the shape it will be queried — hence the normalization wars. But if views are *derived*, one log can feed several representations: a columnar store for analytics (Druid ingests straight from Kafka this way), a search index, a cache. New feature, new shape? Build a new view from the log, run it beside the old one, migrate readers, retire the old — often far gentler than an in-place schema migration. Denormalized views stop being dangerous because the translation process keeps them consistent with the log. This is the **CQRS** idea — command query responsibility segregation — separating the form data is written in from the forms it's read in. The home timeline from Chapter 2 is a perfect specimen: wildly denormalized (your post is copied into every follower's timeline), kept correct by the fan-out process consuming post events.
+
+Concurrency gets harder in one way and simpler in another. Harder: log consumers are asynchronous, so a user can write an event and then not find it in a just-read view — the read-your-writes problem of Chapter 6. (Updating the view synchronously with the append would need a distributed transaction; usually you don't.) Simpler: a well-designed event is a *self-contained* description of a user action, so what used to be a multi-object transaction becomes one atomic append — and if log and state are sharded alike, a single-threaded consumer per shard needs no write concurrency control at all, because the log already serialized the events.
+
+How long can you actually keep everything? Depends on churn. Mostly-append workloads make cheap immutable histories; workloads that endlessly update a small dataset grow a history out of all proportion to the data, and compaction performance becomes make-or-break. And some deletion isn't optional: privacy law (the GDPR among others) can require that personal data actually be removed, not merely superseded by a later event. Then you must genuinely rewrite history — Datomic calls it *excision* — and truly deleting data is famously hard: copies hide in backups, in SSD blocks remapped rather than overwritten, in that warehouse export from March. **Crypto-shredding** is the pragmatic dodge: encrypt data you may someday need to delete, and when the day comes, destroy the key. It relocates the problem (the key store is now mutable and load-bearing, and key granularity must be chosen up front), and honestly all deletion is "making data harder to retrieve" rather than impossible. Sometimes the law requires you to try anyway.
+
+## Processing Streams
+
+You have a stream; now what? Three broad options. Write the events into a database, cache, or index, keeping it in sync with the rest of the system — the CDC consumer pattern above. Push events to humans — alerts, notifications, live dashboards. Or transform input streams into output streams, possibly through a pipeline of stages. That third option — the **operator** or job — is this section's subject, and it's recognizably the child of Unix pipes and MapReduce: read inputs immutably, append outputs elsewhere, with partitioning and parallelization carried over from Chapter 11 nearly unchanged. What doesn't carry over is the ending — a stream has none. Sorting an unbounded input is meaningless, so sort-merge joins are out. And "if a task fails, restart it from the beginning" stops being advice you can take when the task has been running for six years.
+
+### Uses of Stream Processing
+
+The oldest use is monitoring: block the credit card when usage turns fraudulent, trade when the market moves, page someone when the factory machine misbehaves. From that root grew several distinct flavors.
+
+**Complex event processing (CEP)** searches a stream for *patterns of events*, the way a regular expression searches a string for patterns of characters. You declare patterns in a SQL-like language or GUI; the engine maintains a state machine and emits a "complex event" when a pattern completes. Note the charming inversion: a normal database stores data persistently and treats queries as transient visitors, while a CEP engine stores *queries* long-term as the data flows past. Esper and TIBCO StreamBase live here; Flink and Spark offer declarative pattern-matching on streams too.
+
+**Stream analytics** cares less about specific sequences and more about aggregates over many events: rates, rolling averages, this-week-versus-last-week comparisons. Computations run over **windows** — say, the average requests per second across the last five minutes (more on windows shortly). Analytics pipelines often use probabilistic, memory-frugal algorithms — Bloom filters for membership, HyperLogLog for distinct counts, sketch-based percentile estimators — but don't let that breed the myth that streaming is inherently lossy; approximation is an optimization choice, not a law of nature. This is the home turf of Storm, Spark Streaming, Flink, Beam, and Kafka Streams, plus hosted services like Google Cloud Dataflow.
+
+**Maintaining materialized views** is the CDC story again, seen as a processing pattern: keep a derived view continuously up to date as the underlying data changes; event-sourced application state is exactly this. Note the mismatch with analytics windows — a materialized view can't politely forget data older than an hour; it conceptually needs a window stretching back to the beginning of time, minus whatever compaction discards. Frameworks that assume bounded windows struggle here; Kafka Streams and ksqlDB lean on Kafka's compacted topics to do it properly.
+
+<Callout type="insight" title="Incremental view maintenance: don't recompute the world">
+Databases have materialized views, so why not just use those? Because most refresh them by rerunning the whole query — PostgreSQL's REFRESH MATERIALIZED VIEW reprocesses everything, however little changed, and the view is stale between refreshes. **Incremental view maintenance (IVM)** compiles a SQL query into operators that update the result from *only the changed rows*: a sale comes in, that day's revenue row gets adjusted, nothing else is touched. Cheap updates can run constantly, which means fresh views. Materialize, RisingWave, ClickHouse, and Feldera are built around this: ingest event streams, buffer recent changes in memory, fold them into on-disk views, answer SQL reads by combining both.
+</Callout>
+
+**Search on streams** flips a search engine the same way CEP flips a database. A media-monitoring service registers thousands of standing full-text queries ("any article mentioning our client") and matches every incoming document against them; real-estate sites alert you when a new listing matches your saved search. Conventional engines index documents and run transient queries; here the queries persist and the documents flow by — at scale you index the *queries* to narrow which ones each document might match. Elasticsearch's percolator implements this.
+
+One boundary case: message-passing between services (actor frameworks, RPC-ish systems) also moves events around, but it isn't stream processing in this chapter's sense. Actors manage concurrency, communicating ephemerally one-to-one in arbitrary, even cyclic patterns; stream operators are a data management technique — durable multi-subscriber logs, acyclic pipelines, derived outputs. Crossover exists (Storm's distributed RPC interleaves user queries with stream events), but the purposes differ.
+
+### Reasoning About Time
+
+"The average over the last five minutes" sounds unambiguous. It is not, and the gap between its meanings has bitten more production dashboards than anyone admits.
+
+A batch job processing a year of history obviously uses the timestamps *in the events* — the wall clock of the machine running the job is irrelevant trivia, and event timestamps keep the job deterministic: rerun it, get the same answer. Many stream frameworks, though, window by the processing machine's clock, because it's simple and because "the event happened just now, roughly" is often roughly true. Until it isn't. The time an event happened is **event time**; the time your operator gets to it is **processing time**, and everything between — queueing, network faults, a contended broker, a consumer restart, a backlog replay after a bug fix — stretches the gap unpredictably. Delays also shuffle order: a user's first request goes to server A and the second to server B, and B's event can beat A's to the broker.
+
+Postcards make a decent analogy: a traveling friend's cards arrive bunched and shuffled, and one mailed in Lisbon may show up after one mailed a week later from Rome. Reconstruct the journey by *arrival date* and the itinerary is nonsense. You read the postmark — event time — and tolerate the mailbox's chaos.
+
+Window by processing time and the chaos goes straight into your data. Suppose your operator counts requests per second, you redeploy it, and it's down for a minute. On restart it tears through the backlog, and the processing-time graph reports a terrifying spike of traffic that never occurred.
+
+<EventTimeSkew />
+
+Event time fixes the artifact and introduces its own headache: you can never be *sure* a window is complete. When do you declare the 10:37 window done? The stream has moved on to 10:38, but some 10:37 event might still be sitting in a buffer on a wonky network segment. You can close the window after a quiet period, but **straggler** events arriving after closing demand a policy: ignore them (normally a tiny fraction — track the drop rate and alert if it grows), or publish a *correction*, an updated window value, possibly retracting the old one. Some systems carry a **watermark** in the stream — a producer's declaration that no events older than time t are coming — letting consumers trigger windows confidently; with many producers, each with its own watermark, the consumer must track them all, and producers joining or leaving gets fiddly.
+
+There's a worse question underneath: *whose clock supplies the event time?* A mobile app records usage events offline and uploads them when the network returns — hours or days later, the ultimate stragglers. The honest event time is the phone's clock at the moment of the tap, but user-controlled clocks are casually and sometimes deliberately wrong; the server's receive time is trustworthy but describes the upload, not the tap. The workable correction logs three timestamps — occurred (device clock), sent (device clock), received (server clock). Receive minus send estimates the device clock's offset from server time (assuming small network delay); apply that offset to the occurrence time for a defensible estimate of when the event really happened. Batch jobs face identical issues, incidentally — streams just rub your nose in time.
+
+With timestamps settled, choose a window shape:
+
+<WindowTypes />
+
+- **Tumbling**: fixed length, no overlap; every event lands in exactly one window (timestamp rounded down to the minute, say).
+- **Hopping**: fixed length with overlap — a 5-minute window hopping by 1 minute smooths the jitter a tumbling window would show; computable by aggregating adjacent 1-minute tumbles.
+- **Sliding**: contains events within some interval *of each other*, no fixed grid — events at 10:03:39 and 10:08:12 share a 5-minute sliding window though a fixed grid would split them.
+- **Session**: no fixed duration; group one user's burst of activity and close after an inactivity gap (30 quiet minutes, say). Website analytics lives on sessionization.
+
+Window state varies from trivial to enormous: a counter is one number whatever the window size, but sliding windows and joins buffer events until the window passes — budget memory or disk accordingly on high-throughput streams.
+
+### Stream Joins
+
+Batch pipelines join datasets by key; stream pipelines inherit the need, complicated by the fact that either side can grow a new event at any moment. Three shapes cover the territory.
+
+**Stream–stream join (window join).** You log a search event for every query on your site and a click event for every result clicked, tied together by session ID, and you want click-through rate per URL. Embedding the search details in the click event isn't enough — that covers only searches that *got* clicks, and CTR needs the ones that didn't. The click may trail the search by seconds or days (abandoned tab, rediscovered Tuesday), or arrive *first* thanks to network reordering, so you pick a join window — say, an hour. The operator keeps recent events from both streams indexed by session ID; each arrival joins its index and probes the other; matches emit a joined event, and searches that expire unmatched emit "no click," which is data too.
+
+**Stream–table join (enrichment).** Activity events carry a user ID; analytics wants them annotated with the user's profile. Querying the profile database per event would be slow and would eventually flatten it, so the processor keeps a local copy — in-memory hash table or on-disk index. A batch job could use a frozen snapshot, but a stream job runs for years while profiles change, so the copy is kept current the obvious way by now: subscribe to the profile table's CDC changelog. Squint and it's a stream–stream join where the changelog side has a window reaching back to the beginning of time, newer record versions overwriting older.
+
+<StreamTableJoin />
+
+**Table–table join (materialized view maintenance).** The social network timeline again: the cache must update when a post is created or deleted, when u1 follows u2 (backfill recent posts), and when u1 unfollows (remove them). The operator consumes both changelogs, maintaining follower state to know which timelines each post touches — which is really a materialized view of a join:
+
+```sql
+SELECT follows.follower_id AS timeline_id,
+       collect(posts.*)    AS entries
+FROM posts
+JOIN follows ON follows.followee_id = posts.sender_id
+GROUP BY follows.follower_id
+```
+
+All three joins share an anatomy — keep state derived from one input, probe it while processing the other — and all three inherit a quiet menace: **time dependence**. State changes, so *when* an event meets it changes the answer. Events processed before a profile edit join the old profile, later ones the new — but partitioned logs promise no ordering *across* streams, so a rerun may interleave the inputs differently and produce different output: the join is nondeterministic. Concretely: joining sales to a tax-rate table should use the rate *at the time of sale* — reprocess last year's data with today's rates and the books are wrong. Warehouses call this the **slowly changing dimension** problem; the classic fix is versioning — every tax-rate change gets a new identifier, and each sale records which version applied. Determinism restored, but every version must now be kept forever, so log compaction is off the table. The blunter alternative: denormalize, copying the applicable rate into each sale event.
+
+### Fault Tolerance
+
+Batch jobs hold a high card: if a task fails, rerun it; since inputs are immutable and output becomes visible only on success, the result looks as if every record were processed exactly once. That guarantee goes by **exactly-once semantics**, though *effectively-once* is the more honest phrase — records may well be processed multiple times; only the *visible effect* is single. Streams want the same guarantee but can't use the same trick: you can't wait for an infinite job to finish before showing output.
+
+**Microbatching** chops the stream into tiny batches — around a second each in Spark Streaming — and applies batch-style fault tolerance to each. Smaller batches mean lower latency but more scheduling overhead; the batch boundary also imposes an implicit processing-time tumbling window, so larger windows mean manually carrying state across batches. Flink's variant, **checkpointing**, periodically snapshots operator state to durable storage, triggered by barriers flowing through the stream; on crash, restart from the last checkpoint and discard output produced after it — the same semantics without dictating a window size.
+
+Both approaches guarantee this only *inside* the framework's walls. Once output escapes — a database write, a message to an external broker, an email — the framework can't un-happen it, and replaying from a checkpoint performs the side effect twice. Two ways out:
+
+*Atomic commit.* Make everything that should happen exactly once — output messages, database writes, operator state changes, and above all the consumer offset advance — commit atomically or not at all. Chapter 8's verdict on XA-style heterogeneous distributed transactions was grim, but a *restricted* version is tractable: keep state and messaging inside one system and the transaction never crosses technology boundaries. Kafka's transactions, Google Cloud Dataflow, and VoltDB do this, amortizing protocol overhead by committing several input messages per transaction.
+
+*Idempotence.* An <Term id="idempotent">idempotent</Term> operation yields the same result performed once or five times: setting a key to a value qualifies; incrementing a counter does not. Non-idempotent operations can often be promoted with a little metadata — write each value to the external database *together with the offset of the message that produced it*, and a retry can see the update already landed and skip it. The fine print is real: replays must deliver the same messages in the same order (a log-based broker obliges), processing must be deterministic, and no other writer may touch the same values — failover may need fencing to silence a predecessor that isn't as dead as advertised. Within those bounds, idempotence buys effectively-once nearly for free.
+
+Stateful operators — window aggregations, join indexes — additionally need their **state to survive failure**. Options: keep it in a remote replicated store (simple, but a network hop per message is slow); keep it local and replicate periodically (Flink snapshots operator state to a distributed filesystem; Kafka Streams ships state changes to a compacted Kafka topic, CDC-style; VoltDB processes each input redundantly on several nodes); or keep nothing and rebuild from the inputs — replay a short window's events, or reconstruct a CDC-fed table from its compacted changelog. Which wins depends on hardware truths that keep shifting; when network round trips undercut disk seeks, remote state stops looking slow. No universal answer — only the recurring pattern that state is derived, logs are the truth, and anything derived can be derived again.
+
+<Callout type="insight" title="Where this chapter points">
+Notice what kept happening: the log ate everything. Replication, CDC, event sourcing, materialized views, join state, even fault tolerance all reduced to "append events in order; derive the rest, and rederive it after a crash." Chapter 13 takes that pattern as a design philosophy — composing whole systems from streams and derived state — and begins exactly at this chapter's unresolved irritants: cross-stream ordering, exactly-once across system boundaries, and views you can read your own writes from.
+</Callout>

@@ -1,0 +1,39 @@
+---
+import Diagram from '../Diagram.astro';
+---
+
+<Diagram caption="MVCC keeps multiple committed versions of account 2 side by side; each reader is routed to the version that was current when its own transaction started.">
+  <svg viewBox="0 0 720 270" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="mvcc-title">
+    <title id="mvcc-title">Two row versions of an account balance tagged with inserting and deleting transaction IDs, read by two transactions with different snapshots</title>
+
+    <text x="20" y="26" font-size="13" font-weight="600" fill="var(--diagram-stroke)">account 2, as stored in the heap</text>
+
+    <!-- old version -->
+    <rect x="240" y="50" width="440" height="40" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="256" y="75" font-size="12" fill="var(--diagram-stroke)">balance = $500&#160;&#160;&#183;&#160;&#160;inserted_by = 5&#160;&#160;&#183;&#160;&#160;deleted_by = 13</text>
+
+    <!-- new version -->
+    <rect x="240" y="130" width="440" height="40" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <text x="256" y="155" font-size="12" fill="var(--diagram-stroke)">balance = $400&#160;&#160;&#183;&#160;&#160;inserted_by = 13&#160;&#160;&#183;&#160;&#160;deleted_by = &#8211;</text>
+
+    <!-- link between versions -->
+    <line x1="460" y1="90" x2="460" y2="130" stroke="var(--diagram-muted)" stroke-width="1.5"/>
+    <polygon points="460,130 455,121 465,121" fill="var(--diagram-muted)"/>
+    <text x="472" y="114" font-size="11" fill="var(--diagram-muted)">update by txn 13 = delete + insert</text>
+
+    <!-- readers -->
+    <text x="20" y="68" font-size="12" fill="var(--diagram-stroke)">txn 12 reads</text>
+    <text x="20" y="84" font-size="11" fill="var(--diagram-muted)">(started before 13)</text>
+    <line x1="125" y1="70" x2="232" y2="70" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <polygon points="232,70 222,65 222,75" fill="var(--diagram-stroke)"/>
+
+    <text x="20" y="148" font-size="12" fill="var(--diagram-stroke)">txn 14 reads</text>
+    <text x="20" y="164" font-size="11" fill="var(--diagram-muted)">(13 already committed)</text>
+    <line x1="125" y1="150" x2="232" y2="150" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <polygon points="232,150 222,145 222,155" fill="var(--diagram-stroke)"/>
+
+    <!-- outcome notes -->
+    <text x="240" y="215" font-size="12" fill="var(--diagram-stroke)">txn 12 sees $500 &#8212; the deletion by txn 13 is invisible to its snapshot</text>
+    <text x="240" y="240" font-size="12" fill="var(--diagram-stroke)">txn 14 sees $400 &#8212; txn 13 had committed before txn 14 started</text>
+  </svg>
+</Diagram>

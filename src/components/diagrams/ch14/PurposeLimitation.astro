@@ -1,0 +1,53 @@
+---
+import Diagram from '../Diagram.astro';
+---
+
+<Diagram caption="Purpose limitation and data minimization: collect the minimum, use it for the declared purpose, then purge — data you no longer hold cannot be breached, sold, or compelled.">
+  <svg viewBox="0 0 740 330" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="ch14-purge-title">
+    <title id="ch14-purge-title">Two timelines compared: collecting everything forever accumulates risk, while collecting minimally and purging ends the risk</title>
+    <defs>
+      <marker id="ch14-purge-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--diagram-stroke)"/>
+      </marker>
+    </defs>
+
+    <!-- ===== Top lane: collect everything ===== -->
+    <text x="20" y="100" font-size="13" font-weight="600" fill="var(--diagram-stroke)">Big-data</text>
+    <text x="20" y="118" font-size="13" font-weight="600" fill="var(--diagram-stroke)">default</text>
+
+    <!-- risk wedge -->
+    <path d="M 200 106 L 660 106 L 660 36 Z" fill="var(--diagram-fill)" stroke="var(--diagram-muted)" stroke-width="1" stroke-dasharray="4 3"/>
+    <text x="540" y="86" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">risk grows with every byte retained:</text>
+    <text x="540" y="102" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">breach, subpoena, bankruptcy sale, next regime</text>
+
+    <line x1="160" y1="110" x2="700" y2="110" stroke="var(--diagram-stroke)" stroke-width="1.5" marker-end="url(#ch14-purge-arrow)"/>
+
+    <circle cx="200" cy="110" r="5" fill="var(--diagram-stroke)"/>
+    <text x="200" y="136" text-anchor="middle" font-size="12" fill="var(--diagram-stroke)">collect everything</text>
+
+    <circle cx="380" cy="110" r="5" fill="var(--diagram-stroke)"/>
+    <text x="380" y="136" text-anchor="middle" font-size="12" fill="var(--diagram-stroke)">combine and explore</text>
+
+    <circle cx="560" cy="110" r="5" fill="var(--diagram-stroke)"/>
+    <text x="560" y="136" text-anchor="middle" font-size="12" fill="var(--diagram-stroke)">retain forever</text>
+
+    <!-- ===== Bottom lane: minimization ===== -->
+    <text x="20" y="240" font-size="13" font-weight="600" fill="var(--diagram-stroke)">Minimization +</text>
+    <text x="20" y="258" font-size="13" font-weight="600" fill="var(--diagram-stroke)">purpose limitation</text>
+
+    <line x1="160" y1="250" x2="530" y2="250" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <line x1="530" y1="250" x2="700" y2="250" stroke="var(--diagram-muted)" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#ch14-purge-arrow)"/>
+
+    <circle cx="200" cy="250" r="5" fill="var(--diagram-stroke)"/>
+    <text x="200" y="276" text-anchor="middle" font-size="12" fill="var(--diagram-stroke)">collect only what's needed</text>
+
+    <circle cx="370" cy="250" r="5" fill="var(--diagram-stroke)"/>
+    <text x="370" y="297" text-anchor="middle" font-size="12" fill="var(--diagram-stroke)">use for the stated purpose</text>
+
+    <circle cx="530" cy="250" r="7" fill="var(--diagram-accent)"/>
+    <text x="530" y="276" text-anchor="middle" font-size="12" font-weight="600" fill="var(--diagram-accent)">purge</text>
+
+    <text x="615" y="226" text-anchor="middle" font-size="12" fill="var(--diagram-accent)">nothing left to leak</text>
+    <text x="615" y="242" text-anchor="middle" font-size="12" fill="var(--diagram-accent)">or compel</text>
+  </svg>
+</Diagram>

@@ -1,0 +1,283 @@
+---
+title: "The Trouble with Distributed Systems"
+chapter: 9
+description: "Why networks lose messages, clocks lie, and processes freeze mid-instruction — and how quorums, fencing tokens, system models, and randomized testing let you build on such shaky ground."
+readingMinutes: 27
+keyTakeaways:
+  - "A single computer is deterministic by design: it either works or it crashes outright. A distributed system suffers partial failures — some parts broken, others fine — and they are nondeterministic, which is the root of everything hard in this chapter."
+  - "Asynchronous packet networks make no delivery promises. When you get no response, you cannot tell whether the request was lost, the node is down, or the response was lost — a timeout is your only tool, and it proves nothing."
+  - "TCP's 'reliability' covers one connection's packets, not your request: an acknowledged packet only means the remote kernel got it. If you need to know a request was processed, only an application-level response counts."
+  - "Variable network delay is mostly queueing — in the sender's OS, in switch buffers, at the receiver, in VM scheduling — and queues blow up near capacity. Packet networks accept unbounded delay as the price of high utilization for bursty traffic; circuit-switched networks buy bounded delay with reserved, often idle, bandwidth."
+  - "Time-of-day clocks can be stepped backward by NTP and skip leap seconds; monotonic clocks only move forward but are meaningless across machines. Use monotonic clocks for durations, and treat any timestamp comparison across nodes with suspicion."
+  - "Ordering events by time-of-day timestamps (last write wins) silently drops causally later writes when clocks are skewed. Either track causality logically, or do what Spanner does: treat a clock reading as a confidence interval and wait out the uncertainty."
+  - "A thread can be preempted for seconds or minutes — GC pauses, VM suspension, swapping, SIGSTOP — and resumes with no idea time has passed. Any code that checks a lease and then acts on it is racing against a pause you cannot rule out."
+  - "A node cannot trust its own judgment about its status; truth in a distributed system is decided by a quorum. Zombies — former leaseholders that don't know they've been deposed — must be fenced off with monotonically increasing tokens that storage verifies."
+  - "Byzantine fault tolerance handles nodes that lie, but it's expensive and aimed at aerospace and mutually untrusting parties; in a single-organization datacenter you assume honest-but-unreliable nodes and add cheap defenses against weak lying: checksums, input validation, multiple NTP servers."
+  - "Algorithms are proved correct within a system model — partially synchronous with crash-recovery faults is the realistic one — with safety properties that must never break and liveness properties that may wait. Model checkers (TLA+), fault injection (Jepsen), and deterministic simulation testing (FoundationDB, Antithesis) are how you find where reality disagrees."
+references:
+  - title: "The network is reliable"
+    url: "https://aphyr.com/posts/288-the-network-is-reliable"
+    type: article
+    author: "Kyle Kingsbury and Peter Bailis"
+    note: "The evidence file for this chapter's pessimism — documented real-world partitions at Microsoft, Google, and Amazon, including NIC bugs and GC pauses that impersonate network failures."
+  - title: "How to do distributed locking"
+    url: "https://martin.kleppmann.com/2016/02/08/how-to-do-distributed-locking.html"
+    type: article
+    author: "Martin Kleppmann"
+    note: "The full version of the fencing-token argument, worked through against Redis's Redlock — shows exactly how process pauses and clock skew break a lock that looks correct."
+  - title: "Spanner: Google's Globally-Distributed Database"
+    url: "https://research.google.com/archive/spanner-osdi2012.pdf"
+    type: paper
+    author: "James C. Corbett et al. (Google)"
+    note: "The primary source for TrueTime: how exposing clock uncertainty as an interval, backed by GPS and atomic clocks, turns unreliable time into a tool for consistent transactions."
+  - title: "Navigating the 8 fallacies of distributed computing"
+    url: "https://ably.com/blog/8-fallacies-of-distributed-computing"
+    type: article
+    author: "Alex Diaconu (Ably)"
+    note: "A practitioner's tour of the classic fallacies — reliable network, zero latency, synchronized time — with concrete mitigations for each, complementing this chapter's theory."
+  - title: "Jepsen Analyses"
+    url: "https://jepsen.io/analyses"
+    type: article
+    author: "Kyle Kingsbury (Jepsen, LLC)"
+    note: "Dozens of real databases put through partitions, crashes, and clock skew — read a few to see how the failure modes in this chapter show up as stale reads, split brain, and lost writes."
+  - title: "Testing Distributed Systems w/ Deterministic Simulation"
+    url: "https://www.youtube.com/watch?v=4fFDFbi3toc"
+    type: video
+    author: "Will Wilson (Strange Loop 2014)"
+    note: "FoundationDB's engineers explain running an entire distributed database inside a deterministic simulator, so any bug-triggering schedule of failures can be replayed exactly."
+  - title: "Learn TLA+"
+    url: "https://learntla.com/"
+    type: course
+    author: "Hillel Wayne"
+    note: "A free, genuinely beginner-friendly path into the specification language this chapter mentions — you can model-check your first concurrent algorithm in an afternoon."
+  - title: "MIT 6.5840: Distributed Systems"
+    url: "https://pdos.csail.mit.edu/6.824/"
+    type: course
+    author: "MIT PDOS"
+    note: "Open lectures and Go labs where you build Raft and a sharded key-value store yourself — the fastest way to feel these failure modes instead of just reading about them."
+---
+
+import Callout from '../../components/mdx/Callout.astro';
+import Term from '../../components/mdx/Term.astro';
+import RequestFailureModes from '../../components/diagrams/ch09/RequestFailureModes.astro';
+import NetworkQueueingPoints from '../../components/diagrams/ch09/NetworkQueueingPoints.astro';
+import ClockTypes from '../../components/diagrams/ch09/ClockTypes.astro';
+import LeasePauseBug from '../../components/diagrams/ch09/LeasePauseBug.astro';
+import FencingTokens from '../../components/diagrams/ch09/FencingTokens.astro';
+
+A program on a single computer is a remarkably honest machine: it either works or it doesn't. Run the same operation twice, get the same answer. The previous chapters quietly assumed the machines running our replicas, shards, and transactions mostly behave. This chapter takes that assumption away.
+
+Software that spans a network inherits a physical world where packets vanish, clocks disagree, and a process can freeze mid-instruction for a minute and then carry on as if nothing happened. The chapter's job is to turn your pessimism up to maximum: catalog what can go wrong with networks, clocks, and processes — then ask what a node can actually *know* in such a world, and how to reason about algorithms that must survive it. Chapter 10 builds fault-tolerant machinery on top of this rubble.
+
+## Faults and Partial Failures
+
+Why is a single computer so dependable? Partly because it's engineered to fail *completely* rather than confusingly. If memory corrupts or a connector comes loose, you get a kernel panic, not subtly wrong answers. That's a deliberate choice: wrong results are far harder to deal with than crashes, so computers hide their fuzzy physical underpinnings behind an idealized model of mathematical precision. (Chapter 2 showed the idealization leaks — CPUs occasionally compute garbage — but rarely enough that single-machine software ignores it.)
+
+Distributed systems get no such idealization. When software runs on several networked machines, some parts can be broken in unpredictable ways while the rest works fine. This is a **partial failure**, the defining trouble of distributed systems. Worse, partial failures are **nondeterministic**: the same operation may succeed, fail, or — the maddening case — leave you not knowing whether it succeeded. One widely quoted field report (Coda Hale's) lists long-lived partitions inside a single datacenter, whole racks accidentally power-cycled, and a truck crashing into a datacenter's cooling system. In a large enough system, one-in-a-million events happen daily.
+
+The consolation prize is big: a system that *tolerates* partial failures can be more reliable than any single machine — reboot nodes one at a time for a rolling upgrade and the service never blinks. But to build that tolerance you must know your enemy: consider a wide range of faults, including unlikely ones, and trigger them deliberately in testing. In distributed systems, suspicion and paranoia are professional virtues.
+
+## Unreliable Networks
+
+The systems in this book are mostly <Term id="shared-nothing">shared-nothing</Term>: independent machines whose only means of communication is the network — even "shared" object storage is just another service reached over it. And the internet, like most datacenter Ethernet, is an **asynchronous packet network**: you can send a packet, but the network promises nothing about when it arrives, or whether it arrives at all.
+
+Send a request and wait for a response, and count the ways things can go wrong. Your request may be lost (someone unplugged a cable). It may be queued because the network or recipient is overloaded. The remote node may have crashed, or be temporarily unresponsive (a long garbage-collection pause, say). Or the node processed your request fine, and it's the *response* that got lost or delayed.
+
+<RequestFailureModes />
+
+From where you sit, every one of these looks identical: you sent something, and silence came back. The standard coping mechanism is a <Term id="timeout">timeout</Term> — give up after some interval and assume failure. But notice what a timeout does *not* tell you: whether the remote node got your request. It might still be in a queue somewhere, due to be delivered after you've given up on it.
+
+### The Limitations of TCP
+
+Network packets max out at a few kilobytes, so applications sending bigger messages mostly use TCP, which chops a stream into packets and reassembles it at the far end. (The same applies to newer transports like QUIC and SCTP.) TCP earns its "reliable" label honestly enough: it retransmits lost packets, reorders out-of-order ones, catches corruption with a checksum, and paces its sending rate so it doesn't drown the network or the receiver — the mechanism variously called congestion control, flow control, or <Term id="backpressure">backpressure</Term>. (Even "send" is indirect: writing to a socket buffers bytes in the OS, which dispatches packets as the congestion controller allows; the receiving OS buffers and acknowledges them before the remote application hears anything.)
+
+So does TCP let you stop worrying? No, and the gaps matter. If no acknowledgment arrives, TCP can't tell whether your packet or the ack was lost. It retransmits, but it can't splice a cut cable; eventually it gives up and reports an error — at which point you have no idea how much of your data the remote application processed. Even a successful acknowledgment only means the remote *kernel* received the bytes; the application may have crashed before reading them. And TCP's deduplication lives inside one connection: reconnect and resend, and you can deliver the same request twice. The lesson generalizes: if you need to know a request succeeded, nothing short of a positive response from the application itself will do.
+
+### Network Faults in Practice
+
+Surely after decades of practice we've made networks dependable? The evidence says otherwise. One study of a medium-sized datacenter counted about 12 network faults per month — half disconnecting a single machine, half an entire rack. Another found that redundant networking gear helps less than you'd hope, because much of the damage comes from human misconfiguration, which redundancy cheerfully replicates. Out in the wide area, fiber links have been taken down by cows, beavers, and sharks; humans remain reliably destructive via misconfiguration, scavenging, and sabotage.
+
+The delays are as alarming as the outages. Round-trip times of several *minutes* have been observed at high percentiles between cloud regions, and packet delays over a minute can occur inside one datacenter during a switch software upgrade gone wrong. Faults can be weirdly asymmetric, too: A can talk to B and B to C, yet A cannot reach C; one notorious network card dropped all inbound packets while sending outbound ones just fine. A link working in one direction tells you nothing about the other. And even a brief interruption can leave damage that long outlasts it.
+
+<Callout type="note" title="'Network partition' ≠ 'partitioning'">
+When a fault cuts one part of the network off from the rest, it's called a **network partition** or **netsplit**. It isn't fundamentally different from any other network interruption — and it has nothing to do with partitioning (sharding) a database, which is why this book prefers "sharding" for the latter.
+</Callout>
+
+None of this means you must *tolerate* every network fault — if your network is usually fine, showing users an error during a blip can be a sound strategy. What you can't skip is knowing how your software *reacts*. Untested error paths do arbitrarily bad things: clusters that deadlock permanently even after the network recovers, or in one documented case, a system that responded to a partition by deleting all of its data. Deliberately inducing network problems — fault injection, which closes this chapter — is the only way to find out before production does.
+
+### Fault Detection
+
+Many mechanisms need to detect dead nodes automatically: a load balancer should stop routing to a dead backend; in single-leader replication, a dead <Term id="leader">leader</Term> means a <Term id="failover">failover</Term>. Sometimes you get an explicit signal: the OS refuses TCP connections with an RST or FIN when the process crashed but the machine is up; a supervisor script can broadcast "this process died" so others skip the timeout (HBase did this); datacenter switches can be queried for link failures, if you control them; a router that knows an IP is unreachable may say so via ICMP.
+
+Every one of those signals is best-effort — the router rides the same network as everyone else, and none of this works across the internet or in a cloud where you can't touch the switches. In general, assume you may get no feedback whatsoever: retry a few times, then declare the node dead — which lands you on a delicate trade-off between false alarms and slow detection.
+
+### Timeouts and Unbounded Delays
+
+How long should the timeout be? There's no good universal answer. Too long, and you wait ages to declare a node dead while users stare at errors. Too short, and you'll declare nodes dead that merely hiccupped — and premature death sentences cost you twice. If the node is alive and mid-action (sending an email, say), another node may take over and the action happens twice. And a death declaration transfers the node's workload to its neighbors; on a system already straining, killing a slow-but-alive node can snowball into a cascading failure where every node declares every other dead and everything stops.
+
+In a fantasy network that delivered every packet within some bound *d* or not at all, with servers that always responded within time *r*, timeouts would be easy: wait 2*d* + *r*, and silence proves failure. Real asynchronous networks promise no bound — delays are **unbounded** — and most servers can't bound their response times either. Being fast *most* of the time isn't enough: one transient spike trips every aggressive timeout you've set.
+
+Where does the variability come from? Mostly queueing, the same reason commute times vary. A packet headed for a busy link waits in the switch's buffer; if the buffer is full, it's dropped and must be resent — congestion, even though nothing is broken. At the destination, if all CPU cores are busy, the OS queues the incoming request. In a virtualized environment, the whole guest OS can be paused for tens of milliseconds while another VM uses the core, arriving data buffered by the hypervisor. And TCP rate-limits the sender, queueing data before it even leaves the building. Lose a packet and TCP retransmits transparently — your application just sees the extra delay.
+
+<NetworkQueueingPoints />
+
+Queueing punishes utilization: a system with slack drains its queues instantly; one near capacity grows them explosively — so delays get wild exactly when things are busiest. Public clouds add insult: links, switches, and CPUs are shared, and a noisy neighbor can inflate your latency invisibly.
+
+The upshot: there is no "correct" timeout, only a measured one. Observe the distribution of round-trip times over a long period and many machines, then pick your trade-off. Better still, adapt continuously to observed response times and jitter, as the Phi Accrual failure detector does in Akka and Cassandra — TCP computes retransmission timeouts in the same spirit.
+
+<Callout type="example" title="TCP versus UDP">
+Latency-sensitive applications like VoIP choose UDP precisely because it does *less*: no flow control, no retransmission, hence fewer sources of variable delay (switch queues still apply). Late data is worthless data — by the time a lost packet could be retransmitted, its slot in the audio stream has passed, so the app plays a moment of silence and moves on. The retry happens at the human layer: "Sorry, you cut out — say that again?"
+</Callout>
+
+### Synchronous Versus Asynchronous Networks
+
+If unreliable networks cause this much grief, why not engineer the unreliability away in hardware? It's been done: the traditional fixed-line telephone network is exactly that. A phone call establishes a **circuit** — a fixed slice of bandwidth reserved along the entire route for the duration of the call. Classic ISDN runs at 4,000 frames per second, each call owning 16 bits in every frame, each direction: a guaranteed slot every 250 microseconds. With capacity reserved at every hop there is no queueing, so the maximum end-to-end latency is fixed — a **bounded delay**. That is what *synchronous* means applied to a network.
+
+A circuit is nothing like a TCP connection: it holds its reserved bandwidth whether you're speaking or not, while TCP packets opportunistically grab whatever is free and an idle connection consumes none. That difference answers "why not circuits everywhere": datacenter networks and the internet are optimized for **bursty traffic**. A call needs a constant bit rate, but a web request or file transfer has no inherent bandwidth requirement — you just want it done fast. A circuit forces you to guess an allocation: too low and the transfer crawls while capacity idles; too high and the circuit can't be established at all. TCP simply adapts.
+
+<Callout type="insight" title="Latency and resource utilization">
+Variable delay is what dynamic resource sharing feels like. A telephone wire carrying 10,000 circuits is **statically partitioned**: your circuit gets the same fixed bandwidth whether the wire is empty or full — predictable latency, wasted capacity. The internet shares bandwidth **dynamically** — maximal utilization, queueing as the price. CPUs present the same choice: dynamically scheduled threads sometimes wait in the run queue, but the hardware stays busy, which is also why clouds pack VMs from many customers onto one machine. Bounded latency is purchasable, with statically partitioned, mostly idle, expensive resources. Variable delay isn't a law of nature; it's a cost/benefit decision that almost everyone makes the same way.
+</Callout>
+
+Hybrids have been tried — ATM lost to Ethernet in the 1980s outside telephone switch cores; InfiniBand's link-layer flow control reduces queueing without abolishing congestion delay. Quality-of-service machinery (packet prioritization and scheduling, admission control, newer schemes like L4S) can emulate circuits or bound delay statistically. But none of it is switched on in multitenant clouds or on the public internet. There, congestion, queueing, and unbounded delays are simply the terrain — and timeouts remain an experiment, not a calculation.
+
+## Unreliable Clocks
+
+Applications lean on clocks for two distinct kinds of question. **Durations**: has this request timed out yet? what's the p99 response time? **Points in time**: when was this article published? when does this cache entry expire? Distributed systems make both treacherous. Messages take a variable, unknown time to cross the network, so "when did this happen?" gets fuzzy the moment two machines are involved. And each machine has its own physical clock — typically a quartz oscillator — running slightly fast or slow relative to everyone else's. You can discipline clocks with the **Network Time Protocol (NTP)**, which nudges a machine's clock toward time reported by a pool of servers (themselves fed by GPS receivers or similar), but that helps less than you'd hope.
+
+### Monotonic Versus Time-of-Day Clocks
+
+Modern computers carry at least two clocks that answer different questions, and confusing them causes real bugs.
+
+A **time-of-day clock** (wall-clock time) returns the current date and time — `clock_gettime(CLOCK_REALTIME)` on Linux, `System.currentTimeMillis()` in Java — usually as seconds since the epoch (midnight UTC, January 1, 1970, leap seconds not counted). These clocks are NTP-synchronized, so in principle a timestamp means the same thing on every machine. But they have a vicious quirk: if a clock has drifted too far ahead, NTP may forcibly reset it, making time *jump backward* — which makes time-of-day clocks unfit for measuring elapsed time.
+
+A **monotonic clock** — `CLOCK_MONOTONIC`, Java's `System.nanoTime()` — is built for exactly that. It moves only forward; read it before and after some work and subtract. The catch is the inverse: its absolute value is meaningless (nanoseconds since boot, perhaps), so comparing monotonic values from two machines is nonsense. NTP may *slew* a monotonic clock — tune its rate by up to 0.05% to correct quartz drift — but cannot make it jump. (One wrinkle: multi-socket servers may have a timer per CPU, with the OS papering over discrepancies — treat perfect monotonicity with mild suspicion.)
+
+<ClockTypes />
+
+The rule writes itself: durations and timeouts get the monotonic clock, which needs no cross-machine agreement and shrugs off slight inaccuracy. Points in time get the time-of-day clock — with all the caveats below.
+
+### Clock Synchronization and Accuracy
+
+Time-of-day clocks are only useful if they're set right, and our tools for that are wobblier than most engineers assume.
+
+Quartz drifts, and drifts more when the machine runs hot. Google budgets 200 parts per million for its servers — 6 ms of drift between 30-second resyncs, or 17 *seconds* per day if you only sync daily. That's the floor when everything works. Then come the failure modes: a clock too far off may refuse to sync or get forcibly reset (hello, backward jumps); a node firewalled off from its NTP servers can drift for weeks unnoticed; NTP accuracy is capped by network delay — about 35 ms achievable over the internet, spiking toward a second under congestion; and some public NTP servers are simply wrong, off by hours. Clients defend themselves by querying several servers and discarding outliers — still, betting correctness on time reported by strangers on the internet should make you a little nervous.
+
+Leap seconds deserve their own line in the indictment: a minute with 59 or 61 seconds violates assumptions in software that never considered the possibility, and leap seconds have crashed a remarkable number of large systems. The pragmatic fix is **smearing** — NTP servers lie gently, spreading the extra second over a day — though server behavior varies. (Relief is scheduled: leap seconds are abolished from 2035.) Virtualization adds a layer: when the hypervisor parks a VM for tens of milliseconds, the guest experiences time lurching forward. And on devices you don't control, abandon hope — users set phone clocks wrong on purpose, for example to cheat in games.
+
+Precision *is* achievable when someone is motivated to pay. European MiFID II regulation requires high-frequency trading firms to keep clocks within 100 microseconds of UTC so flash crashes can be reconstructed. Getting there takes GPS receivers or atomic clocks, the **Precision Time Protocol (PTP)** instead of NTP, and careful deployment and monitoring — noting that GPS jamming is a real, local phenomenon. Good time isn't impossible; it just never comes free.
+
+### Relying on Synchronized Clocks
+
+Clocks fail like networks do — occasionally, despite mostly working — but with a nastier failure mode: silence. A dead network interface announces itself; a quietly drifting clock doesn't, and software that trusts it tends to lose data without throwing a single error. If your system genuinely requires synchronized clocks, monitor clock offsets across the cluster — a node whose clock wanders too far should be declared dead and evicted before it does damage.
+
+**Timestamps for ordering events.** Here is the trap in its purest form. Two clients write to a multi-leader database: client A writes `x = 1` on node 1; the write replicates to node 3, where client B reads it and increments, writing `x = 2`. B's write is unambiguously *causally later*. Now suppose node 1's clock runs a touch fast: A's write carries timestamp 42.004 while B's, stamped by node 3, carries 42.003 — skew under 3 ms, *better* than typical NTP sync. When both writes reach node 2 and it resolves the conflict by **last write wins (LWW)** — keep the greatest timestamp, discard the rest — it keeps `x = 1` and throws away the increment. No error, no log line. The write just evaporates.
+
+<Callout type="warning" title="LWW with wall clocks silently eats writes">
+Systems like Cassandra and ScyllaDB use client-supplied time-of-day timestamps with LWW to avoid an extra read round trip. The consequences are worth memorizing: a node with a lagging clock *cannot overwrite* values written by a fast-clocked node until the skew elapses — arbitrary amounts of data dropped, silently. LWW also can't distinguish causally sequential writes from truly concurrent ones (you need version vectors for that), and equal timestamps need a tiebreaker — typically a random number, which can itself violate causality. "Most recent" is only as meaningful as the clock that defined it.
+</Callout>
+
+Could you just synchronize clocks well enough? No — NTP's accuracy is itself limited by network round-trip time, and ordering events safely needs clock error well below network delay. Unwinnable. The principled alternative is **logical clocks**: counters that track only the relative order of events — did this happen before that? — rather than seconds. (Clocks measuring actual elapsed time, both kinds above, are **physical clocks**; Chapter 10 returns to logical clocks and ID generators.)
+
+**Clock readings as confidence intervals.** A clock will happily hand you a timestamp with nanosecond resolution, but resolution isn't accuracy. Given quartz drift since the last sync, plus the NTP server's own uncertainty, plus the round trip to reach it, an honest clock reading is not a point but a *range*: "95% confident the time is between 10.3 and 10.5 seconds past the minute." If your uncertainty is ±100 ms, the microsecond digits are decoration. Most APIs hide this — `clock_gettime` returns a value with no error bars, so you can't tell whether the confidence interval spans five milliseconds or five years. The exceptions: Google's **TrueTime** (in Spanner) and Amazon's ClockBound return an explicit interval — earliest and latest possible current time.
+
+**Synchronized clocks for global snapshots.** Why bother? Snapshot isolation (Chapter 8) needs monotonically increasing transaction IDs that respect causality. On one machine, a counter does it; across many shards in many datacenters, a global counter is a coordination bottleneck — and timestamps would be the perfect distributed transaction ID, *if* you could trust them. Spanner's move: trust the *interval*. If interval A and interval B don't overlap, with A entirely before B, then A definitely happened first. To guarantee non-overlap, Spanner deliberately **waits out the length of the confidence interval** before committing a read-write transaction. Commit-wait makes uncertainty the thing worth minimizing — hence GPS receivers or atomic clocks in every Google datacenter, holding it around 7 ms. The hardware isn't the essence; the interval is. YugabyteDB can do similarly with ClockBound on AWS, and more systems are following.
+
+### Process Pauses
+
+The final source of trouble doesn't involve the network at all. Consider a single-leader-per-shard database. A node believes it's the leader. How does it know it hasn't been deposed? One scheme: a **lease** from the other nodes — a lock with an expiry. Hold a valid lease and you're the leader; renew it periodically; crash, and the lease lapses so another node takes over. The request loop practically writes itself:
+
+```java
+while (true) {
+  Request req = nextRequest();
+  // renew when fewer than 10 seconds remain
+  if (lease.expiryMillis - System.currentTimeMillis() < 10_000) {
+    lease = lease.renew();
+  }
+  if (lease.isValid()) {
+    handle(req);   // <- what if we're paused for 15 s right here?
+  }
+}
+```
+
+Two bugs hide in these few lines. First, the expiry was computed by *another machine's* clock and is compared against the local one — a few seconds of skew and the logic quietly goes wrong. Second, and more interesting: even with local monotonic time, the code assumes nothing much happens between checking `lease.isValid()` and finishing `handle(req)`. If the thread stops for 15 seconds at that arrow, the lease expires mid-pause, another node takes over, and our thread — with no way to notice it was paused — completes a write it no longer has the right to make.
+
+Fifteen seconds? Sadly plausible. The rogues' gallery: stop-the-world garbage collection (historically minutes); VM suspension and **live migration**, where execution stops while memory is copied to another host; a laptop lid closing; CPU **steal time** while the hypervisor runs someone else's VM; lock contention; synchronous disk I/O sneaking in unannounced (Java's classloader lazily loading a class mid-request — worse if the "disk" is a network block device like EBS); page faults escalating to **thrashing** (why servers often disable swap — better to kill a process than to thrash); and the humble `SIGSTOP` from an operator's stray Ctrl-Z.
+
+<LeasePauseBug />
+
+On a single machine we'd call this a race condition and reach for mutexes and atomic counters. Those tools assume shared memory, and a distributed system has none — only messages over an unreliable network. A node must assume its execution can be suspended for a long time at *any* point, while the rest of the world keeps moving — possibly holding a funeral for it — before it resumes, blissfully unaware.
+
+**Response-time guarantees.** Are unbounded pauses inevitable? No — just expensive to eliminate. **Hard real-time** systems, the kind that release your airbag, guarantee a response by a deadline no matter what: a real-time operating system with guaranteed CPU scheduling, libraries documenting worst-case execution times, restricted or banned dynamic allocation, exhaustive testing. ("Real-time" here is far stricter than the web's "real-time updates.") It constrains your tools and trades throughput for predictability — which is why it lives in safety-critical embedded devices, not data infrastructure. Server-side systems choose cheap and pausable, then must live with it.
+
+**Limiting the impact of garbage collection.** Short of real time, you can blunt the worst offender. Modern collectors (G1, ZGC, Shenandoah, Go's concurrent collector) pause only milliseconds when tuned well; Rust and Swift avoid GC altogether via lifetime tracking and reference counting; object pools and off-heap data help within a GC'd language. Two operational tricks: treat a GC pause as a brief planned outage — the node stops accepting requests, drains in-flight work, and collects while traffic routes around it; or collect only short-lived objects and restart the process on a schedule before long-lived garbage accumulates, as in a rolling upgrade. None of this eliminates pauses; all of it shrinks their blast radius.
+
+## Knowledge, Truth, and Lies
+
+Step back and the picture is unsettling. No shared memory; messages over a network that delays or drops them; clocks that can't be trusted; execution that can stop dead at any moment. A node cannot know *anything* for certain about another node — it can only infer from the messages it does or doesn't receive. It gets almost philosophical: what can we know to be true in a system whose instruments of perception are themselves unreliable?
+
+Engineering's answer is to dodge the philosophy: state your assumptions explicitly — a **system model** — and design algorithms that are provably correct *given those assumptions*. Reliable behavior is achievable on unreliable foundations; it just has to be earned, assumption by assumption.
+
+### The Majority Rules
+
+Three short horror stories. A node's outbound network fails while inbound works fine: it receives every message, answers all of them, and watches its replies vanish — until the others, hearing nothing, declare it dead. It's dragged to the graveyard protesting; nobody can hear. Second: a node *notices* its messages aren't being acknowledged and correctly diagnoses a network fault — it still gets declared dead, and knowing why doesn't help. Third: a node pauses for a minute, gets declared dead and replaced, then resumes — from its own perspective, no time has passed and it's still in charge.
+
+The moral: a node's judgment about itself cannot be trusted, through no fault of its own. So distributed algorithms refuse to let any single node decide anything important. Decisions require a <Term id="quorum">quorum</Term> — a vote among nodes, most commonly an absolute majority of more than half. If a quorum declares a node dead, it's dead by definition, however alive it feels; the outvoted node must step down. The arithmetic is the charm: three nodes tolerate one fault, five tolerate two, and — decisively — there can only ever be *one* majority at a time, so two conflicting decisions can't both win. Quorums are the foundation of the consensus algorithms in Chapter 10.
+
+### Distributed Locks and Leases
+
+Leases are how a system enforces "only one of this thing": one leader per shard (avoiding <Term id="split-brain">split-brain</Term>), one writer per file, one worker per input chunk. The stakes vary — duplicate batch work wastes money, but two leaders or two writers corrupt data. So take seriously the question: what happens when two nodes *both* believe they hold the lease?
+
+We've already met the mechanism. A client acquires a lease from a lock service (often built on a consensus algorithm), checks it's valid, and starts writing to a storage service — then pauses past its expiry. A second client legitimately acquires the lease and writes. The zombie wakes and writes too. This isn't hypothetical; HBase had exactly this bug. A pause isn't even required: a write request sent *just before* a crash can sit in the network for ages (remember those minute-long delays) and arrive at storage long after the lease changed hands. Same corruption, no pause.
+
+A **zombie** is a former leaseholder that hasn't yet learned it was deposed. You can't prevent zombies — pauses and delays are facts of life — so you must render them harmless: **fence them off**. One school shuts them down physically — cut their network, kill the VM, power off the machine — known as STONITH ("shoot the other node in the head"). It's less effective than it is dramatic: it can't catch a write already in flight, nodes can end up shooting each other in a panic, and by the time the zombie is executed, the damage may be done.
+
+The reliable fix makes *storage* the bouncer. Have the lock service hand out a **fencing token** with every grant — a number that increases with each grant. Every write must carry the writer's token, and the storage service remembers the highest token it has seen and rejects anything older. Client 1 holds token 33, pauses, expires; client 2 acquires token 34 and writes; when the zombie's token-33 write eventually arrives, storage refuses it. A new leaseholder should write immediately upon acquiring the lease — once its token is on record, every older zombie is locked out.
+
+<FencingTokens />
+
+Fencing tokens hide everywhere under other names: Chubby's sequencers, Kafka's epoch numbers, Paxos's ballot number, Raft's term number; ZooKeeper's `zxid`, etcd's revision counter, and Hazelcast's FencedLock all serve. Storage needs a way to check tokens — or, equivalently, an atomic compare-and-set-style conditional write, which S3, Azure Blob Storage, and Google Cloud Storage all offer. (If you only ever write to one such store, it could implement the lease itself and skip the lock service.) Tokens extend to replicated storage too: in a leaderless store with LWW, put the fencing token in the most significant bits of the write timestamp, and every timestamp from the new leaseholder beats every timestamp from the old one — even for writes the zombie issues *later*. A straggler replica might briefly keep a zombie write, but quorum reads and read repair prefer the higher timestamp and eventually erase it.
+
+### Byzantine Faults
+
+Fencing tokens stop a node that's wrong *by accident*; a node that wanted to cheat could simply forge a token. Everything in this book assumes nodes are **unreliable but honest**: they may be slow, dead, or out of date, but when they speak, they say what they believe. Drop that assumption — allow nodes to "lie," sending arbitrary corrupted or malicious responses, perhaps casting contradictory votes in the same election — and you have a **Byzantine fault**. Reaching agreement among nodes that may lie is the Byzantine Generals Problem, and tolerating it is a different, far more expensive discipline.
+
+<Callout type="note" title="Why 'Byzantine'?">
+The two generals problem has two armies coordinating an attack via messengers who may be captured — packets in a lossy network. Lamport's generalization puts *n* generals in the field, some of them traitors sending deceitful messages. Byzantium owes its starring role to vocabulary, not history: "byzantine" already meant convolutedly devious, and Lamport reportedly wanted a nationality nobody living would take offense at — having been advised that "The Albanian Generals Problem" was unwise.
+</Callout>
+
+Byzantine fault tolerance earns its keep in two settings. First, where hardware can be corrupted into incoherence and failure is catastrophic — radiation flipping bits in flight-control computers, which is why aerospace systems tolerate Byzantine faults. Second, systems of mutually untrusting participants with no central referee: cryptocurrencies and blockchains are, at bottom, machinery for getting parties who assume each other dishonest to agree on whether a transaction happened.
+
+For the datacenter systems in this book, you can almost always skip it. Your organization controls all the nodes; radiation is manageable at sea level; multitenant isolation is done with virtualization and access control. The protocols are expensive, and most require more than two-thirds of nodes honest — which exposes the deeper futility: deploy the same software everywhere, and a bug is a "traitor" on *every* node at once, a supermajority of liars no protocol survives. Likewise for attackers: compromise one node and you can usually compromise them all, so firewalls, authentication, and encryption remain the real defenses. Web applications do face genuinely arbitrary client behavior, but the answer is input validation and an authoritative server, not Byzantine consensus. Peer-to-peer systems, lacking any authority, are where it genuinely matters.
+
+That said, cheap defenses against *weak* forms of lying are good engineering: application-level checksums (or TLS) against corrupted packets that slip past TCP's checksum; sanity checks and size limits on inputs even behind a firewall; an NTP client consulting several servers and discarding outliers. None of this would stop an adversary. All of it stops the everyday lies of broken hardware and misconfiguration.
+
+### System Model and Reality
+
+To say an algorithm is correct, we need to pin down what world it lives in. A system model formalizes the assumptions, and they come in two menus.
+
+For timing, three options. The **synchronous model** assumes bounded network delay, bounded pauses, and bounded clock error — not zero, just never exceeding a known cap; this chapter has been one long argument that no such cap exists in practice. The **asynchronous model** assumes nothing about timing — no clock, so no timeouts — heroic but cripplingly restrictive. The realistic middle is the **partially synchronous model**: synchronous *most of the time*, with occasional excursions where delays, pauses, and clock error become arbitrarily large. That matches lived experience: networks are usually fine, or we'd never get anything done, but any timing assumption you bake in will occasionally be shattered.
+
+For node failures: **crash-stop** (a failed node never returns), **crash-recovery** (nodes crash at any moment and may return later, keeping stable disk storage but losing memory), and **Byzantine** (anything goes). Reality adds an awkward in-between: nodes that don't fail but *degrade* — a NIC dropping to dial-up speeds from a driver bug, a process spending its life in GC, worn-out SSDs with erratic latency. These **limping nodes** (also "gray failure" or "fail-slow") still answer health checks while accomplishing nothing, and they're often harder to handle than a clean crash. For practical systems, the standard-issue model is *partially synchronous with crash-recovery faults*.
+
+**Correctness, safety, and liveness.** Within a model, correctness is a list of properties. For a fencing-token generator: *uniqueness* (no token issued twice), *monotonic sequence* (if request x completed before y began, x's token is smaller), and *availability* (a requester that doesn't crash eventually gets a token). The first two are **safety** properties, the third **liveness**, and the distinction does real work. A safety violation happens at an identifiable moment and cannot be undone — the damage is permanent. A liveness property can be unsatisfied *now* yet still satisfiable later — the response hasn't arrived, but hope remains. ("Eventually" in a definition is the tell; eventual consistency is a liveness property.) The payoff: we demand safety *unconditionally* — even if every node crashes and the network burns, the algorithm must never return a wrong result — while liveness may carry conditions, like "provided a majority of nodes are up and the network eventually recovers." The partially synchronous model bakes in exactly that hope: every outage eventually ends.
+
+**Mapping models to reality.** Models are simplifications, and reality pokes holes in them. Crash-recovery assumes stable storage survives crashes — but disks get corrupted, and one firmware bug left servers unable to see their own drives after a reboot. A quorum algorithm depends on nodes remembering what they acknowledged; a node with amnesia breaks the quorum condition and with it the proof. So real implementations carry code for circumstances the theory declared impossible — even if it amounts to logging *here be dragons* and waking an operator. That's the line between computer science and software engineering — and no knock on theory: distilling chaotic reality into a small set of faults you can reason about is precisely what makes these problems solvable.
+
+### Formal Methods and Randomized Testing
+
+So you have an algorithm and a list of properties. Concurrency, partial failure, and variable delay generate an astronomical state space — how do you gain confidence the properties hold in all of it, not just the states your unit tests happened to visit?
+
+The strongest tool is **formal verification**: a mathematical proof that the algorithm satisfies its properties in every situation the model allows. Proofs don't transfer automatically to implementations, but they catch design flaws that could lurk for years until some timing coincidence springs them. A more accessible relative is **model checking**: write the algorithm's essence in a specification language — TLA+, Gallina, FizzBee — and let a tool systematically explore reachable states, checking invariants in each. Real algorithms have infinite state spaces, so the checker explores a bounded approximation and can miss bugs needing longer executions — yet the effort-to-insight ratio is excellent. CockroachDB, TiDB, and Kafka all use specifications to find bugs, and TLA+ analysis exposed a potential data-loss bug in Viewstamped Replication that originated in ambiguous prose in the original paper. The standing risk is drift: the checker verifies your *model*, and your implementation can quietly diverge unless you check conformance.
+
+Testing real code takes randomness. **Property-based testing** and **fuzzing** throw generated inputs at your system and check invariants. **Fault injection** attacks the environment instead: kill processes, unmount disks, firewall off links, pause nodes — in staging or, if you've internalized this chapter, in production, the practice Netflix's Chaos Monkey made famous as chaos engineering. Orchestrating the breakage by hand is tedious, so frameworks exist; **Jepsen**, the best known, has found critical safety bugs in a long list of widely used databases.
+
+Fault injection's weakness is reproducibility — rerun the test and the failures land differently. **Deterministic simulation testing (DST)** closes that gap: run your *actual code* through huge numbers of randomized executions in which network, I/O, clocks, and scheduling are simulated mocks, so the simulator controls the exact order of every event — and a failing run can be replayed exactly, by construction. The catch is that all nondeterminism must funnel through the simulator, enforced in one of three places: the application's architecture (FoundationDB's Flow async library has a pluggable simulated network; TigerBeetle runs all state mutations through one event loop with mock clocks), the language runtime (Rust's MadSim offers deterministic drop-ins for Tokio and common clients; FrostDB patches Go's scheduler to run goroutines sequentially), or the machine itself (Antithesis runs your containerized system under a custom hypervisor that answers every nondeterministic call deterministically). Bonus powers follow: simulated clocks let timeouts fire without waiting wall-clock time, and a simulator can fork an execution when it stumbles onto a rare branch.
+
+<Callout type="insight" title="The power of determinism">
+Every villain in this chapter — concurrency, delay, pauses, clock jumps, crashes — is a flavor of nondeterminism, so one of the most useful design moves is to *remove* it. The book keeps rediscovering this idea: event sourcing replays a deterministic log to rebuild views; workflow engines need deterministic definitions for durable execution; state machine replication keeps replicas identical by feeding each the same deterministic operations. But full determinism is slippery — hash-table iteration order and memory limits stay nondeterministic after you've mocked everything else. It's an asset you engineer for, not a default you can assume.
+</Callout>
+
+<Callout type="insight" title="Where this chapter points">
+This chapter was deliberately all problems: messages that vanish, clocks you can't compare, processes that nap through their own funerals — and the conclusion that a node alone can't be sure of anything. Two hints of the way out surfaced already: quorums make truth a majority vote, and fencing tokens make stale actors harmless. Chapter 10 builds the full machinery — consensus, total ordering, coordination services — that turns this paranoia into guarantees. And if one machine can carry your workload, not opening this Pandora's box is also a strategy: the trouble here is the price of fault tolerance and low latency, worth paying only when you need them.
+</Callout>

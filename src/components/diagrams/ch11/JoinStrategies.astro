@@ -1,0 +1,74 @@
+---
+import Diagram from '../Diagram.astro';
+---
+
+<Diagram wide caption="Two distributed join strategies: a sort-merge join shuffles both inputs so that matching keys meet at the same reducer, while a broadcast hash join copies the small table to every task so the large table never crosses the network.">
+  <svg viewBox="0 0 880 360" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="joins-title">
+    <title id="joins-title">Comparison of a sort-merge join and a broadcast hash join</title>
+
+    <!-- divider -->
+    <line x1="440" y1="20" x2="440" y2="340" stroke="var(--diagram-muted)" stroke-width="1" stroke-dasharray="4 4"/>
+
+    <!-- LEFT: sort-merge join -->
+    <text x="220" y="32" text-anchor="middle" font-size="14" font-weight="600" fill="var(--diagram-stroke)">Sort-merge join</text>
+
+    <rect x="30" y="56" width="150" height="44" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="105" y="82" text-anchor="middle" font-size="13" fill="var(--diagram-stroke)">events (large)</text>
+
+    <rect x="250" y="56" width="150" height="44" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="325" y="82" text-anchor="middle" font-size="13" fill="var(--diagram-stroke)">users (large)</text>
+
+    <line x1="105" y1="100" x2="180" y2="156" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <polygon points="173,152 186,160 176,162" fill="var(--diagram-accent)"/>
+    <line x1="325" y1="100" x2="252" y2="156" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <polygon points="256,152 246,160 259,162" fill="var(--diagram-accent)"/>
+
+    <rect x="105" y="160" width="220" height="50" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <text x="215" y="181" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-stroke)">shuffle and sort both sides</text>
+    <text x="215" y="199" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">by user_id</text>
+
+    <line x1="215" y1="210" x2="215" y2="248" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <polygon points="211,248 215,256 219,248" fill="var(--diagram-stroke)"/>
+
+    <rect x="105" y="256" width="220" height="50" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="215" y="277" text-anchor="middle" font-size="13" fill="var(--diagram-stroke)">reducers merge sorted runs;</text>
+    <text x="215" y="295" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">matching keys are adjacent</text>
+
+    <text x="215" y="334" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">every row of both tables crosses the network</text>
+
+    <!-- RIGHT: broadcast hash join -->
+    <text x="660" y="32" text-anchor="middle" font-size="14" font-weight="600" fill="var(--diagram-stroke)">Broadcast hash join</text>
+
+    <rect x="585" y="50" width="150" height="44" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <text x="660" y="76" text-anchor="middle" font-size="13" fill="var(--diagram-stroke)">lookup table (small)</text>
+
+    <line x1="610" y1="94" x2="532" y2="158" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <polygon points="536,153 526,162 539,163" fill="var(--diagram-accent)"/>
+    <line x1="660" y1="94" x2="660" y2="158" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <polygon points="656,158 660,166 664,158" fill="var(--diagram-accent)"/>
+    <line x1="710" y1="94" x2="788" y2="158" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <polygon points="781,153 794,162 781,163" fill="var(--diagram-accent)"/>
+
+    <text x="660" y="136" text-anchor="middle" font-size="12" fill="var(--diagram-accent)">copied whole to every task</text>
+
+    <g font-size="12">
+      <rect x="468" y="166" width="120" height="86" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+      <text x="528" y="188" text-anchor="middle" font-weight="600" fill="var(--diagram-stroke)">task 1</text>
+      <text x="528" y="210" text-anchor="middle" fill="var(--diagram-stroke)">events shard 1</text>
+      <text x="528" y="232" text-anchor="middle" fill="var(--diagram-muted)">+ hash table</text>
+
+      <rect x="600" y="166" width="120" height="86" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+      <text x="660" y="188" text-anchor="middle" font-weight="600" fill="var(--diagram-stroke)">task 2</text>
+      <text x="660" y="210" text-anchor="middle" fill="var(--diagram-stroke)">events shard 2</text>
+      <text x="660" y="232" text-anchor="middle" fill="var(--diagram-muted)">+ hash table</text>
+
+      <rect x="732" y="166" width="120" height="86" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+      <text x="792" y="188" text-anchor="middle" font-weight="600" fill="var(--diagram-stroke)">task 3</text>
+      <text x="792" y="210" text-anchor="middle" fill="var(--diagram-stroke)">events shard 3</text>
+      <text x="792" y="232" text-anchor="middle" fill="var(--diagram-muted)">+ hash table</text>
+    </g>
+
+    <text x="660" y="290" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">the large table stays where it is —</text>
+    <text x="660" y="308" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">no shuffle, no sort</text>
+  </svg>
+</Diagram>

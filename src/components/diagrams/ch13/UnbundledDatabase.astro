@@ -1,0 +1,73 @@
+---
+import Diagram from '../Diagram.astro';
+---
+
+<Diagram wide caption="Unbundling the database: the features inside one integrated product reappear as separate tools, stitched together by change data capture and an event log.">
+  <svg viewBox="0 0 880 340" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="unbundled-db-title">
+    <title id="unbundled-db-title">An integrated database compared with the same features unbundled into composed tools</title>
+
+    <!-- Left panel: integrated database -->
+    <rect x="20" y="46" width="330" height="270" rx="8" fill="none" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="185" y="32" text-anchor="middle" font-size="14" font-weight="600" fill="var(--diagram-stroke)">One integrated database</text>
+
+    <g fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5">
+      <rect x="44" y="66" width="282" height="40" rx="6"/>
+      <rect x="44" y="116" width="282" height="40" rx="6"/>
+      <rect x="44" y="166" width="282" height="40" rx="6"/>
+      <rect x="44" y="216" width="282" height="40" rx="6"/>
+      <rect x="44" y="266" width="282" height="40" rx="6"/>
+    </g>
+    <g font-size="13" fill="var(--diagram-stroke)" text-anchor="middle">
+      <text x="185" y="91">Tables (primary storage)</text>
+      <text x="185" y="141">Secondary indexes</text>
+      <text x="185" y="191">Materialized views</text>
+      <text x="185" y="241">Replication log</text>
+      <text x="185" y="291">Triggers / stored procedures</text>
+    </g>
+
+    <!-- divider note -->
+    <text x="378" y="180" text-anchor="middle" font-size="12" fill="var(--diagram-muted)" transform="rotate(-90 378 180)">same job, repackaged</text>
+
+    <!-- Right panel: unbundled -->
+    <text x="650" y="32" text-anchor="middle" font-size="14" font-weight="600" fill="var(--diagram-stroke)">Unbundled across tools</text>
+
+    <rect x="408" y="130" width="130" height="70" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="473" y="160" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-stroke)">OLTP database</text>
+    <text x="473" y="178" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">system of record</text>
+
+    <line x1="538" y1="165" x2="572" y2="165" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <polygon points="572,160 582,165 572,170" fill="var(--diagram-stroke)"/>
+    <text x="560" y="152" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">CDC</text>
+
+    <rect x="586" y="130" width="120" height="70" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <text x="646" y="160" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-stroke)">Event log</text>
+    <text x="646" y="178" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">ordered, durable</text>
+
+    <!-- derived systems -->
+    <g fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5">
+      <rect x="746" y="60" width="116" height="52" rx="6"/>
+      <rect x="746" y="144" width="116" height="52" rx="6"/>
+      <rect x="746" y="228" width="116" height="52" rx="6"/>
+    </g>
+    <g font-size="12" font-weight="600" fill="var(--diagram-stroke)" text-anchor="middle">
+      <text x="804" y="90">Search index</text>
+      <text x="804" y="174">Cache</text>
+      <text x="804" y="258">Warehouse</text>
+    </g>
+
+    <g stroke="var(--diagram-accent)" stroke-width="1.5">
+      <line x1="706" y1="148" x2="738" y2="94"/>
+      <line x1="706" y1="165" x2="738" y2="168"/>
+      <line x1="706" y1="184" x2="738" y2="246"/>
+    </g>
+    <g fill="var(--diagram-accent)">
+      <polygon points="735,88 746,86 740,98"/>
+      <polygon points="736,162 746,169 736,174"/>
+      <polygon points="740,240 746,252 734,250"/>
+    </g>
+
+    <text x="646" y="240" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">stream processors play the role of</text>
+    <text x="646" y="256" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">index-maintenance code, run by</text>
+    <text x="646" y="272" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">different teams on different machines</text>
+  </svg>
+</Diagram>

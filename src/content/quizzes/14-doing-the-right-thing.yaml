@@ -1,0 +1,91 @@
+questions:
+  - id: ch14-q01
+    prompt: "A bank's loan-approval model receives no ethnicity data, but its features include postal code and IP address, and the city it serves is racially segregated. What is the chapter's verdict on this design?"
+    options:
+      - "It complies with anti-discrimination law, so it is ethically sound"
+      - "It can still discriminate by race, because postal code and IP act as proxies for protected traits"
+      - "It is safe as long as the model's overall accuracy is high"
+      - "It is only a problem if the engineers intended to discriminate"
+    answerIndex: 1
+    explanation: "A model doesn't need the protected column to use the protected trait — in a segregated city, location features are strong predictors of race, so the bias rides in on a proxy. High accuracy makes it worse, not better: the model is accurately reproducing a discriminatory past. Intent is irrelevant to the harm."
+  - id: ch14-q02
+    prompt: "A rejected applicant challenges your company's ML-based tenant-screening decision in court, and the judge asks how the decision was reached. Your team responds that 'the model weighed thousands of features.' What principle does this violate?"
+    options:
+      - "Data minimization — the model used too many features"
+      - "Purpose limitation — screening was not the declared purpose"
+      - "Accountability — people cannot evade responsibility by blaming an algorithm"
+      - "Consent — the applicant never agreed to be scored"
+    answerIndex: 2
+    explanation: "The chapter's accountability point is exactly this: humans must remain answerable for automated decisions, including being able to explain them and offer recourse. Minimization and purpose limitation are data-collection principles; the failure here is that 'the algorithm decided' is being used as a responsibility shield."
+  - id: ch14-q03
+    prompt: "An employer screens job applicants by credit score. An applicant's score dropped after a medical emergency caused missed payments. What systemic problem does the chapter predict?"
+    options:
+      - "A self-reinforcing feedback loop: rejection causes poverty, which worsens the score, which causes more rejection"
+      - "Nothing systemic — the score accurately reflects payment history"
+      - "A privacy breach, since credit data is a protected trait"
+      - "Model drift, because credit scores change over time"
+    answerIndex: 0
+    explanation: "This is the chapter's canonical feedback loop: each rejection deepens the financial trouble that lowered the score, so the prediction manufactures its own confirmation. The score may be 'accurate' as a record, which is precisely what makes the loop so insidious — the harm hides behind correct-looking data."
+  - id: ch14-q04
+    prompt: "Economists studied German gas stations after they adopted algorithmic pricing. What did they find, and why does the chapter cite it?"
+    options:
+      - "Prices fell because algorithms compete more efficiently than humans"
+      - "Competition fell and prices rose — the algorithms learned to collude without any human conspiring"
+      - "Prices became more volatile but averaged the same"
+      - "Stations abandoned the algorithms because customers complained"
+    answerIndex: 1
+    explanation: "The algorithms, each independently maximizing revenue, settled into tacit collusion: less competition, higher consumer prices. The chapter cites it because the harm emerged from a feedback loop between systems — no biased data, no bad actor — showing why components must be analyzed as a whole system."
+  - id: ch14-q05
+    prompt: "A free fitness app is funded entirely by advertising. According to the chapter, what follows from that business model?"
+    options:
+      - "The app must be collecting only the data needed for its features"
+      - "Users are the customers, since they receive the service"
+      - "Advertisers are the actual customers, so tracking grows beyond feature needs to serve them — which the chapter calls surveillance"
+      - "The app is legally barred from sharing data with data brokers"
+    answerIndex: 2
+    explanation: "Whoever pays is the customer. Ad funding means tracking gets more detailed and longer-retained to build marketing profiles — serving advertisers, not the person being tracked. That inversion is exactly what makes 'surveillance' the honest word; nothing about the model limits collection to feature needs."
+  - id: ch14-q06
+    prompt: "Which of these consent flows would actually meet the GDPR's standard for valid consent?"
+    options:
+      - "A pre-ticked 'share my data with partners' box the user can untick"
+      - "A banner stating that continued use of the site constitutes agreement"
+      - "A plain-language opt-in the user can later withdraw while still using the service"
+      - "A 40-page policy the user must accept in full to create an account"
+    answerIndex: 2
+    explanation: "GDPR consent must be freely given, specific, informed, and unambiguous, and withdrawable without detriment. Pre-ticked boxes and inactivity explicitly don't count, and all-or-nothing acceptance of an unreadable policy is neither informed nor freely given — refusing must not cost the user the service."
+  - id: ch14-q07
+    prompt: "A colleague argues: 'Privacy is dead — people post their whole lives on social media anyway.' What is the chapter's rebuttal?"
+    options:
+      - "People who post publicly have legally waived their privacy rights"
+      - "Privacy is a decision right — choosing what to reveal to whom — so voluntary sharing is privacy being exercised, not abandoned"
+      - "Privacy only ever applied to medical and financial records"
+      - "Correct — modern data systems have made privacy technically impossible"
+    answerIndex: 1
+    explanation: "Privacy isn't secrecy; it's the freedom to choose what to reveal, to whom, in each situation. Someone posting vacation photos while refusing to share their health data is exercising exactly that right. Surveillance is harmful because it transfers the deciding power to the company — not because anything was secret."
+  - id: ch14-q08
+    prompt: "A startup acquires a bankrupt competitor and discovers the deal includes seven years of the defunct company's user location history. Which of the chapter's warnings does this illustrate?"
+    options:
+      - "Data as a hazardous asset: collected data outlives the collector's intentions and changes hands in ways users never anticipated"
+      - "Tail latency amplification in data pipelines"
+      - "The echo-chamber effect of recommendation systems"
+      - "The GDPR's legitimate-interest basis for processing"
+    answerIndex: 0
+    explanation: "When a company goes bankrupt, its personal data is sold as an asset — one of the chapter's examples of why data is 'toxic' or 'the new uranium.' The users consented (at best) to one company's policy, and the data has now outlived both the company and the promise. Minimization and purging are the defenses."
+  - id: ch14-q09
+    prompt: "Why does the chapter say the GDPR's purpose limitation principle collides head-on with the philosophy of big data?"
+    options:
+      - "Big data systems are too large to store purpose metadata"
+      - "Purpose limitation requires deleting data within 30 days, which breaks analytics"
+      - "Big data's strategy is to collect maximally and explore for unforeseen insights — and 'unforeseen' is the opposite of 'specified and explicit' purposes"
+      - "The GDPR bans combining more than two datasets"
+    answerIndex: 2
+    explanation: "Purpose limitation demands data be collected for specified, explicit purposes and not reused incompatibly; the big-data playbook is to hoard, join everything, and hunt for insights nobody anticipated. The tension is philosophical, not technical — which is why compliance hasn't changed the culture much."
+  - id: ch14-q10
+    prompt: "Your team is designing a smart-speaker feature and proposes keeping raw audio recordings indefinitely 'in case they're useful for future models.' What is the chapter's first-step counsel?"
+    options:
+      - "Keep the audio but encrypt it, which removes the ethical concern"
+      - "Minimize what you collect and purge data once its purpose is served — data you don't hold can't be leaked, stolen, or compelled"
+      - "Keep it as long as the privacy policy discloses the retention"
+      - "Anonymize the recordings, after which retention carries no risk"
+    answerIndex: 1
+    explanation: "The chapter's concrete starting point is minimization plus retention limits: every retained byte accumulates risk — breach, insider leak, subpoena, bankruptcy sale, a future government. Encryption and disclosure reduce some risks but the data still exists and can still be compelled; 'anonymized' data is notoriously re-identifiable."

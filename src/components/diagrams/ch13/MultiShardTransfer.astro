@@ -1,0 +1,65 @@
+---
+import Diagram from '../Diagram.astro';
+---
+
+<Diagram wide caption="A payment across three shards without atomic commit: one atomic append of the request event, deterministic processing, and request-ID deduplication at every consumer.">
+  <svg viewBox="0 0 880 360" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="multishard-transfer-title">
+    <title id="multishard-transfer-title">A multi-shard money transfer implemented with event logs and stream processors</title>
+
+    <!-- Client -->
+    <rect x="20" y="146" width="140" height="78" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="90" y="172" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-stroke)">Client</text>
+    <text x="90" y="192" text-anchor="middle" font-size="12" fill="var(--diagram-stroke)">transfer $11</text>
+    <text x="90" y="210" text-anchor="middle" font-size="12" fill="var(--diagram-accent)">request ID a1b2</text>
+
+    <line x1="160" y1="185" x2="196" y2="185" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <polygon points="196,180 206,185 196,190" fill="var(--diagram-stroke)"/>
+    <text x="183" y="172" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">append</text>
+
+    <!-- Source account log -->
+    <rect x="210" y="146" width="160" height="78" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <text x="290" y="176" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-stroke)">Source account log</text>
+    <text x="290" y="196" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">one atomic append —</text>
+    <text x="290" y="211" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">this is the atomicity</text>
+
+    <line x1="370" y1="185" x2="406" y2="185" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <polygon points="406,180 416,185 406,190" fill="var(--diagram-stroke)"/>
+
+    <!-- Source processor -->
+    <rect x="420" y="136" width="170" height="98" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="505" y="162" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-stroke)">Source processor</text>
+    <text x="505" y="182" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">dedupe by request ID</text>
+    <text x="505" y="198" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">check balance, reserve,</text>
+    <text x="505" y="214" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">emit events (same ID)</text>
+
+    <!-- Output logs -->
+    <g fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5">
+      <rect x="668" y="30" width="192" height="64" rx="6"/>
+      <rect x="668" y="150" width="192" height="64" rx="6"/>
+      <rect x="668" y="270" width="192" height="64" rx="6"/>
+    </g>
+    <g text-anchor="middle">
+      <text x="764" y="54" font-size="12" font-weight="600" fill="var(--diagram-stroke)">Source account log</text>
+      <text x="764" y="74" font-size="11" fill="var(--diagram-muted)">outgoing −$11 (ID a1b2)</text>
+      <text x="764" y="174" font-size="12" font-weight="600" fill="var(--diagram-stroke)">Destination log</text>
+      <text x="764" y="194" font-size="11" fill="var(--diagram-muted)">incoming +$10 (ID a1b2)</text>
+      <text x="764" y="294" font-size="12" font-weight="600" fill="var(--diagram-stroke)">Fees log</text>
+      <text x="764" y="314" font-size="11" fill="var(--diagram-muted)">fee +$1 (ID a1b2)</text>
+    </g>
+
+    <g stroke="var(--diagram-accent)" stroke-width="1.5">
+      <line x1="590" y1="156" x2="660" y2="70"/>
+      <line x1="590" y1="185" x2="660" y2="182"/>
+      <line x1="590" y1="214" x2="660" y2="296"/>
+    </g>
+    <g fill="var(--diagram-accent)">
+      <polygon points="656,62 668,62 660,74"/>
+      <polygon points="658,176 668,182 658,188"/>
+      <polygon points="662,288 668,300 656,296"/>
+    </g>
+
+    <text x="290" y="290" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">crash → at-least-once redelivery,</text>
+    <text x="290" y="306" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">deterministic replay emits the same events;</text>
+    <text x="290" y="322" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">downstream consumers drop duplicates by ID</text>
+  </svg>
+</Diagram>

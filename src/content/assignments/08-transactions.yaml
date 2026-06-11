@@ -1,0 +1,52 @@
+assignments:
+  - id: ch08-a01
+    title: "Pick isolation levels for a veterinary clinic chain"
+    scenario: |
+      PawPoint runs scheduling software for 200 veterinary clinics on a single PostgreSQL instance. Three workloads share the database. First, appointment booking: staff check a vet's calendar for an open slot, then insert the appointment — double-bookings have been reported twice this month. Second, a nightly job that scans all tables to produce billing reports and verify that every appointment has exactly one invoice; it takes about 40 minutes and has occasionally flagged "missing" invoices that turned out to exist. Third, a vaccine-stock counter per clinic that staff decrement when administering a dose; stock counts drift upward from reality over time, and nobody knows why. The team currently runs everything at PostgreSQL's default isolation level (read committed) and is wary of "the performance cost of serializable."
+    tasks:
+      - "Diagnose each of the three symptoms by name: which anomaly is causing double-bookings, phantom 'missing' invoices in the nightly report, and upward-drifting stock counts?"
+      - "Prescribe the cheapest adequate fix for each workload — isolation level change, query change, or both — and justify why a blanket switch to serializable everywhere isn't necessary."
+      - "The booking fix you choose may cause some transactions to abort. Explain what the application layer must do about that, and which kinds of errors it should NOT retry."
+    hints:
+      - "One of the three problems involves checking for the absence of rows before inserting."
+      - "A 40-minute scan wants a frozen view of the database, not locks."
+    modelAnswer: |
+      Double-bookings are write skew with phantoms: two booking transactions each check that a slot is free (the conflicting row doesn't exist yet), both see no conflict on their own snapshot, and both insert. The nightly report's false alarms are read skew — a 40-minute scan at read committed observes different tables at different moments, so an appointment committed mid-scan appears without its invoice. The drifting stock counter is the lost update problem: staff devices read the count, decrement in application code, and write back, clobbering concurrent decrements.
+
+      Fixes, cheapest first. Stock counter: no isolation change needed — replace the read-modify-write with an atomic operation (UPDATE stock SET count = count - 1 WHERE ...). Nightly report: run it in a repeatable read (snapshot isolation) transaction; it gets a consistent point-in-time view with no locking, and MVCC means it never blocks daytime writes. Booking: this genuinely needs serializable isolation (PostgreSQL's SSI), but only for booking transactions — isolation levels are per-transaction, so the contention-sensitive paths can stay at weaker levels. SSI is optimistic and non-blocking, so the feared performance cliff mostly shows up as occasional aborts under contention, not as 2PL-style lock queues.
+
+      Serializable bookings will sometimes abort with a serialization failure. The application must catch that specific error and retry the whole transaction, ideally with a retry cap and backoff. It should retry only transient errors (serialization failures, deadlocks, failovers) — never permanent ones like constraint violations, and never blindly after an ambiguous timeout where the commit may have succeeded, which requires deduplication instead.
+  - id: ch08-a02
+    title: "Concert ticketing under a thundering herd"
+    scenario: |
+      StageGate sells concert tickets. For a stadium show, 40,000 fans hit "buy" within two minutes of on-sale. A purchase transaction reads the count of sold seats in a section, verifies capacity isn't exceeded, inserts a ticket row, and charges the card via an external payment API inside the same database transaction. The database offers snapshot isolation by default and a serializable option based on SSI. Last on-sale, three sections oversold by dozens of seats, and a handful of fans were charged twice after timeouts. An architect proposes moving ticket allocation to a single-threaded in-memory service, "like Redis does it," while another wants to wrap the payment API and the database in XA two-phase commit.
+    tasks:
+      - "Explain precisely why sections oversold under snapshot isolation, and evaluate the two proposed fixes plus a third option (SSI) for the allocation step under this contention profile."
+      - "Explain why charging cards inside the database transaction caused double charges, and redesign the purchase flow so payment happens exactly once without XA."
+      - "Capacity per section is a multi-row invariant. Describe one way to enforce it without serializable isolation, and the downside of that approach."
+    hints:
+      - "Count-then-insert is the same shape as the on-call doctors problem."
+      - "What does an aborted transaction do to its external side effects? Nothing — and that's the problem."
+    modelAnswer: |
+      Overselling is write skew via phantoms: each purchase reads the seat count from its own snapshot, sees capacity available, and inserts a new ticket row — no transaction overwrites another, so snapshot isolation raises no error. Under 40,000 near-simultaneous buyers, SSI would be correct but bloody: optimistic concurrency aborts the second committer of every conflict, and a hot section means abort storms and retry load. The single-threaded allocator is actually well suited here — allocation transactions are tiny, the dataset fits in memory, and serial execution gives serializability with zero conflict overhead — provided each request is a single submitted operation (a stored-procedure-style command), not an interactive conversation. Sharding by section keeps it linear.
+
+      Double charges happened because the payment call is a side effect outside the database: when the transaction aborted or timed out and was retried, the charge didn't roll back with it. XA would require the payment provider to support prepare/commit — it doesn't, and an in-doubt coordinator would hold locks across the hottest table during peak sale. Better: make the flow idempotent. Reserve the seat and commit with status pending plus a unique payment-idempotency key; call the payment API with that key (providers deduplicate on it); then a second transaction marks the ticket paid. Crashes at any step retry safely because every step is idempotent or deduplicated.
+
+      Without serializable isolation, you can materialize the conflict: keep a per-section row holding seats_remaining and decrement it atomically (or SELECT ... FOR UPDATE) in every purchase, turning the multi-row invariant into single-row contention. The downside is exactly that contention — every buyer in a section serializes on one hot row, capping throughput and inflating tail latency during the rush.
+  - id: ch08-a03
+    title: "Freight ledger across shards and a message bus"
+    scenario: |
+      HaulMark runs logistics for freight carriers. Its billing system is sharded by carrier across 16 PostgreSQL nodes, and a RabbitMQ bus delivers shipment-completion events that each trigger a billing write. Two initiatives are on the table. Initiative A: 'balance transfers' that move prepaid credit between two carriers — usually on different shards — which must never create or destroy money. Initiative B: an audit found that about 0.3% of shipment events were billed twice after worker crashes, and a vendor is pitching an XA transaction manager spanning RabbitMQ and all 16 shards to guarantee exactly-once billing. The CTO asks you to design A correctly and to give a verdict on B's vendor pitch.
+    tasks:
+      - "For initiative A, explain why a cross-shard transfer can't just issue two single-shard transactions, and sketch how 2PC makes it atomic — including what each shard promises at prepare and where the commit point lives."
+      - "Describe the operational failure mode HaulMark must engineer for when running 2PC, and what infrastructure choice mitigates it."
+      - "For initiative B, argue for or against the XA vendor pitch, and propose an alternative that fixes double-billing with only single-database transactions."
+    hints:
+      - "What happens to the destination shard if the source shard commits its debit and the other node then rejects the credit?"
+      - "Re-read the in-doubt locks discussion before costing the XA option."
+    modelAnswer: |
+      Two independent transactions can break the money invariant: if the debit commits on shard 3 and the credit then fails on shard 9 (crash, constraint, lost message), credit has been destroyed — and the debit can't be retracted, because once committed it's visible to other transactions. 2PC fixes this with a coordinator: both shards execute their half under a global transaction ID; at prepare, each shard writes everything durably and verifies constraints, and a yes vote is a binding promise to commit under any circumstances — the shard surrenders its right to abort. The commit point is the coordinator durably logging its decision; after that, commit messages are retried until both shards comply. Either both halves happen or neither.
+
+      The failure mode to engineer for is the in-doubt window: a coordinator crash after prepare leaves shards holding row locks on carrier balances, unable to commit or abort, blocking other billing transactions — potentially until manual intervention if the coordinator log is lost. Mitigation: make the coordinator's decision log replicated and highly available with automatic failover (a consensus-backed coordinator, as database-internal distributed transaction systems do), and never embed it solely in one app server's local disk.
+
+      Reject the XA pitch. It buys the worst version of 2PC — a lowest-common-denominator protocol with the coordinator welded to application processes, in-doubt locks across 16 shards, and no SSI compatibility — to solve a problem that doesn't need atomic commit at all. Double-billing is an idempotence problem: give every shipment event a unique ID, keep a processed-IDs table on the relevant shard, and check-and-insert the ID inside the same single-database transaction as the billing write, acknowledging to RabbitMQ only after commit. Redeliveries then hit the ID and are dropped. Exactly-once billing, no XA.

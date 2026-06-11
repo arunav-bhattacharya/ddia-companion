@@ -1,0 +1,71 @@
+---
+import Diagram from '../Diagram.astro';
+---
+
+<Diagram wide caption="Three places the shard-routing knowledge can live: in every database node, in a dedicated routing tier, or in the client itself.">
+  <svg viewBox="0 0 880 300" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="routing-title">
+    <title id="routing-title">Three request routing approaches for sharded databases</title>
+
+    <!-- dividers -->
+    <line x1="295" y1="15" x2="295" y2="285" stroke="var(--diagram-muted)" stroke-width="1.5" stroke-dasharray="4 5"/>
+    <line x1="590" y1="15" x2="590" y2="285" stroke="var(--diagram-muted)" stroke-width="1.5" stroke-dasharray="4 5"/>
+
+    <text x="148" y="30" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-stroke)">1. Ask any node</text>
+    <text x="442" y="30" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-stroke)">2. Routing tier</text>
+    <text x="735" y="30" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-stroke)">3. Shard-aware client</text>
+
+    <!-- PANEL 1 -->
+    <rect x="98" y="50" width="100" height="34" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="148" y="72" text-anchor="middle" font-size="12" fill="var(--diagram-stroke)">client</text>
+
+    <rect x="35" y="135" width="80" height="34" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="75" y="157" text-anchor="middle" font-size="12" fill="var(--diagram-stroke)">node A</text>
+    <rect x="160" y="135" width="80" height="34" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <text x="200" y="157" text-anchor="middle" font-size="12" fill="var(--diagram-stroke)">node B</text>
+
+    <line x1="130" y1="84" x2="85" y2="128" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <polygon points="81,123 80,134 91,129" fill="var(--diagram-stroke)"/>
+    <line x1="115" y1="152" x2="152" y2="152" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <polygon points="150,147 160,152 150,157" fill="var(--diagram-accent)"/>
+
+    <text x="148" y="200" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">wrong node forwards to</text>
+    <text x="148" y="216" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">the shard&#8217;s owner and</text>
+    <text x="148" y="232" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">relays the reply back</text>
+
+    <!-- PANEL 2 -->
+    <rect x="392" y="50" width="100" height="34" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="442" y="72" text-anchor="middle" font-size="12" fill="var(--diagram-stroke)">client</text>
+
+    <rect x="382" y="120" width="120" height="34" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <text x="442" y="142" text-anchor="middle" font-size="12" fill="var(--diagram-stroke)">routing tier</text>
+
+    <rect x="330" y="190" width="80" height="34" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="370" y="212" text-anchor="middle" font-size="12" fill="var(--diagram-stroke)">node A</text>
+    <rect x="455" y="190" width="80" height="34" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="495" y="212" text-anchor="middle" font-size="12" fill="var(--diagram-stroke)">node B</text>
+
+    <line x1="442" y1="84" x2="442" y2="112" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <polygon points="437,110 442,120 447,110" fill="var(--diagram-stroke)"/>
+    <line x1="465" y1="154" x2="488" y2="182" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <polygon points="482,180 492,188 491,176" fill="var(--diagram-accent)"/>
+
+    <text x="442" y="252" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">shard-aware load balancer;</text>
+    <text x="442" y="268" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">handles no requests itself</text>
+
+    <!-- PANEL 3 -->
+    <rect x="675" y="50" width="120" height="50" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <text x="735" y="71" text-anchor="middle" font-size="12" font-weight="600" fill="var(--diagram-stroke)">client</text>
+    <text x="735" y="89" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">knows shard map</text>
+
+    <rect x="625" y="190" width="80" height="34" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="665" y="212" text-anchor="middle" font-size="12" fill="var(--diagram-stroke)">node A</text>
+    <rect x="750" y="190" width="80" height="34" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="790" y="212" text-anchor="middle" font-size="12" fill="var(--diagram-stroke)">node B</text>
+
+    <line x1="755" y1="100" x2="786" y2="182" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <polygon points="780,180 790,189 790,177" fill="var(--diagram-accent)"/>
+
+    <text x="735" y="252" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">no intermediary; client must</text>
+    <text x="735" y="268" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">track assignment changes</text>
+  </svg>
+</Diagram>

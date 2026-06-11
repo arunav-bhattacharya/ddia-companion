@@ -1,0 +1,109 @@
+questions:
+  - id: ch07-q01
+    prompt: "Your API's read traffic has grown 8x while writes and data size are flat, and the single database node is saturated by reads. According to the chapter, what's the appropriate first move?"
+    options:
+      - "Shard by primary key so reads spread across nodes"
+      - "Add read replicas — read scaling doesn't require sharding"
+      - "Shard by hash of key to avoid hot spots"
+      - "Move to a fixed-number-of-shards scheme with 1,000 shards"
+    answerIndex: 1
+    explanation: "Sharding earns its complexity only when data volume or write throughput exceeds one node. Read throughput scales with replication alone, since every replica holds all the data. Sharding here would buy partition keys, cross-shard queries, and rebalancing for a problem replicas solve cheaply."
+  - id: ch07-q02
+    prompt: "A fleet of delivery trucks reports GPS positions every second to a database sharded by key range, keyed on timestamp. What happens?"
+    options:
+      - "Writes spread evenly because each truck has a distinct timestamp"
+      - "All current writes hammer the shard owning the present time range while other shards idle"
+      - "The hash function distributes the timestamps uniformly"
+      - "Range queries become impossible because timestamps are scattered"
+    answerIndex: 1
+    explanation: "Key-range sharding keeps nearby keys together, and every truck's 'now' is nearby. The shard covering the current time range absorbs 100% of writes — a hot shard despite perfectly distributed data. Prefixing the key with truck ID spreads the writes, at the cost of one range query per truck when reading a time window."
+  - id: ch07-q03
+    prompt: "A cluster assigns keys by hash(key) % N where N is the number of nodes. You grow from 4 nodes to 5. What's the consequence?"
+    options:
+      - "Only about a fifth of the keys move to the new node"
+      - "Most keys change node assignment, forcing a near-total data reshuffle"
+      - "Nothing moves until shards are explicitly split"
+      - "The new node stays empty until existing shards exceed their size threshold"
+    answerIndex: 1
+    explanation: "Changing N changes the result of hash(key) % N for most keys, so most records must move — wildly more data motion than the 1/5 that actually needs to land on the new node. This is why systems use a fixed shard count or consistent hashing, where rebalancing moves close to the minimum."
+  - id: ch07-q04
+    prompt: "A database is pre-split into 1,200 shards across 12 nodes (100 each). A 13th node joins. How does rebalancing work in this scheme?"
+    options:
+      - "Each shard is split into 13 subranges and redistributed"
+      - "Keys are re-hashed with modulo 13 and moved individually"
+      - "A few whole shards move from each existing node to the new one; key-to-shard mapping never changes"
+      - "The new node receives only newly written keys until it catches up"
+    answerIndex: 2
+    explanation: "With many more shards than nodes, only the shard-to-node assignment changes: the new node steals roughly 8 shards from each existing node until each holds about 92. hash(key) % 1200 is untouched, so no record changes shard, and old assignments keep serving during the transfer. Re-hashing (option B) is exactly the mod-N mistake this scheme avoids."
+  - id: ch07-q05
+    prompt: "Why might a team pick hash-range sharding (shards own ranges of hash values) over a fixed number of shards?"
+    options:
+      - "Hash-range sharding makes range scans over the partition key efficient"
+      - "It avoids needing any hash function"
+      - "Fixed shard counts can't tolerate node failures"
+      - "The number of shards can grow by splitting as the dataset grows, instead of being guessed up front"
+    answerIndex: 3
+    explanation: "A fixed shard count must be chosen at creation; if the dataset grows past it, resharding is an expensive rewrite. Hash-range shards split on demand like key-range shards, so the count adapts. Option A is backwards — hashing deliberately scatters adjacent keys, so partition-key range scans are inefficient in both hash schemes."
+  - id: ch07-q06
+    prompt: "A ticketing platform sharded by hash of event ID sees one stadium concert generate 95% of all writes. Consistent hashing is already in place. Why is there still a hot spot, and what helps?"
+    options:
+      - "The hash function is too weak; switching MD5 to Murmur3 will spread the load"
+      - "All traffic for one key hashes to one shard; salt the key with random digits to split writes, accepting fan-out reads"
+      - "Consistent hashing only works when the number of shards is a power of two"
+      - "Add more nodes — consistent hashing will automatically spread the hot key across them"
+    answerIndex: 1
+    explanation: "Hashing spreads distinct keys, but one key always hashes to one place — no hash function or extra node divides a single key's traffic. Appending two random digits splits writes across 100 sibling keys on different shards; reads must then gather and merge all 100, and you need bookkeeping to track which keys are split."
+  - id: ch07-q07
+    prompt: "During an incident, one overloaded node responds slowly. The cluster's automation declares it dead and rebalances its shards away, after which two more nodes slow down and are also declared dead. What is the chapter's lesson?"
+    options:
+      - "Failure detection timeouts should be shorter so dead nodes are removed faster"
+      - "Automatic rebalancing combined with automatic failure detection can amplify overload into cascading failure; a human in the loop adds safety"
+      - "Rebalancing should always be fully automatic to react faster than humans can"
+      - "The cluster needed more shards per node to rebalance smoothly"
+    answerIndex: 1
+    explanation: "Rebalancing is itself expensive — data transfer plus rerouting — so 'helping' an overloaded cluster by rebalancing adds load, making more nodes look dead in turn. Shorter timeouts (option A) make the false-positive declarations more likely, not less. Manual or human-approved rebalancing is slower but resists the stampede."
+  - id: ch07-q08
+    prompt: "What problem do ZooKeeper or etcd solve for a sharded database's request routing?"
+    options:
+      - "They cache query results so hot keys don't overload shards"
+      - "They maintain the authoritative, consensus-protected shard-to-node mapping and notify routers when it changes"
+      - "They hash incoming keys so clients don't have to"
+      - "They replace the need for a routing tier by handling requests directly"
+    answerIndex: 1
+    explanation: "Routing needs one source of truth for who owns which shard, and that source must survive node failures without splitting into two contradictory coordinators. ZooKeeper/etcd use consensus to provide exactly that; routing tiers and shard-aware clients subscribe for updates. They never see actual data requests."
+  - id: ch07-q09
+    prompt: "Riak disseminates shard assignments via a gossip protocol instead of a consensus service. What's the trade-off?"
+    options:
+      - "Gossip is strictly more reliable but slower than consensus"
+      - "No central coordination service, but split brain is possible — parts of the cluster may disagree about shard ownership, tolerable only because Riak's consistency guarantees are weak anyway"
+      - "Gossip requires every client to maintain a full copy of the data"
+      - "Gossip prevents split brain but cannot handle node additions"
+    answerIndex: 1
+    explanation: "Gossip avoids operating a ZooKeeper-style service, but without consensus, different parts of the cluster can hold conflicting views of the same shard's ownership — split brain. A leaderless, weakly consistent store can shrug that off; a system promising stronger guarantees could not."
+  - id: ch07-q10
+    prompt: "A used-car marketplace shards listings by ID with local secondary indexes on color and make. A user searches for all red cars. What must the system do?"
+    options:
+      - "Query the one shard whose index owns the term 'red'"
+      - "Query only the shard where red cars are stored"
+      - "Scan the primary key index of every shard sequentially"
+      - "Send the query to every shard in parallel and merge the results — scatter/gather"
+    answerIndex: 3
+    explanation: "Local indexes cover only their own shard's records, and red cars can be on any shard, so without a partition key the query fans out to all shards. Even parallelized, the slowest shard sets the response time (tail latency amplification). Option A describes a global, term-partitioned index — a different design."
+  - id: ch07-q11
+    prompt: "Your analytics product has 50 shards and query volume keeps growing, but every query filters on secondary attributes with local indexes. The team proposes doubling to 100 shards to handle more queries. Why won't this work?"
+    options:
+      - "With scatter/gather, every shard processes every query, so adding shards adds storage capacity but not query throughput"
+      - "Resharding from 50 to 100 shards is impossible without consistent hashing"
+      - "Local indexes only function with fewer than 64 shards"
+      - "Doubling shards doubles tail latency exactly"
+    answerIndex: 0
+    explanation: "Each secondary-index query must visit all shards, so per-shard query load is unchanged at 100 shards — you've scaled data capacity, not query capacity. The fixes are structural: a global (term-partitioned) index so single-term queries hit one shard, or routing more queries by partition key."
+  - id: ch07-q12
+    prompt: "DynamoDB updates its global secondary indexes asynchronously after a write. What behavior should an application expect?"
+    options:
+      - "Writes fail if any index shard is unavailable"
+      - "Index reads are always consistent because DynamoDB uses distributed transactions"
+      - "A read via the global index may briefly miss a recently written record, like reading from a lagging replica"
+      - "The base table write is delayed until all index shards confirm"
+    answerIndex: 2
+    explanation: "A global index entry can live on a different shard than the record, so synchronous atomic updates would require a distributed transaction on every write. DynamoDB instead applies index updates asynchronously: writes stay fast, and the index trails reality slightly — the same staleness pattern as replication lag."

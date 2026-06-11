@@ -1,0 +1,84 @@
+---
+import Diagram from '../Diagram.astro';
+---
+
+<Diagram wide caption="Dual writes let two concurrent clients interleave differently at the database and the search index, leaving X = B in one and X = A in the other forever. With CDC, the database alone decides the order, and every follower applies the same sequence.">
+  <svg viewBox="0 0 780 330" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="dualwrite-title">
+    <title id="dualwrite-title">Race condition with dual writes versus ordered replication with change data capture</title>
+
+    <!-- Left panel: dual writes -->
+    <text x="190" y="26" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-stroke)">dual writes: a race</text>
+
+    <rect x="30" y="60" width="90" height="32" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="75" y="80" text-anchor="middle" font-size="12" fill="var(--diagram-stroke)">client 1: X=A</text>
+    <rect x="30" y="160" width="90" height="32" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="75" y="180" text-anchor="middle" font-size="12" fill="var(--diagram-stroke)">client 2: X=B</text>
+
+    <rect x="240" y="60" width="120" height="36" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="300" y="78" text-anchor="middle" font-size="12" fill="var(--diagram-stroke)">database</text>
+    <text x="300" y="91" text-anchor="middle" font-size="11" fill="var(--diagram-accent)">A then B → X=B</text>
+
+    <rect x="240" y="156" width="120" height="36" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="300" y="174" text-anchor="middle" font-size="12" fill="var(--diagram-stroke)">search index</text>
+    <text x="300" y="187" text-anchor="middle" font-size="11" fill="var(--diagram-accent)">B then A → X=A</text>
+
+    <!-- crossing arrows: each client writes to both -->
+    <line x1="120" y1="70" x2="236" y2="74" stroke="var(--diagram-stroke)" stroke-width="1.5" marker-end="url(#dw-arrow)"/>
+    <line x1="120" y1="86" x2="236" y2="170" stroke="var(--diagram-stroke)" stroke-width="1.5" marker-end="url(#dw-arrow)"/>
+    <line x1="120" y1="166" x2="236" y2="86" stroke="var(--diagram-stroke)" stroke-width="1.5" marker-end="url(#dw-arrow)"/>
+    <line x1="120" y1="182" x2="236" y2="178" stroke="var(--diagram-stroke)" stroke-width="1.5" marker-end="url(#dw-arrow)"/>
+
+    <text x="190" y="240" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">writes arrive in a different order at each system —</text>
+    <text x="190" y="256" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">permanently inconsistent, and no error was raised</text>
+
+    <!-- divider -->
+    <line x1="400" y1="40" x2="400" y2="300" stroke="var(--diagram-muted)" stroke-width="1.5" stroke-dasharray="4 5"/>
+
+    <!-- Right panel: CDC -->
+    <text x="590" y="26" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-stroke)">change data capture: one leader</text>
+
+    <rect x="420" y="52" width="86" height="30" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="463" y="71" text-anchor="middle" font-size="12" fill="var(--diagram-stroke)">client 1</text>
+    <rect x="420" y="94" width="86" height="30" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="463" y="113" text-anchor="middle" font-size="12" fill="var(--diagram-stroke)">client 2</text>
+
+    <rect x="546" y="66" width="110" height="44" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <text x="601" y="85" text-anchor="middle" font-size="12" fill="var(--diagram-stroke)">database</text>
+    <text x="601" y="100" text-anchor="middle" font-size="11" fill="var(--diagram-accent)">decides the order</text>
+
+    <line x1="506" y1="67" x2="542" y2="80" stroke="var(--diagram-stroke)" stroke-width="1.5" marker-end="url(#dw-arrow)"/>
+    <line x1="506" y1="109" x2="542" y2="96" stroke="var(--diagram-stroke)" stroke-width="1.5" marker-end="url(#dw-arrow)"/>
+
+    <!-- changelog -->
+    <line x1="601" y1="110" x2="601" y2="146" stroke="var(--diagram-accent)" stroke-width="1.5" marker-end="url(#dw-arrow-accent)"/>
+    <g>
+      <rect x="520" y="150" width="50" height="28" rx="4" fill="var(--diagram-fill)" stroke="var(--diagram-muted)" stroke-width="1.5"/>
+      <text x="545" y="169" text-anchor="middle" font-size="11" fill="var(--diagram-stroke)">X=A</text>
+      <rect x="576" y="150" width="50" height="28" rx="4" fill="var(--diagram-fill)" stroke="var(--diagram-muted)" stroke-width="1.5"/>
+      <text x="601" y="169" text-anchor="middle" font-size="11" fill="var(--diagram-stroke)">X=B</text>
+      <text x="688" y="169" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">change log</text>
+    </g>
+
+    <line x1="560" y1="182" x2="520" y2="216" stroke="var(--diagram-stroke)" stroke-width="1.5" marker-end="url(#dw-arrow)"/>
+    <line x1="601" y1="182" x2="601" y2="216" stroke="var(--diagram-stroke)" stroke-width="1.5" marker-end="url(#dw-arrow)"/>
+    <line x1="642" y1="182" x2="682" y2="216" stroke="var(--diagram-stroke)" stroke-width="1.5" marker-end="url(#dw-arrow)"/>
+
+    <rect x="442" y="220" width="106" height="32" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="495" y="240" text-anchor="middle" font-size="11" fill="var(--diagram-stroke)">search index</text>
+    <rect x="560" y="220" width="80" height="32" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="600" y="240" text-anchor="middle" font-size="11" fill="var(--diagram-stroke)">cache</text>
+    <rect x="652" y="220" width="106" height="32" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="705" y="240" text-anchor="middle" font-size="11" fill="var(--diagram-stroke)">warehouse</text>
+
+    <text x="590" y="284" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">every follower applies the same changes in the same order: all end at X=B</text>
+
+    <defs>
+      <marker id="dw-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--diagram-stroke)"/>
+      </marker>
+      <marker id="dw-arrow-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--diagram-accent)"/>
+      </marker>
+    </defs>
+  </svg>
+</Diagram>

@@ -1,0 +1,121 @@
+questions:
+  - id: ch09-q01
+    prompt: "Your service sends a payment request to a downstream node and the call times out after 5 seconds. What do you now know about the payment?"
+    options:
+      - "It failed — the timeout proves the request was never processed"
+      - "It succeeded but the node is too overloaded to confirm"
+      - "Nothing — the request may be lost, queued, processed with the response lost, or still in flight"
+      - "The network is partitioned between you and the node"
+    answerIndex: 2
+    explanation: |
+      A timeout tells you only that no response arrived in time. The request may never have arrived, may be sitting in a queue waiting to be processed after you gave up, may have been fully processed with the response lost — all indistinguishable from your side. Treating a timeout as proof of failure is exactly how duplicate payments happen on retry.
+  - id: ch09-q02
+    prompt: "You write a request to a TCP socket, the kernel reports success, and packet captures show the remote end acknowledged every byte. The connection then drops. Was your request processed?"
+    options:
+      - "Yes — TCP acknowledgments guarantee delivery to the application"
+      - "Unknown — the ack only means the remote kernel buffered the bytes; the application may have crashed before reading them"
+      - "Yes, but possibly more than once due to retransmission"
+      - "No — a dropped connection rolls back any unprocessed data"
+    answerIndex: 1
+    explanation: |
+      TCP's reliability ends at the remote OS: an acknowledgment means the kernel received and buffered the data, not that the application read or acted on it. Retransmission can't cause application-level duplicates within one connection (TCP dedupes those), and nothing 'rolls back.' Only a positive response from the application itself confirms processing.
+  - id: ch09-q03
+    prompt: "To detect failures faster, you cut your cluster's node-death timeout from 30 s to 2 s. During a traffic spike, the whole cluster collapses even though no hardware failed. What most likely happened?"
+    options:
+      - "The short timeout caused TCP to retransmit too aggressively, saturating the network"
+      - "Slow-but-alive nodes were declared dead, their load shifted to already-strained neighbors, which then also missed the 2 s deadline — a cascading failure"
+      - "The monitoring system itself could not keep up with checks every 2 seconds"
+      - "Nodes marked dead were permanently removed and the cluster ran out of capacity"
+    answerIndex: 1
+    explanation: |
+      Under load, response times balloon from queueing, so a 2 s deadline flags healthy-but-busy nodes as dead. Each false death sentence transfers that node's work to neighbors that were already struggling, pushing them over the same threshold — a self-amplifying spiral until every node has declared every other dead. Timeouts must be chosen from measured delay distributions (or adapt, like Phi Accrual), not picked for speed alone.
+  - id: ch09-q04
+    prompt: "Your datacenter network is healthy — no failed links, no broken hardware — yet round-trip times occasionally spike from 0.5 ms to 300 ms. What is the most likely cause?"
+    options:
+      - "Queueing: switch buffers, busy receiver CPUs, hypervisor pauses, and TCP backpressure all add delay that explodes near capacity"
+      - "Background NTP synchronization traffic congesting the links"
+      - "TCP checksum failures forcing repeated retransmission of corrupted packets"
+      - "DNS resolution delays on each new connection"
+    answerIndex: 0
+    explanation: |
+      Variable delay is mostly queueing, and nothing needs to be broken for queues to form: packets wait in switch buffers behind other senders, the receiving OS queues requests while CPUs are busy, hypervisors pause guests for other VMs, and TCP rate-limits the sender. Queues drain instantly with slack but grow explosively near capacity — delays are worst exactly when the system is busiest.
+  - id: ch09-q05
+    prompt: "Circuit-switched telephone networks achieve a guaranteed maximum end-to-end latency. Why don't datacenters and the internet just do the same?"
+    options:
+      - "Circuit switching cannot scale beyond a few thousand simultaneous connections"
+      - "Modern fiber is too fast for circuit reservation protocols to keep up"
+      - "Packet networks are optimized for bursty traffic: a circuit reserves fixed bandwidth that data transfers would mostly waste, while TCP grabs whatever is free"
+      - "Circuits would make latency worse because every packet must follow the same route"
+    answerIndex: 2
+    explanation: |
+      A circuit buys bounded delay by reserving bandwidth for the call's whole duration — fine for constant-bit-rate audio, wasteful for a web request that just wants to finish fast. You'd have to guess an allocation: too low and the transfer crawls beside idle capacity; too high and the circuit can't be established. Bounded latency is a cost/benefit choice — high utilization for bursty traffic wins almost everywhere, with unbounded delay as the price.
+  - id: ch09-q06
+    prompt: "A Java service measures request timeouts using System.currentTimeMillis() before and after each call. Occasionally the measured 'elapsed time' is negative. Why?"
+    options:
+      - "Integer overflow in the millisecond counter after long uptimes"
+      - "currentTimeMillis() reads the time-of-day clock, which NTP can step backward when the local clock has drifted ahead"
+      - "The JIT compiler reorders the two clock reads for performance"
+      - "Leap seconds cause the clock to tick twice for the same millisecond"
+    answerIndex: 1
+    explanation: |
+      Time-of-day clocks are NTP-disciplined, and if the local clock has drifted too far ahead, NTP forcibly resets it — time jumps backward, and an end-minus-start subtraction goes negative. Elapsed-time measurement is exactly what monotonic clocks (System.nanoTime, CLOCK_MONOTONIC) exist for: they only move forward, and NTP can only slew their rate, never make them jump.
+  - id: ch09-q07
+    prompt: "In a multi-leader database using last-write-wins with node-assigned wall-clock timestamps, client B reads client A's write and then increments it on a different node. NTP skew between nodes is under 3 ms — better than typical. What can happen?"
+    options:
+      - "Nothing — 3 ms of skew is far too small to affect correctness"
+      - "B's causally later increment gets a smaller timestamp than A's write and is silently discarded during conflict resolution"
+      - "The database detects the skew and rejects B's write with a clock error"
+      - "Both writes are kept and the application sees a merge conflict"
+    answerIndex: 1
+    explanation: |
+      If A's node runs 3 ms fast, A's write can carry timestamp 42.004 while B's later increment, stamped elsewhere, carries 42.003 — so LWW keeps A's value and the increment evaporates with no error or log line. The skew being 'small' doesn't help: safe ordering needs clock error well below network delay, which NTP can't deliver since its accuracy is itself limited by network delay. That's why ordering belongs to logical clocks.
+  - id: ch09-q08
+    prompt: "Spanner deliberately waits the full width of its TrueTime confidence interval before committing a read-write transaction. What does this waiting buy?"
+    options:
+      - "It gives replicas time to apply the write before any reader can see it"
+      - "It guarantees the commit timestamp's interval cannot overlap a later transaction's interval, so timestamp order matches causal order"
+      - "It allows NTP to resynchronize the node's clock before the timestamp is recorded"
+      - "It throttles write throughput so the commit log never falls behind"
+    answerIndex: 1
+    explanation: |
+      An honest clock reading is a range, not a point. If two intervals don't overlap, the earlier one definitely happened first — so by waiting out its own uncertainty, Spanner ensures any transaction starting afterward gets a strictly later, non-overlapping interval. That makes timestamps safe to use as causality-respecting transaction IDs. GPS and atomic clocks aren't the essence; they just shrink the interval (~7 ms) so the wait stays cheap.
+  - id: ch09-q09
+    prompt: "A worker acquires a 30-second lease, checks it's valid, then suffers a 50-second GC pause before writing to storage. Another worker has meanwhile acquired the lease and written. What actually prevents the first worker's stale write from corrupting data?"
+    options:
+      - "The lock service detects the pause and kills the worker's connection (STONITH)"
+      - "The worker re-checks the lease after the pause, sees it expired, and aborts"
+      - "Storage rejects the write because it carries a fencing token lower than the highest token storage has already seen"
+      - "TCP keepalives expire during the pause, so the write can never reach storage"
+    answerIndex: 2
+    explanation: |
+      The paused worker can't save itself: it resumes with no idea time has passed, and its write may already be in flight — STONITH can't catch a packet already sent, and a re-check just shrinks the race window without closing it. The reliable fix makes storage the bouncer: each lease grant carries an increasing fencing token, storage remembers the highest seen, and the zombie's older token is refused on arrival.
+  - id: ch09-q10
+    prompt: "A node's outbound network link silently fails: it receives every heartbeat and processes requests perfectly, but its replies vanish. A majority of the other nodes declare it dead and elect a replacement. What must this node do when it discovers this?"
+    options:
+      - "Continue serving — it knows first-hand that it is alive and functioning correctly"
+      - "Step down — truth is decided by the quorum, and a majority verdict stands even when the outvoted node is right about itself"
+      - "Contest the election by broadcasting proof that it processed recent requests"
+      - "Split the workload with the new leader until the network recovers"
+    answerIndex: 1
+    explanation: |
+      The node's self-assessment is accurate and completely irrelevant. If nodes could overrule the majority based on private knowledge, two nodes could each believe they're the rightful leader — split brain. Quorums work precisely because there can be only one majority at a time, so a single consistent decision wins; the price is that a correct-but-outvoted node must accept the verdict and step down.
+  - id: ch09-q11
+    prompt: "Your team runs a 40-node Kafka-and-databases stack inside your company's cloud account. An architect proposes adopting Byzantine fault-tolerant consensus 'for defense in depth.' What's the chapter-grounded response?"
+    options:
+      - "Agree — BFT is the only protection against compromised or buggy nodes"
+      - "Decline — BFT is expensive, and since every node runs the same software, one bug makes a supermajority of 'traitors' that no protocol survives; use checksums, input validation, and standard security instead"
+      - "Agree, but only for the consensus layer where correctness matters most"
+      - "Decline — BFT only works on networks with bounded delay, which clouds lack"
+    answerIndex: 1
+    explanation: |
+      BFT assumes traitors are a minority (typically under one-third), but uniform software deployment means a bug 'betrays' every node at once — and an attacker who compromises one node can usually compromise them all. The real defenses are firewalls, authentication, and cheap guards against weak lying: application-level checksums, input sanity checks, multiple NTP servers. BFT earns its cost in aerospace and among mutually untrusting parties, not inside one organization.
+  - id: ch09-q12
+    prompt: "A fencing-token service promises: (1) no token is ever issued twice, and (2) every non-crashed requester eventually receives a token. During a week-long network partition, requesters get no tokens at all, but no duplicates are ever issued. Which properties held?"
+    options:
+      - "Both were violated — a week without tokens is clearly a malfunction"
+      - "Safety (uniqueness) held; liveness (availability) was unsatisfied during the partition but can still be satisfied once it heals"
+      - "Liveness held; safety was violated by the prolonged unavailability"
+      - "Neither property applies during a partition, since the system model excludes them"
+    answerIndex: 1
+    explanation: |
+      Uniqueness is a safety property — a violation would happen at a definite moment and be permanent — and it held unconditionally, as safety must even when the network burns. Availability is a liveness property ('eventually' is the tell): unsatisfied now, still satisfiable later, which is exactly why liveness may carry conditions like 'provided the network eventually recovers.' This split is what lets algorithms stay correct through arbitrary outages.

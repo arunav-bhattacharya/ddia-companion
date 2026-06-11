@@ -1,0 +1,61 @@
+cards:
+  - id: ch10-f01
+    front: "What is linearizability, in one phrase?"
+    back: "A recency guarantee: the system behaves as if there were a single copy of the data and every operation were atomic. Once any client has read a new value, every read that starts afterwards must return a value at least that new."
+  - id: ch10-f02
+    front: "Linearizability vs. serializability — what's the distinction?"
+    back: "Serializability is an isolation level for multi-object transactions: equivalent to some serial order, stale reads allowed. Linearizability is a recency guarantee on single objects: no stale reads, but no multi-object protection (write skew still possible). Both together = strict serializability."
+  - id: ch10-f03
+    front: "A read overlaps an in-flight write. What may it return, and what constraint gives linearizability teeth?"
+    back: "It may return the old or new value — it's concurrent with the write. But at some instant the value atomically flips: once any read returns the new value, all later-starting reads must too. No flip-flopping back to the old value."
+  - id: ch10-f04
+    front: "Why do locks and leader election require linearizability?"
+    back: "All nodes must agree on who holds the lock or lease. If two nodes can simultaneously conclude 'I hold it,' you get split brain — two leaders accepting writes. ZooKeeper and etcd implement linearizable operations via consensus for exactly this."
+  - id: ch10-f05
+    front: "Why does enforcing a hard uniqueness constraint at write time require linearizability?"
+    back: "Registering a username is equivalent to acquiring a lock on it, which is equivalent to a CAS: set it to your user ID only if unclaimed. With two concurrent claims, exactly one must succeed and the other must see the up-to-date value — a recency requirement."
+  - id: ch10-f06
+    front: "What is a cross-channel timing dependency?"
+    back: "Information flows through a second channel that can outrun replication — e.g., a web server stores a file, then queues a 'transcode this' message; the worker reads a replica the write hasn't reached. The staleness becomes observable because the message arrived first."
+  - id: ch10-f07
+    front: "Why aren't quorum reads and writes (w + r > n) linearizable by themselves?"
+    back: "Writes arrive at replicas at different moments. A reader can get the new value from one replica, then a later reader can hit a different quorum the write hasn't reached and get the old value. Fixing it needs synchronous read repair — and a linearizable CAS needs full consensus."
+  - id: ch10-f08
+    front: "What does the CAP theorem actually say, and why is 'pick two' misleading?"
+    back: "Only that during a network partition you must choose between linearizability and availability. Partitions are a fault, not a choice — you can't 'not pick' them. Its definitions are narrow (consistency = exactly linearizability), so most real systems are neither CP nor AP."
+  - id: ch10-f09
+    front: "Why isn't the RAM in a multi-core CPU linearizable, and what does that reveal?"
+    back: "Each core has its own cache and store buffer — replicas, flushed asynchronously. CPUs drop linearizability for performance, not fault tolerance. Attiya and Welch proved linearizable operations take time proportional to network delay uncertainty — a permanent latency tax."
+  - id: ch10-f10
+    front: "How does a Lamport clock work?"
+    back: "Each node keeps a counter; a timestamp is (counter, node ID). Rule 1: increment the counter for every timestamp generated. Rule 2: on seeing a higher counter, fast-forward to match. Compare by counter, break ties by node ID — a total order consistent with causality."
+  - id: ch10-f11
+    front: "What do Lamport timestamps NOT give you?"
+    back: "Recency — they can't tell you whether a value is up to date (not linearizable). And they order concurrent events arbitrarily, with no way to detect afterwards that they were concurrent. Detecting concurrency needs vector clocks, at the cost of one counter per node."
+  - id: ch10-f12
+    front: "What is a hybrid logical clock?"
+    back: "A Lamport-style clock layered on a physical clock counting microseconds: timestamps stay near wall-clock time, fast-forward when a node sees a later timestamp, and increment on every use — so they stay monotonic even when NTP steps the clock back. CockroachDB uses one."
+  - id: ch10-f13
+    front: "How do you build a linearizable ID generator, and what does batching cost?"
+    back: "A single node atomically increments and persists a counter, replicated with single-leader replication (TiDB's timestamp oracle). Batching — persist a claim on a whole block of IDs, serve from memory — amortizes the cost; a crash skips the rest of a batch: gaps, but never duplicates or disorder."
+  - id: ch10-f14
+    front: "How does Spanner generate linearizable timestamps without a central node?"
+    back: "TrueTime returns an uncertainty interval rather than a point, and Spanner waits out the interval before treating the timestamp as assigned. A request starting after another finishes provably gets a greater timestamp — at the cost of infrastructure that keeps clock uncertainty tight."
+  - id: ch10-f15
+    front: "What are the four properties of consensus, and which is the hard one?"
+    back: "Uniform agreement (no two nodes decide differently), integrity (no changing your mind), validity (decided value was proposed), termination (every non-crashed node eventually decides). The first three are safety and easy without faults; termination — liveness despite crashes — is the hard part, and needs a majority."
+  - id: ch10-f16
+    front: "Which problems are equivalent to consensus, and what's the odd one out?"
+    back: "Single-value agreement, linearizable CAS, shared logs (total order broadcast), atomic commitment, locks/leases: solve one fault-tolerantly and you can build the rest. Fetch-and-add is the exception — losers can't learn who won if the winner crashes — so its consensus number is only 2."
+  - id: ch10-f17
+    front: "What is total order broadcast / a shared log?"
+    back: "Any node can request appends; everyone reads the same entries in the same order — appends eventually appear, entries are never lost and never change once read. It's the form of consensus real systems expose (Raft, Zab, Multi-Paxos) and the basis of state machine replication."
+  - id: ch10-f18
+    front: "How do consensus algorithms escape the 'electing a leader takes a leader' loop?"
+    back: "Require a unique leader only per epoch (term/ballot/view number), monotonically increasing. Two voting rounds — election, then a quorum ack per log entry — with overlapping quorums: any append quorum shares a node with the latest election quorum, so a deposed leader discovers its deposition."
+  - id: ch10-f19
+    front: "What are the main costs of running consensus?"
+    back: "A strict majority must be alive (3 nodes to tolerate 1 failure, 5 for 2); every write and linearizable read is a quorum round-trip; more nodes means more voters, not more throughput; and timeout tuning is delicate — too short and spurious elections thrash the cluster."
+  - id: ch10-f20
+    front: "What do coordination services like ZooKeeper and etcd provide, and what data belongs in them?"
+    back: "Locks and leases (atomic CAS), fencing tokens (zxid/revision), failure detection via sessions and ephemeral nodes, and change notifications via watches. Only small, slow-changing coordination state — leader identity, shard ownership — not application data at thousands of writes per second."

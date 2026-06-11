@@ -1,0 +1,51 @@
+---
+import Diagram from '../Diagram.astro';
+---
+
+<Diagram caption="With timestamps as partition keys, every sensor writes to the shard for the current month while older shards sit idle — a hot shard created by the key choice, not by data volume.">
+  <svg viewBox="0 0 720 320" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="hotshard-title">
+    <title id="hotshard-title">All current sensor writes converging on the shard covering the current month</title>
+
+    <!-- Writers -->
+    <g font-size="12">
+      <rect x="20" y="40" width="150" height="40" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+      <text x="95" y="65" text-anchor="middle" fill="var(--diagram-stroke)">Sensor 1 &#183; now</text>
+
+      <rect x="20" y="100" width="150" height="40" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+      <text x="95" y="125" text-anchor="middle" fill="var(--diagram-stroke)">Sensor 2 &#183; now</text>
+
+      <rect x="20" y="160" width="150" height="40" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+      <text x="95" y="185" text-anchor="middle" fill="var(--diagram-stroke)">Sensor 3 &#183; now</text>
+
+      <text x="95" y="225" text-anchor="middle" fill="var(--diagram-muted)">&#8230; thousands more,</text>
+      <text x="95" y="242" text-anchor="middle" fill="var(--diagram-muted)">all writing the current time</text>
+    </g>
+
+    <!-- Shards (key ranges = months) -->
+    <g font-size="12">
+      <rect x="460" y="30" width="230" height="52" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-muted)" stroke-width="1.5"/>
+      <text x="575" y="52" text-anchor="middle" font-weight="600" fill="var(--diagram-muted)">Shard: April 2026</text>
+      <text x="575" y="70" text-anchor="middle" fill="var(--diagram-muted)">idle</text>
+
+      <rect x="460" y="102" width="230" height="52" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-muted)" stroke-width="1.5"/>
+      <text x="575" y="124" text-anchor="middle" font-weight="600" fill="var(--diagram-muted)">Shard: May 2026</text>
+      <text x="575" y="142" text-anchor="middle" fill="var(--diagram-muted)">idle</text>
+
+      <rect x="460" y="174" width="230" height="52" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-accent)" stroke-width="2.5"/>
+      <text x="575" y="196" text-anchor="middle" font-weight="600" fill="var(--diagram-accent)">Shard: June 2026</text>
+      <text x="575" y="214" text-anchor="middle" fill="var(--diagram-accent)">100% of writes</text>
+    </g>
+
+    <!-- Arrows: all to June shard -->
+    <line x1="170" y1="60" x2="452" y2="190" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <polygon points="446,187 458,193 449,197" fill="var(--diagram-accent)"/>
+    <line x1="170" y1="120" x2="452" y2="197" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <polygon points="445,193 457,200 447,203" fill="var(--diagram-accent)"/>
+    <line x1="170" y1="180" x2="452" y2="203" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <polygon points="444,198 456,204 445,208" fill="var(--diagram-accent)"/>
+
+    <!-- Fix note -->
+    <text x="360" y="285" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">Fix: key by (sensor ID, timestamp) so concurrent writes from different</text>
+    <text x="360" y="303" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">sensors land in different shards &#8212; at the cost of one range query per sensor</text>
+  </svg>
+</Diagram>

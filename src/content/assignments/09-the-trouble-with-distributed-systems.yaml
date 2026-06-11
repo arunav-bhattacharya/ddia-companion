@@ -1,0 +1,52 @@
+assignments:
+  - id: ch09-a01
+    title: "Fence the zombie encoder"
+    scenario: |
+      You run the transcoding pipeline at StockReel, a stock-footage marketplace processing 80,000 video uploads a day. Each upload must be encoded exactly once: a fleet of 60 JVM workers acquires a per-video lease (30-second expiry, renewed every 10 seconds) from a ZooKeeper-based lock service, encodes the video, and writes the result to S3. Last month, 14 videos were corrupted by two workers writing overlapping output to the same S3 key. The incident review found GC pauses up to 45 seconds on workers under memory pressure, and one case where a worker's write, sent just before it crashed, arrived at S3 90 seconds later. An engineer proposes the fix: "have each worker re-check its lease immediately before writing, and have the lock service kill the connection of any worker that stops renewing."
+    tasks:
+      - "Walk through the exact timeline by which a 45-second GC pause defeats the proposed re-check, and explain why the 90-second delayed write defeats it even without any pause."
+      - "Design a fencing-token scheme for this pipeline: what the lock service issues, what each S3 write must carry, and what check the storage side performs. Note which S3 feature makes this implementable."
+      - "Explain why the connection-killing proposal (a STONITH variant) reduces but cannot eliminate the corruption, in one or two sentences per failure mode it misses."
+    hints:
+      - "The re-check and the write are two separate steps — what can happen between them?"
+      - "S3, Azure Blob Storage, and GCS all offer conditional (compare-and-set-style) writes."
+    modelAnswer: |
+      The re-check is a race, not a fix. A worker checks its lease, finds it valid, and then pauses for 45 seconds at the very next instruction; the lease expires 20 seconds in, another worker legitimately acquires it and writes, and the zombie resumes — with no way to know it was paused — and writes anyway. Shrinking the window between check and write never closes it. The 90-second delayed write is worse: the packet left the worker while its lease was still valid, so no re-check at any point could have helped; the network simply held the write until after the lease changed hands.
+
+      The fencing fix makes storage the gatekeeper. ZooKeeper already provides a monotonically increasing number with every lock grant (its zxid or a sequence node counter). Every S3 write carries the worker's token, and the write is issued as a conditional put that succeeds only if no object with a higher token exists for that video — implementable with S3's compare-and-set conditional writes, e.g., encoding the token in object metadata or a versioned key and using If-Match/If-None-Match semantics. The new leaseholder writes immediately on acquiring the lease; from then on, every token-33 zombie write bounces off the recorded token 34.
+
+      STONITH misses both failure modes above: it cannot recall a write already in the network (the 90-second packet is beyond reach), and the kill order itself crosses the same unreliable network — by the time the zombie is executed, its damage may already be queued for delivery.
+  - id: ch09-a02
+    title: "Vanishing status updates at TransFreight"
+    scenario: |
+      TransFreight runs a shipment-tracking platform across three regional datacenters (Rotterdam, Singapore, Dallas) using a multi-leader database that resolves conflicts by last write wins, with timestamps taken from each node's time-of-day clock. Servers sync via NTP every 64 seconds; measured offsets between datacenters drift between 10 ms and 120 ms, occasionally worse during congestion. Operations reports a recurring mystery: a warehouse scans a container as "arrived" in Singapore, a customs officer immediately updates it to "cleared" via the Dallas leader, and hours later the status has reverted to "arrived." Separately, the SRE team's latency dashboard — which computes request durations from System.currentTimeMillis() pairs — occasionally shows negative response times, and one Dallas node's clock was recently found 40 minutes off after a firewall change blocked its NTP servers for three weeks.
+    tasks:
+      - "Reconstruct the lost-update mechanism with a concrete timeline: show how a clock skew far smaller than 120 ms makes LWW discard the causally later 'cleared' write, and why no error is ever logged."
+      - "Explain the two unrelated clock bugs in the scenario (negative durations; the 40-minute drift) and prescribe a fix for each — naming which clock type each use case should rely on, and what monitoring would have caught the drifting node."
+      - "Propose two alternative designs for ordering the status updates that do not depend on synchronized wall clocks, and state the trade-off each carries."
+    hints:
+      - "B read A's write before overwriting it — what does that tell you about causality that the timestamps fail to capture?"
+      - "One alternative tracks order with counters; another makes uncertainty explicit as an interval."
+    modelAnswer: |
+      Timeline: at true time T the Singapore node, whose clock runs 30 ms fast, stamps "arrived" with timestamp 10:00:00.045. Two seconds later the customs officer, having seen that status, writes "cleared" through Dallas, whose accurate clock stamps it 10:00:02.020 — fine so far. But replication conflicts are resolved pairwise on every node, and if instead the skew ran the other way at the moment of two near-simultaneous updates (Singapore fast by 30 ms, writes 5 ms apart in real time), the causally later write carries the smaller timestamp and LWW keeps the earlier one. Nothing is logged because nothing "failed": LWW did exactly what it was configured to do — keep the largest timestamp and discard the rest.
+
+      The negative durations come from measuring elapsed time with the time-of-day clock, which NTP steps backward when a node has drifted ahead; durations belong to the monotonic clock (System.nanoTime), which only moves forward. The 40-minute drift is the silent-failure mode of clocks: a firewalled node drifts for weeks without one error. Fix: monitor clock offsets across the cluster and evict any node whose clock wanders past a threshold, treating bad time like a dead node.
+
+      Alternatives: (1) logical clocks/version vectors, which capture that "cleared" causally followed "arrived" — at the cost of detecting concurrent writes that the application must then merge; (2) interval-based timestamps à la TrueTime/ClockBound with commit-wait — strong ordering, but it requires interval-aware infrastructure and adds latency proportional to clock uncertainty.
+  - id: ch09-a03
+    title: "Timeouts and a torture chamber for BookNest's payment gateway"
+    scenario: |
+      BookNest, a hotel-booking platform, routes 2,000 payments per minute through a gateway service that calls an external card processor. The gateway uses a fixed 1-second timeout and retries up to 3 times. During a holiday surge, the processor's p99 rose from 300 ms to 2.5 s; the gateway's retries tripled traffic to the struggling processor, and 0.4% of guests were charged twice for the same booking. The processor's API acknowledges requests at the TCP level quickly but can take seconds to respond at the application level. Your CTO asks for two deliverables before next season: a defensible timeout-and-retry policy, and a testing program that would have caught both the duplicate charges and the retry-driven overload before production did.
+    tasks:
+      - "Explain precisely why retry-after-timeout caused duplicate charges, distinguishing what a TCP acknowledgment proves from what an application response proves, and why the timeout proved nothing about the first attempt's fate."
+      - "Design the timeout-and-retry policy: how the timeout should be derived (and from what data), what should replace the fixed value, and which two or three mechanisms prevent retries from amplifying overload. Include an idempotency mechanism and relate it to fencing-style reasoning."
+      - "Specify a testing program with at least three layers — name concrete techniques from the chapter — and state for each layer one specific bug from this scenario it would have caught, plus the safety or liveness property it checks."
+    hints:
+      - "A timeout is a decision to stop waiting, not evidence of failure."
+      - "Think Jepsen-style fault injection for the environment, deterministic simulation for reproducibility, and a property list to check against."
+    modelAnswer: |
+      The duplicates follow directly from what a timeout cannot tell you. When the gateway gave up after 1 second, the first charge might be lost, queued, or already processed with the response still in flight — indistinguishable cases. TCP's quick acknowledgment only proves the processor's kernel buffered the bytes, not that the application charged the card. Retrying an operation whose outcome is unknown, without idempotency, is a coin flip on double-charging — and at a 2.5 s p99, most "failed" first attempts were actually succeeding late.
+
+      Policy: derive the timeout from the measured distribution of processor response times across weeks including past surges, not from a round number — or better, adapt it continuously to observed latency and jitter, Phi-Accrual-style. Cap retries with exponential backoff and jitter, add a circuit breaker that sheds load when the processor degrades, and make every charge idempotent: the gateway attaches a unique booking-scoped idempotency key, and the processor records and deduplicates keys — the same shape as fencing tokens, where the receiving side, not the hopeful sender, enforces exactly-once effects.
+
+      Testing: (1) fault injection / chaos engineering (Jepsen-style): firewall off the processor, inject 2-second delays, kill gateway instances mid-request — would have surfaced the duplicate charge (safety: no booking is ever charged twice). (2) Deterministic simulation testing with mocked network and clocks: replay the exact schedule where a response arrives after the timeout fires — reproducibly demonstrating the duplicate, and letting timeouts fire without waiting wall-clock time. (3) Load testing with induced latency at the dependency: would have exposed the retry storm tripling traffic (liveness: every valid payment eventually completes once the processor recovers, rather than the system melting down).

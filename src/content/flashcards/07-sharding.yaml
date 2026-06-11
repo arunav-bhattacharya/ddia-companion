@@ -1,0 +1,55 @@
+cards:
+  - id: ch07-f01
+    front: "Sharding vs. replication — what does each one split or copy?"
+    back: "Replication stores a full copy of the same data on multiple nodes (fault tolerance, read scaling). Sharding splits the data so each record belongs to exactly one shard, spreading data volume and write throughput. Real systems combine both: each shard is replicated."
+  - id: ch07-f02
+    front: "When does sharding actually become necessary?"
+    back: "When data volume or write throughput exceeds what one node can handle. Read throughput alone doesn't justify it — replicas serve reads. If a single machine copes, stay single-shard: sharding adds partition keys, awkward cross-shard queries, and a scheme that's hard to change."
+  - id: ch07-f03
+    front: "What is a partition key, and why does its choice matter so much?"
+    back: "The attribute that determines which shard a record lives in; all records with the same partition key share a shard. Lookups by it are fast; lookups by anything else require searching all shards. It's also hard to change once data is loaded."
+  - id: ch07-f04
+    front: "Name three of the many terms different systems use for a shard."
+    back: "Partition (Kafka), range (CockroachDB), region (HBase, TiDB), vBucket (Couchbase), vnode (Riak), token-range (Cassandra), tablet (Bigtable, YugabyteDB, ScyllaDB). PostgreSQL distinguishes partitioning (splitting a table on one machine) from sharding (across machines)."
+  - id: ch07-f05
+    front: "Give three benefits of one-shard-per-tenant in a multitenant SaaS."
+    back: "Any of: resource isolation, permission isolation, cell-based fault isolation, per-tenant backup/restore, easy GDPR/CCPA export and deletion, data residency pinning, gradual per-tenant schema rollout. Main risks: a tenant outgrowing one node, overhead of many tiny tenants, cross-tenant queries."
+  - id: ch07-f06
+    front: "Hot shard vs. hot key — distinction?"
+    back: "A hot shard (hot spot) is a shard with disproportionately high load, defeating the even-spread goal of sharding. A hot key is a single key with extreme traffic (e.g., a celebrity's ID) — it makes whichever shard holds it hot, and no hash function can spread one key."
+  - id: ch07-f07
+    front: "Key-range sharding: main advantage and main risk?"
+    back: "Advantage: keys stay sorted within contiguous ranges, so range scans are cheap (like pulling one encyclopedia volume). Risk: writes to nearby keys — timestamps especially — all land on one shard, creating a hot spot while other shards idle."
+  - id: ch07-f08
+    front: "Why is keying sensor data by raw timestamp bad, and what's the fix?"
+    back: "Every device writes the current time, so all writes hit the shard owning 'now' (e.g., this month). Fix: prefix the key with sensor ID so concurrent writes spread across shards — at the cost of one range query per sensor when reading a time window."
+  - id: ch07-f09
+    front: "How does a key-range sharded database rebalance as data grows?"
+    back: "By splitting a shard into subranges when it exceeds a size (HBase default 10 GB) or write-rate threshold, and merging small neighbors — like a B-tree's top level. Splitting is expensive (rewrites all the shard's data) and hits a shard that's often already overloaded."
+  - id: ch07-f10
+    front: "What's wrong with assigning keys via hash(key) mod N nodes?"
+    back: "When N changes, most keys map to a different node, so adding or removing one machine reshuffles nearly the whole dataset. Good rebalancing moves as little data as possible."
+  - id: ch07-f11
+    front: "How does the fixed-number-of-shards scheme make rebalancing cheap?"
+    back: "Create many more shards than nodes (e.g., 1,000 shards, 10 nodes). hash(key) % 1000 never changes, so keys never switch shards; rebalancing just moves whole shards to the new node. Limits: you can't exceed the shard count in nodes, and resharding later is expensive."
+  - id: ch07-f12
+    front: "What two properties define a consistent hashing algorithm?"
+    back: "Keys map roughly evenly across shards, and changing the number of shards moves as few keys as possible. 'Consistent' means keys tend to stay put — nothing to do with replica or ACID consistency. Variants: Cassandra-style ranges, rendezvous hashing, jump consistent hashing."
+  - id: ch07-f13
+    front: "A perfect hash spreads keys uniformly. Why can load still be skewed, and what's the salting fix?"
+    back: "All traffic for one hot key hashes to the same shard. Appending two random digits splits its writes across 100 keys on different shards — but reads must then query all 100 and combine, and you must track which keys are split and un-split them when they cool down."
+  - id: ch07-f14
+    front: "Why can automatic rebalancing plus automatic failure detection be dangerous?"
+    back: "An overloaded node responds slowly, gets declared dead, and the cluster rebalances away from it — adding load to other nodes and the network, which then also look dead. A cascading failure built from safety mechanisms; a human in the loop prevents the stampede."
+  - id: ch07-f15
+    front: "What are the three request-routing architectures for a sharded database?"
+    back: "(1) Clients contact any node, which forwards to the shard's owner; (2) a routing tier (shard-aware load balancer, e.g., mongos) forwards every request; (3) shard-aware clients connect directly. All need an up-to-date shard-to-node map."
+  - id: ch07-f16
+    front: "What role does ZooKeeper (or etcd) play in a sharded system?"
+    back: "A consensus-backed coordination service holding the authoritative shard-to-node assignment. Nodes register; routing tiers and clients subscribe and are notified of ownership changes. Consensus provides fault tolerance and prevents split-brain coordinators."
+  - id: ch07-f17
+    front: "Local (document-partitioned) secondary index — write cost vs. read cost?"
+    back: "Each shard indexes only its own records. Writes touch one shard (cheap). Reads without the partition key must scatter/gather across every shard — prone to tail latency amplification, and query throughput stops scaling as you add shards."
+  - id: ch07-f18
+    front: "Global (term-partitioned) secondary index — what flips relative to local indexes?"
+    back: "The index is sharded by indexed value, so a single-term query reads one index shard for the whole postings list. But one record write may update several index shards, needing distributed transactions or async updates (DynamoDB — index reads can be stale)."

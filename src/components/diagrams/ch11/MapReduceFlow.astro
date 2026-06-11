@@ -1,0 +1,102 @@
+---
+import Diagram from '../Diagram.astro';
+---
+
+<Diagram wide caption="A MapReduce job: each map task writes one locally sorted file per reducer, and each reducer fetches its file from every mapper and merge-sorts them — so all values for a key arrive together.">
+  <svg viewBox="0 0 840 400" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="mrflow-title">
+    <title id="mrflow-title">MapReduce dataflow from input shards through mappers, shuffle, and reducers to output shards</title>
+
+    <!-- stage labels -->
+    <text x="66" y="30" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">input shards</text>
+    <text x="210" y="30" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">map tasks</text>
+    <text x="365" y="30" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">sorted files, one per reducer</text>
+    <text x="595" y="30" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">reduce tasks</text>
+    <text x="760" y="30" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">output shards</text>
+
+    <!-- input shards -->
+    <rect x="20" y="54" width="92" height="44" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="66" y="80" text-anchor="middle" font-size="13" fill="var(--diagram-stroke)">m1</text>
+    <rect x="20" y="164" width="92" height="44" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="66" y="190" text-anchor="middle" font-size="13" fill="var(--diagram-stroke)">m2</text>
+    <rect x="20" y="274" width="92" height="44" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="66" y="300" text-anchor="middle" font-size="13" fill="var(--diagram-stroke)">m3</text>
+
+    <!-- map tasks -->
+    <rect x="160" y="54" width="100" height="44" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="210" y="80" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-stroke)">mapper 1</text>
+    <rect x="160" y="164" width="100" height="44" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="210" y="190" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-stroke)">mapper 2</text>
+    <rect x="160" y="274" width="100" height="44" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="210" y="300" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-stroke)">mapper 3</text>
+
+    <!-- arrows input -> map -->
+    <line x1="112" y1="76" x2="152" y2="76" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <polygon points="152,72 160,76 152,80" fill="var(--diagram-stroke)"/>
+    <line x1="112" y1="186" x2="152" y2="186" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <polygon points="152,182 160,186 152,190" fill="var(--diagram-stroke)"/>
+    <line x1="112" y1="296" x2="152" y2="296" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <polygon points="152,292 160,296 152,300" fill="var(--diagram-stroke)"/>
+
+    <!-- mapper output files (one per reducer) -->
+    <g font-size="11">
+      <rect x="310" y="56" width="110" height="20" rx="4" fill="var(--diagram-fill)" stroke="var(--diagram-muted)" stroke-width="1"/>
+      <text x="365" y="70" text-anchor="middle" fill="var(--diagram-muted)">for r1 (sorted)</text>
+      <rect x="310" y="80" width="110" height="20" rx="4" fill="var(--diagram-fill)" stroke="var(--diagram-muted)" stroke-width="1"/>
+      <text x="365" y="94" text-anchor="middle" fill="var(--diagram-muted)">for r2 (sorted)</text>
+
+      <rect x="310" y="166" width="110" height="20" rx="4" fill="var(--diagram-fill)" stroke="var(--diagram-muted)" stroke-width="1"/>
+      <text x="365" y="180" text-anchor="middle" fill="var(--diagram-muted)">for r1 (sorted)</text>
+      <rect x="310" y="190" width="110" height="20" rx="4" fill="var(--diagram-fill)" stroke="var(--diagram-muted)" stroke-width="1"/>
+      <text x="365" y="204" text-anchor="middle" fill="var(--diagram-muted)">for r2 (sorted)</text>
+
+      <rect x="310" y="276" width="110" height="20" rx="4" fill="var(--diagram-fill)" stroke="var(--diagram-muted)" stroke-width="1"/>
+      <text x="365" y="290" text-anchor="middle" fill="var(--diagram-muted)">for r1 (sorted)</text>
+      <rect x="310" y="300" width="110" height="20" rx="4" fill="var(--diagram-fill)" stroke="var(--diagram-muted)" stroke-width="1"/>
+      <text x="365" y="314" text-anchor="middle" fill="var(--diagram-muted)">for r2 (sorted)</text>
+    </g>
+
+    <!-- arrows map -> files -->
+    <line x1="260" y1="76" x2="304" y2="76" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <polygon points="304,72 312,76 304,80" fill="var(--diagram-stroke)"/>
+    <line x1="260" y1="186" x2="304" y2="186" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <polygon points="304,182 312,186 304,190" fill="var(--diagram-stroke)"/>
+    <line x1="260" y1="296" x2="304" y2="296" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <polygon points="304,292 312,296 304,300" fill="var(--diagram-stroke)"/>
+
+    <!-- shuffle lines to reducer 1 -->
+    <line x1="420" y1="66" x2="534" y2="122" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <polygon points="528,118 540,125 530,128" fill="var(--diagram-accent)"/>
+    <line x1="420" y1="176" x2="534" y2="132" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <polygon points="529,128 540,130 531,138" fill="var(--diagram-accent)"/>
+    <line x1="420" y1="286" x2="534" y2="142" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <polygon points="527,141 540,138 532,150" fill="var(--diagram-accent)"/>
+
+    <!-- shuffle lines to reducer 2 -->
+    <line x1="420" y1="90" x2="534" y2="258" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <polygon points="527,250 540,261 530,263" fill="var(--diagram-accent)"/>
+    <line x1="420" y1="200" x2="534" y2="266" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <polygon points="528,260 540,269 530,271" fill="var(--diagram-accent)"/>
+    <line x1="420" y1="310" x2="534" y2="276" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <polygon points="528,272 540,272 532,282" fill="var(--diagram-accent)"/>
+
+    <text x="478" y="386" text-anchor="middle" font-size="12" fill="var(--diagram-accent)">shuffle: reducers fetch and merge-sort their files</text>
+
+    <!-- reducers -->
+    <rect x="540" y="105" width="110" height="50" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <text x="595" y="135" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-stroke)">reducer 1</text>
+    <rect x="540" y="245" width="110" height="50" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <text x="595" y="275" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-stroke)">reducer 2</text>
+
+    <!-- arrows reducer -> output -->
+    <line x1="650" y1="130" x2="700" y2="130" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <polygon points="700,126 708,130 700,134" fill="var(--diagram-stroke)"/>
+    <line x1="650" y1="270" x2="700" y2="270" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <polygon points="700,266 708,270 700,274" fill="var(--diagram-stroke)"/>
+
+    <!-- output shards -->
+    <rect x="708" y="108" width="100" height="44" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="758" y="134" text-anchor="middle" font-size="13" fill="var(--diagram-stroke)">r1</text>
+    <rect x="708" y="248" width="100" height="44" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="758" y="274" text-anchor="middle" font-size="13" fill="var(--diagram-stroke)">r2</text>
+  </svg>
+</Diagram>

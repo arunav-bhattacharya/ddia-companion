@@ -1,0 +1,61 @@
+---
+import Diagram from '../Diagram.astro';
+---
+
+<Diagram caption="A dataflow engine plans the whole workflow as one DAG: adjacent operators that keep the same sharding are fused into a single task, and data crosses the network only at the join and group-by boundaries.">
+  <svg viewBox="0 0 760 320" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="opdag-title">
+    <title id="opdag-title">Operator DAG in a dataflow engine with fused operators and shuffle boundaries</title>
+
+    <!-- fused group outline -->
+    <rect x="152" y="18" width="270" height="68" rx="8" fill="none" stroke="var(--diagram-muted)" stroke-width="1.5" stroke-dasharray="6 4"/>
+    <text x="287" y="108" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">fused into one task: no data copied between operators</text>
+
+    <!-- top branch -->
+    <rect x="20" y="30" width="110" height="44" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="75" y="56" text-anchor="middle" font-size="13" fill="var(--diagram-stroke)">read events</text>
+
+    <rect x="166" y="30" width="100" height="44" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="216" y="56" text-anchor="middle" font-size="13" fill="var(--diagram-stroke)">filter bots</text>
+
+    <rect x="300" y="30" width="110" height="44" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="355" y="51" text-anchor="middle" font-size="13" fill="var(--diagram-stroke)">key by</text>
+    <text x="355" y="67" text-anchor="middle" font-size="13" fill="var(--diagram-stroke)">user_id</text>
+
+    <line x1="130" y1="52" x2="158" y2="52" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <polygon points="158,48 166,52 158,56" fill="var(--diagram-stroke)"/>
+    <line x1="266" y1="52" x2="292" y2="52" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <polygon points="292,48 300,52 292,56" fill="var(--diagram-stroke)"/>
+
+    <!-- bottom branch -->
+    <rect x="20" y="210" width="110" height="44" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="75" y="236" text-anchor="middle" font-size="13" fill="var(--diagram-stroke)">read users</text>
+
+    <rect x="166" y="210" width="110" height="44" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="221" y="231" text-anchor="middle" font-size="13" fill="var(--diagram-stroke)">key by</text>
+    <text x="221" y="247" text-anchor="middle" font-size="13" fill="var(--diagram-stroke)">user_id</text>
+
+    <line x1="130" y1="232" x2="158" y2="232" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <polygon points="158,228 166,232 158,236" fill="var(--diagram-stroke)"/>
+
+    <!-- shuffle edges into join -->
+    <line x1="410" y1="60" x2="492" y2="126" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <polygon points="485,122 498,131 487,132" fill="var(--diagram-accent)"/>
+    <line x1="276" y1="232" x2="492" y2="160" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <polygon points="485,156 498,156 488,166" fill="var(--diagram-accent)"/>
+    <text x="420" y="190" text-anchor="middle" font-size="12" fill="var(--diagram-accent)">shuffle</text>
+    <text x="420" y="206" text-anchor="middle" font-size="12" fill="var(--diagram-accent)">(only where the key changes)</text>
+
+    <!-- join -->
+    <rect x="498" y="118" width="110" height="50" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <text x="553" y="139" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-stroke)">join on</text>
+    <text x="553" y="156" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-stroke)">user_id</text>
+
+    <!-- group by -->
+    <rect x="640" y="118" width="100" height="50" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="690" y="139" text-anchor="middle" font-size="13" fill="var(--diagram-stroke)">group by</text>
+    <text x="690" y="156" text-anchor="middle" font-size="13" fill="var(--diagram-stroke)">url, count</text>
+
+    <line x1="608" y1="143" x2="632" y2="143" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <polygon points="632,139 640,143 632,147" fill="var(--diagram-stroke)"/>
+  </svg>
+</Diagram>

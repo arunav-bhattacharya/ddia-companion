@@ -1,0 +1,52 @@
+assignments:
+  - id: ch14-a01
+    title: "Telematics pricing without an algorithmic prison"
+    scenario: |
+      You're the data lead at MotorMutual, a mid-size auto insurer launching usage-based pricing. A telematics device records each policyholder's braking, acceleration, speed, time of day, and GPS location. The actuarial team's first model cuts claimed losses by 12% in backtesting — but it leans heavily on two features: share of driving after 11pm and home postal code. Your city is strongly segregated by income and race, and many night drivers are shift workers in lower-paid jobs. Marketing wants to advertise "fair, data-driven prices based on how YOU drive." A separate proposal on the table: deny renewal entirely to the riskiest 2% as scored by the model.
+    tasks:
+      - "Evaluate the model's two strongest features against the chapter's discussion of protected traits and proxies. Is 'based on how YOU drive' an accurate description of this model?"
+      - "Analyze the non-renewal proposal: what feedback loop and exclusion effects could it create for the people it scores as risky, and what would meaningful recourse look like?"
+      - "Propose three concrete changes (features, process, or governance) that keep most of the loss-reduction benefit while reducing the discrimination and accountability risks."
+    hints:
+      - "A credit score asks what you did; predictive analytics asks who you resemble. Which features measure behavior, and which measure circumstance?"
+      - "Who can the rejected 2% appeal to, and what would they even be appealing against?"
+    modelAnswer: |
+      Postal code is the textbook proxy: in a segregated city it predicts race and class, so pricing on it imports historical discrimination while looking mathematically neutral — money laundering for bias. Night driving is subtler: it does describe behavior, but it's really a proxy for being a shift worker, i.e., for income. So "based on how YOU drive" is partly false advertising: the model substantially prices who you resemble and where you live, not what you did behind the wheel.
+
+      The non-renewal proposal risks an algorithmic prison. Insurance is close to mandatory for participation in working life; if competitors train on similar data, the same 2% get refused everywhere, with no proof of individual fault and no appeal. There's a feedback loop too: losing affordable insurance pushes people toward worse jobs and neighborhoods, which worsens exactly the features the model penalizes. Recourse requires a human-reviewable explanation of the decision, a channel to correct erroneous data, and a person who is accountable — "the model scored you" cannot be the final answer.
+
+      Concrete changes: (1) restrict the model to genuinely behavioral features (braking harshness, following distance, speeding events) and drop postal code; test whether remaining features proxy for protected traits. (2) Replace automated non-renewal with human review plus a path to improve — e.g., a probation period with coaching, so the prediction doesn't become self-fulfilling. (3) Govern it: document purpose, run disparate-impact audits each retraining cycle, and minimize retention — keep derived risk features, purge raw GPS traces once scored, since location history is hazardous material the company doesn't need to hold.
+  - id: ch14-a02
+    title: "The loyalty-card data your CFO wants to sell"
+    scenario: |
+      GreenBasket, a regional supermarket chain, has 1.4 million loyalty-card members. Eight years of itemized purchase history sit in the warehouse, joined with store visits and the mobile app's location pings. The program's signup screen says data is used "to personalize your offers." Facing a tight quarter, the CFO proposes selling the dataset to a data broker, who will resell it to insurers and lenders; the deal is worth a year of the analytics team's budget. Legal notes that some members are in jurisdictions with GDPR-style laws, and an analyst points out the basket data can reveal pregnancies, medical conditions (from over-the-counter purchases), alcohol consumption, and religious observance.
+    tasks:
+      - "Assess the proposed sale against purpose limitation and the consent members actually gave. Does 'personalize your offers' cover resale to insurers?"
+      - "Explain, using the chapter's privacy-as-decision-right framing, what members lose if the sale proceeds — even members who are never individually re-identified."
+      - "Design a data-retention and minimization policy for the loyalty program that protects members while preserving the personalization features they signed up for."
+    hints:
+      - "Whose decision is it what a basket reveals about a person — the shopper's or the company's?"
+      - "How much history does a 'people who bought X' recommender actually need?"
+    modelAnswer: |
+      The sale fails purpose limitation outright: data collected "to personalize your offers" would be processed for an incompatible purpose — risk-scoring by insurers and lenders. The consent was never meaningful for this use: no member reading that signup screen could foresee their antacid and wine purchases influencing a loan decision. Under GDPR-style law the processing basis collapses; ethically it collapses everywhere.
+
+      Privacy is the right to decide what to reveal to whom. A shopper revealed their purchases to a supermarket for coupons — a specific disclosure decision. Selling the data transfers that decision right to GreenBasket and then to a broker, who exercises it for profit. Even if no individual is re-identified, members lose agency: someone else now decides that "households likely pregnant" or "frequent alcohol buyers" are categories worth disclosing to insurers. The intimate inference, not the name, is the harm — and the data may also describe non-members (family members on shared cards) who never agreed to anything.
+
+      Policy: collect only what personalization needs — drop continuous location pings (store-visit timestamps suffice). Retain itemized history 12–18 months, long enough for seasonal recommendations, then purge raw rows, keeping only coarse aggregates. Exclude sensitive inference categories (pregnancy, health, religion) from profiles entirely. Publish the retention schedule in plain language, make deletion a one-tap action, and put the rule in writing: member data is never sold or shared for decisions about credit, insurance, or employment. Data you no longer hold can't be breached, subpoenaed, or sold in a bad quarter — including by whoever owns GreenBasket next.
+  - id: ch14-a03
+    title: "A hiring model trained on yesterday's warehouse"
+    scenario: |
+      SwiftHaul, a logistics company hiring 8,000 warehouse workers a year, wants to replace its overwhelmed recruiters with an ML screen. The training data is ten years of applications labeled with "hired and stayed 12+ months." The historical workforce skews heavily male, and past managers had wide discretion in hiring. The vendor's model ingests resumes plus commute distance, employment gaps, and — optionally — a credit check. It outputs a 0–100 score; the plan is to auto-reject everyone below 40 with a templated email. The vendor calls the model "objective, bias-free screening, validated at 87% accuracy."
+    tasks:
+      - "Identify the specific mechanisms by which this model could learn and amplify discrimination, despite containing no protected-trait features."
+      - "Critique the vendor's 'objective, bias-free, 87% accurate' claim using the chapter's arguments about what predictive systems actually learn and what accuracy means for individuals."
+      - "Specify the accountability machinery you would require before deployment: explanation, appeal, monitoring, and the decision rights humans must retain."
+    hints:
+      - "What does the label 'hired and stayed' actually measure — applicant quality, or past managers' preferences?"
+      - "Employment gaps and credit records correlate with what life circumstances?"
+    modelAnswer: |
+      The label is the core problem: "hired and stayed 12+ months" encodes ten years of managers' discretionary choices, so the model learns who managers used to pick — a male-skewed pattern — not who performs well. Proxies do the rest: resume signals (women's colleges, gendered first names in references), employment gaps (childcare, illness), commute distance (residential segregation), and credit checks (poverty, medical debt) all correlate with protected traits. The model can be scrupulously blind to gender and race while reconstructing both. The credit check adds the chapter's feedback loop: people in financial trouble get auto-rejected, deepening the trouble.
+
+      "Objective" here means only that the bias is consistent: extrapolating a discriminatory past codifies it, with the discrimination laundered through math. And 87% accuracy is an aggregate — predictions are probabilistic, so a statistically decent model is still confidently wrong about thousands of individual applicants a year, and auto-rejection at scale means those errors fall on people with no recourse. At 8,000 hires a year, a 13% error rate isn't a footnote; it's a small town.
+
+      Before deployment: per-decision explanations a recruiter can read; a human review path for every auto-rejection, with the appeal going to a named accountable owner, not the vendor; disparate-impact monitoring by gender, age, and ethnicity proxies every quarter, with deployment halted on regression; the credit check removed — it is a proxy stack with no demonstrated job relevance; and the threshold decision retained by humans: the model may rank and flag, but a person signs every "no." If the vendor can't support this machinery, the honest conclusion is that the system isn't ready to make decisions about people's livelihoods.

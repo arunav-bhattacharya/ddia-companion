@@ -1,0 +1,58 @@
+assignments:
+  - id: ch10-a01
+    title: "Stop double-selling stadium seats"
+    scenario: |
+      SeatStorm sells tickets for a 62,000-seat stadium. For a major final, the whole venue sells out in about four minutes — peak load around 9,000 seat-claim requests per second. The current system stores seat ownership in a leaderless store across three regions with n = 3, w = 2, r = 2, resolving conflicts by last-write-wins on wall-clock timestamps. After the last on-sale, 143 seats were sold to two buyers each, and support spent a week issuing refunds.
+
+      The team's first proposal is to raise the quorum to w = 3, r = 3. The CTO wants to know whether that actually fixes double-selling, and if not, what would.
+    tasks:
+      - "Explain precisely why the current design double-sells seats, and why raising the quorum to w = 3, r = 3 still doesn't make seat claims safe."
+      - "Design a claim mechanism that guarantees one buyer per seat, naming the primitive it relies on and what provides it fault-tolerantly."
+      - "The stadium map page shows live seat availability to ~500,000 browsing users. Decide what consistency this read path needs and how to serve it without melting the consensus cluster."
+    hints:
+      - "Claiming a seat is morally identical to registering a username — what operation is that equivalent to?"
+      - "Reads that may be slightly stale are much cheaper than reads that may not be."
+    modelAnswer: |
+      Double-selling has two causes. Last-write-wins resolves two concurrent claims by wall-clock timestamp, silently discarding one write — both buyers got a success response, but only one survives, and clock skew means the 'winner' isn't even necessarily first. And quorums don't help: even with w = 3, r = 3, two concurrent claim attempts both read 'available' before either write lands, then both write. A seat claim is a uniqueness constraint, which is a compare-and-set — set owner to buyer X only if currently empty — and a linearizable, fault-tolerant CAS cannot be built from quorum reads and writes at all; it requires consensus.
+
+      The fix: route claims through a consensus-backed mechanism. Either claim seats via linearizable CAS in a coordination service (etcd transactions), or — cleaner at this scale — append claim requests tagged with seat numbers to a replicated shared log (Raft); the first entry per seat wins, every replica applying the log in order agrees on the winner, and the log handles the four-minute stampede as sequential appends. Sharding the log by seat block keeps throughput comfortable, since linearizability is per-object.
+
+      The map page needs no linearizability — a seat showing available for an extra second just means a friendly 'already taken' at claim time, because the CAS is the actual gatekeeper. Serve it from read replicas or caches fed asynchronously from the log (ZooKeeper-style observers are this pattern: they receive the log but don't vote), refreshed every second or two. That keeps half a million browsers off the quorum path entirely.
+  - id: ch10-a02
+    title: "Ordering events across a freight network"
+    scenario: |
+      HaulLine runs freight logistics across three regions (US, EU, Singapore), emitting about 25,000 tracking events per second into a per-shipment audit timeline: pickup scanned, customs cleared, handed to carrier, delivered. Each region currently assigns event IDs from its own wall-clock-prefixed generator (Snowflake-style). Auditors keep flagging impossible timelines — containers 'delivered' before they cleared customs — traced to clock skew of up to 40 ms between regions.
+
+      Separately, the compliance team has a stricter flow: when an exporter's license is suspended in the compliance database, any shipment release recorded afterwards in the operations database must provably carry a later ID. Last quarter a release got a lower ID than the suspension that preceded it, and the regulator noticed.
+    tasks:
+      - "Explain why Snowflake-style IDs misorder the audit timeline, and propose a cheap scheme that keeps causally related scan events in order without any central service. State what the scheme still cannot guarantee."
+      - "Explain why the compliance incident happened even though both databases used logical clocks, and what property the suspension-then-release flow actually requires."
+      - "Compare two designs for compliance-grade IDs — a single timestamp oracle vs. Spanner-style commit-wait — under HaulLine's 3-region, 25k events/sec reality."
+    hints:
+      - "Which clock property survives an NTP step backwards?"
+      - "The two databases never read from each other — what does that do to a logical clock's counter?"
+    modelAnswer: |
+      Snowflake IDs order events only as well as the clocks behind them: 40 ms of skew is plenty to stamp 'delivered' before 'customs cleared' when consecutive scans happen in different regions seconds apart. A hybrid logical clock fixes the causal cases cheaply: timestamps track physical time but fast-forward whenever a node sees a later timestamp, and increment on every use, so they stay monotonic even when NTP steps a clock back. Since each scan event arrives carrying the shipment's previous timestamp, every causally downstream event gets a higher HLC value — no central service, and timestamps stay close enough to wall-clock for 'what happened Tuesday' queries. What HLCs cannot do is order events between nodes that never communicated, and they can never tell you a value is current: causal, not linearizable.
+
+      That uncovered case is exactly the compliance bug — the photo-privacy problem in a customs uniform. The operations database never reads from the compliance database, so its counter can run behind, handing the later release a lower timestamp. Suspension-then-release is sequential in real time across two systems, which is precisely the gap between causal ordering and linearizability: the flow needs a linearizable ID generator.
+
+      A timestamp oracle (TiDB-style) is the pragmatic pick: one replicated counter, batching block claims so 25k/sec is trivial — accepting one cross-region round-trip on compliance-relevant writes and gaps after failover (harmless for ordering). Spanner-style commit-wait avoids the central hop but requires TrueTime-class clock infrastructure to keep uncertainty intervals short. Sensible split: HLCs for the bulk tracking firehose, the oracle only for the low-volume compliance path.
+  - id: ch10-a03
+    title: "Retiring a homegrown leader election in a hospital pipeline"
+    scenario: |
+      MedRelay processes lab results for 200 hospitals. A fleet of 40 ingest workers must have exactly one 'router' instance assigning incoming results to per-hospital queues; duplicate routing creates duplicate patient records downstream. Leadership today is a Redis key set with SETNX and a 10-second TTL, refreshed every 3 seconds by the leader.
+
+      Last month a 24-second JVM garbage-collection pause hit the leader. Its key expired, a second worker took over, and when the first woke it kept routing for 11 more seconds — believing it was 4 seconds into a valid lease. Two routers ran concurrently, and 3,100 duplicate records reached hospital systems. The team proposes shortening the TTL to 3 seconds. You've been asked to review.
+    tasks:
+      - "Explain why the GC-pause incident is inherent to the lease-with-TTL design, and why shortening the TTL makes things worse rather than better."
+      - "Redesign leadership using a coordination service, specifying the mechanisms by name and — critically — what stops a woken zombie leader from writing."
+      - "Recommend a cluster size and placement for the coordination service, and state what happens to routing during a network partition that isolates the current leader."
+    hints:
+      - "The paused process cannot know it was paused — what must the *downstream* system check?"
+      - "How many node failures must the coordination cluster survive, and what does each extra node cost?"
+    modelAnswer: |
+      A process cannot detect its own pause: the old leader's last clock reading said 4 seconds remained, and a 24-second GC pause is invisible from inside. Any lease scheme where the holder self-certifies by local clock has this hole — Chapter 9's process pauses meeting this chapter's split brain. Shortening the TTL to 3 seconds makes it worse: now even routine 4-second pauses and minor network blips trigger spurious failovers, so leadership thrashes, while the fundamental zombie window remains.
+
+      Replace it with ZooKeeper or etcd. Leadership: contenders create an ephemeral node; the session's heartbeats are the failure detector, and when the leader's session lapses, watches notify the others to re-elect — consensus (Zab/Raft) guarantees one leader per epoch, no split-brain election. But election alone doesn't stop the zombie: the woken process doesn't know it lost. Every routing write must carry a fencing token — the monotonically increasing zxid (or etcd revision) from lease acquisition — and the queue layer must reject writes bearing a token older than the newest it has seen. The old leader's term-7 writes bounce off a system that has seen term 8. Use Apache Curator's recipes rather than hand-rolling.
+
+      Run 3 voting nodes (tolerates 1 failure) across availability zones in one region — 5 only if you must survive two concurrent failures; extra voters slow every quorum write. During a partition, the isolated leader's session expires and it can no longer reach quorum; the majority side elects a successor. Routing pauses for the session timeout (~10–15 s) — for patient data, briefly unavailable beats duplicated.

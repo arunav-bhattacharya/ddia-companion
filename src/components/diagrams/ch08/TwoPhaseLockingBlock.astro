@@ -1,0 +1,29 @@
+---
+import Diagram from '../Diagram.astro';
+---
+
+<Diagram caption="Under two-phase locking, readers block writers: transaction B's write must wait for transaction A's shared lock to be released at commit — the opposite of snapshot isolation's no-blocking rule.">
+  <svg viewBox="0 0 720 250" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="twopl-title">
+    <title id="twopl-title">Timeline of transaction A holding a shared lock while reading, forcing transaction B's exclusive lock request to wait until A commits</title>
+
+    <!-- lane labels -->
+    <text x="20" y="70" font-size="12" fill="var(--diagram-muted)">txn A (reader)</text>
+    <text x="20" y="160" font-size="12" fill="var(--diagram-muted)">txn B (writer)</text>
+
+    <!-- A: shared lock held -->
+    <rect x="150" y="48" width="300" height="32" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="165" y="69" font-size="12" fill="var(--diagram-stroke)">holds shared lock on x, reading</text>
+    <text x="455" y="40" font-size="12" font-weight="600" fill="var(--diagram-stroke)">commit &#8594; locks released</text>
+    <line x1="450" y1="48" x2="450" y2="200" stroke="var(--diagram-muted)" stroke-width="1.5" stroke-dasharray="4 3"/>
+
+    <!-- B: blocked then proceeds -->
+    <rect x="230" y="138" width="220" height="32" rx="6" fill="none" stroke="var(--diagram-accent)" stroke-width="1.5" stroke-dasharray="5 4"/>
+    <text x="340" y="159" text-anchor="middle" font-size="12" fill="var(--diagram-accent)">wants exclusive lock &#8212; blocked</text>
+
+    <rect x="450" y="138" width="180" height="32" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="540" y="159" text-anchor="middle" font-size="12" fill="var(--diagram-stroke)">writes x, then commits</text>
+
+    <!-- phases annotation -->
+    <text x="150" y="225" font-size="11" fill="var(--diagram-muted)">two phases per transaction: acquire locks while running (growing), release them all at the end (shrinking)</text>
+  </svg>
+</Diagram>

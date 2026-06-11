@@ -1,0 +1,109 @@
+questions:
+  - id: ch10-q01
+    prompt: "Your leaderless store has n = 3, w = 3, r = 2 — comfortably w + r > n. Reader A gets the new value of x during a write; reader B starts a fresh read after A finishes and gets the old value from both replicas it contacts. How is that possible?"
+    options:
+      - "It isn't — w + r > n mathematically guarantees linearizability"
+      - "The write reaches replicas at different moments, so B's quorum can be two replicas the write hasn't arrived at yet"
+      - "Reader B must have used r = 1 by mistake"
+      - "The replicas lost the write during an unclean shutdown"
+    answerIndex: 1
+    explanation: "Quorum overlap guarantees B's read set intersects the write set, but the write may not have *arrived* at those replicas yet — network delays deliver it at different times. The quorum condition is satisfied and linearizability is still violated. Fixing it requires synchronous read repair, and even then a linearizable CAS needs consensus."
+  - id: ch10-q02
+    prompt: "A database advertises full serializability. A user commits a transaction updating their shipping address, then a support agent's transaction, started moments later, reads the old address. Is the database broken?"
+    options:
+      - "Yes — serializability forbids reading stale data"
+      - "Yes — this violates atomicity of the first transaction"
+      - "No — serializability only promises equivalence to *some* serial order, which may differ from real-time order; recency is linearizability's job"
+      - "No — addresses are multi-object data, which serializability doesn't cover"
+    answerIndex: 2
+    explanation: "Serializability is an isolation level: the outcome must match some serial execution, but that imagined order needn't match wall-clock order, so stale reads are legal. The recency guarantee — operations see the latest state — is linearizability, a separate dial. A system offering both is strictly serializable."
+  - id: ch10-q03
+    prompt: "Two signups for the username 'nova' arrive at different replicas within the same millisecond, and exactly one must win. Which mechanism is actually sufficient?"
+    options:
+      - "Last-write-wins with NTP-synchronized timestamps — the earlier request wins"
+      - "Lamport timestamps — lowest timestamp wins"
+      - "A quorum write of the username record with w > n/2"
+      - "A linearizable compare-and-set, which requires consensus"
+    answerIndex: 3
+    explanation: "Claiming a username is a CAS: set it to your user ID only if unclaimed — and a fault-tolerant linearizable CAS is equivalent to consensus. LWW clock skew can pick either writer (and silently drop one); Lamport timestamps can't tell a node its timestamp is the lowest without hearing from every node; plain quorum writes accept both conflicting values."
+  - id: ch10-q04
+    prompt: "Your app stores uploaded invoices in replicated file storage, then enqueues an OCR job referencing the file. Occasionally the OCR worker finds no file, or an older version. The queue and the storage service are both individually healthy. What's the likely cause?"
+    options:
+      - "The message queue is reordering messages under load"
+      - "A cross-channel timing dependency — the queue outran the storage's replication, and the worker read a replica the write hadn't reached"
+      - "The OCR worker's clock is skewed relative to the storage nodes"
+      - "The storage system uses serializable transactions, which delay visibility"
+    answerIndex: 1
+    explanation: "The queue is a second communication channel that can be faster than the storage system's internal replication, so the 'process this' message arrives before the data does — the same anomaly as hearing a friend cheer before your own refresh shows the score. Linearizable storage fixes it; so can read-your-writes techniques if you control the channel."
+  - id: ch10-q05
+    prompt: "A vendor pitches their database as 'AP, so it stays available during any failure.' Per this chapter, what's the soundest response?"
+    options:
+      - "Accept it — AP systems are by definition always available"
+      - "Object that AP is impossible and all real systems are CP"
+      - "Point out that CAP's definitions are narrow — 'consistency' means exactly linearizability, its 'availability' doesn't match practice, and most real systems are neither CP nor AP"
+      - "Ask whether they chose two of the three CAP properties at design time"
+    answerIndex: 2
+    explanation: "CAP only says that *during a partition* you choose between linearizability and availability — and its formal definitions are idiosyncratic enough that many sensible, fault-tolerant systems fit neither label. 'Pick two' is wrong because partitions are a fault, not a menu option. The CP/AP labels mostly mark a sales pitch, not a guarantee."
+  - id: ch10-q06
+    prompt: "Why do most distributed databases — and even the memory system of a multi-core CPU — decline to provide linearizability?"
+    options:
+      - "Latency: linearizable operations must take time proportional to network delay uncertainty, a permanent performance tax"
+      - "Network partitions make linearizability impossible to implement at all"
+      - "Linearizability requires specialized clock hardware like GPS receivers"
+      - "It can only be implemented on a single machine"
+    answerIndex: 0
+    explanation: "A CPU core's caches are asynchronously flushed replicas, dropped from linearizability purely for speed — fault tolerance isn't the issue, since a core never operates while 'partitioned' from its own machine. Attiya and Welch proved the latency cost is fundamental. Partitions force an availability choice (CAP) but don't make linearizability unimplementable, and only Spanner-style designs need fancy clocks."
+  - id: ch10-q07
+    prompt: "Two events carry Lamport timestamps (3, nodeB) and (5, nodeA). A teammate concludes the nodeB event happened first in real time. What can you actually conclude?"
+    options:
+      - "They're right — lower Lamport timestamps always mean earlier real-time occurrence"
+      - "Only that the (5, nodeA) event did not happen-before the (3, nodeB) event — they may be causally ordered or merely concurrent, ordered arbitrarily"
+      - "The events must be concurrent, because they're on different nodes"
+      - "Nothing at all — Lamport timestamps carry no ordering information across nodes"
+    answerIndex: 1
+    explanation: "Lamport clocks guarantee one direction: if A happened-before B, then A's timestamp is smaller. The converse fails — concurrent events also get ordered (arbitrarily but consistently) by the total order. So a smaller timestamp means 'not causally after,' never 'earlier on the wall clock.' Detecting true concurrency takes vector clocks."
+  - id: ch10-q08
+    prompt: "A user sets their account private on their laptop, then uploads a photo from their phone. Settings and photos live in separate databases, each using its own logical clock. A snapshot read later shows the photo while the account is still public. Why?"
+    options:
+      - "Logical clocks order only what a node has seen — the photos database never read from the accounts database, so its counter lagged and gave the upload a lower timestamp"
+      - "The phone's wall clock was behind the laptop's"
+      - "MVCC snapshots are inherently inconsistent across databases"
+      - "The photo upload was concurrent with the privacy change, so either order is correct"
+    answerIndex: 0
+    explanation: "Causal ordering only propagates along communication paths. The two databases never exchanged timestamps, so the later upload could get a smaller timestamp, and a snapshot between the two sees the photo in a still-public account. The operations weren't concurrent — the user did them sequentially — which is exactly the gap between causal and linearizable. A linearizable ID generator (timestamp oracle) closes it."
+  - id: ch10-q09
+    prompt: "Your timestamp oracle persists a claim on IDs in batches of 10,000 and hands them out from memory. It crashes after issuing 4,200 of the current batch and fails over. What's the consequence?"
+    options:
+      - "Up to 4,200 duplicate IDs may be issued by the new leader"
+      - "About 5,800 IDs are skipped — gaps appear, but ordering and uniqueness survive"
+      - "The new leader must replay the log to find the exact last ID issued"
+      - "IDs issued after failover may be smaller than IDs issued before"
+    answerIndex: 1
+    explanation: "Batching persists only the claim on the whole block, so a crash forfeits the unissued remainder — the new leader starts at the next batch boundary. That trades gaps for throughput, which is usually fine; what batching never does is reissue an ID or go backwards. If your schema needs gapless sequence numbers, you must pay for persistence on every increment."
+  - id: ch10-q10
+    prompt: "Five job-runner nodes each atomically increment a shared fetch-and-add counter to elect a coordinator; whoever reads 0 wins. The node that read 0 crashes immediately, before telling anyone. What's the fundamental problem?"
+    options:
+      - "The counter overflows after enough elections"
+      - "Two nodes can read 0 simultaneously if the increments race"
+      - "The survivors know only that they lost, not who won — and they can't pick a replacement because the winner might come back, so termination fails"
+      - "Nothing — the next node to read the counter simply becomes coordinator"
+    answerIndex: 2
+    explanation: "Fetch-and-add is atomic, so exactly one node reads 0 — but losers learn nothing about the winner's identity, and electing someone else risks two coordinators if the winner recovers. That's why fetch-and-add has consensus number 2 (it works only for two pre-acquainted proposers), while CAS and shared logs have consensus number infinity and can solve election for any group size."
+  - id: ch10-q11
+    prompt: "A Raft leader stalls in a 90-second GC pause; the cluster elects a new leader in term 8. The old term-7 leader wakes and tries to commit a pending entry. What stops it from corrupting the log?"
+    options:
+      - "Quorum overlap — any quorum acking its entry must include a node that voted in term 8, which rejects the term-7 append"
+      - "The old leader's lease expires, causing it to crash and restart cleanly"
+      - "Followers detect the GC pause via heartbeat timing and ignore the node"
+      - "Raft entries are idempotent, so a duplicate commit is harmless"
+    answerIndex: 0
+    explanation: "Every append needs acknowledgment from a quorum, and that quorum necessarily overlaps the quorum that elected the term-8 leader — at least one node knows of the higher term and refuses. The deposed leader discovers its deposition mechanically, with no reliance on clocks or on the node knowing it was paused. This overlapping-quorums rule is the safety crux that makes split brain structurally impossible."
+  - id: ch10-q12
+    prompt: "A client holds a ZooKeeper lock on shard 7, pauses long past its session timeout, and ZooKeeper deletes its ephemeral node, releasing the lock to another worker. The first client then wakes and resumes writing to shard 7. What is the intended defense?"
+    options:
+      - "Ephemeral nodes — the lock was already released, so no defense is needed"
+      - "Fencing tokens — writes carry the monotonically increasing zxid from lock acquisition, and storage rejects writes bearing an older token"
+      - "Longer session timeouts, so clients are never declared dead while merely paused"
+      - "Watches — the paused client is notified its lock was lost before it can write"
+    answerIndex: 1
+    explanation: "Releasing the lock doesn't stop the zombie — the woken client doesn't know it was deposed and writes anyway. The downstream resource must check a fencing token: each lock grant carries a monotonically increasing ID (ZooKeeper's zxid, etcd's revision), and storage rejects anything older than the newest token seen. Longer timeouts just delay failover, and a paused process can't act on watch notifications in time."

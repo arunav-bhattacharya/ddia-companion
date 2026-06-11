@@ -1,0 +1,43 @@
+---
+import Diagram from '../Diagram.astro';
+
+const stops = [
+  { x: 30, label1: 'sender OS', label2: 'TCP send buffer', note: 'congestion control rate-limits the sender' },
+  { x: 215, label1: 'network switch', label2: 'port queue', note: 'many senders, one outgoing link' },
+  { x: 400, label1: 'receiver OS', label2: 'socket buffer', note: 'all CPU cores busy' },
+  { x: 585, label1: 'VM monitor', label2: 'paused guest', note: 'VM suspended for tens of ms' },
+];
+---
+
+<Diagram caption="Four places a packet can sit in a queue on its way from one application to another — each adds variable delay, and a full queue means the packet is dropped." wide>
+  <svg viewBox="0 0 740 250" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="netq-title">
+    <title id="netq-title">Queueing points between sender and receiver: OS send buffer, switch queue, receiver socket buffer, and VM pause</title>
+
+    <text x="30" y="26" font-size="13" font-weight="600" fill="var(--diagram-stroke)">application sends a packet &#8594; queues all the way down</text>
+
+    {
+      stops.map((s, i) => (
+        <g>
+          <rect x={s.x} y="50" width="125" height="74" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5" />
+          <text x={s.x + 62} y="70" text-anchor="middle" font-size="12" font-weight="600" fill="var(--diagram-stroke)">{s.label1}</text>
+          <text x={s.x + 62} y="86" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">{s.label2}</text>
+          {/* queued packets */}
+          <rect x={s.x + 18} y="98" width="16" height="14" rx="3" fill="var(--diagram-accent)" />
+          <rect x={s.x + 40} y="98" width="16" height="14" rx="3" fill="var(--diagram-accent)" opacity="0.7" />
+          <rect x={s.x + 62} y="98" width="16" height="14" rx="3" fill="var(--diagram-accent)" opacity="0.45" />
+          <rect x={s.x + 84} y="98" width="16" height="14" rx="3" fill="var(--diagram-accent)" opacity="0.25" />
+          <text x={s.x + 62} y="148" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">{s.note}</text>
+          {i < 3 && (
+            <g>
+              <line x1={s.x + 125} y1="87" x2={s.x + 185} y2="87" stroke="var(--diagram-stroke)" stroke-width="1.5" />
+              <path d={`M ${s.x + 185} 87 l -7 -4 v 8 z`} fill="var(--diagram-stroke)" />
+            </g>
+          )}
+        </g>
+      ))
+    }
+
+    <line x1="30" y1="190" x2="710" y2="190" stroke="var(--diagram-muted)" stroke-width="1.5" stroke-dasharray="5 4"/>
+    <text x="370" y="216" text-anchor="middle" font-size="12" fill="var(--diagram-stroke)">total delay = sum of all the waits &#8212; unbounded, and worst when the system is near capacity</text>
+  </svg>
+</Diagram>

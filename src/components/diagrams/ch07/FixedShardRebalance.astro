@@ -1,0 +1,59 @@
+---
+import Diagram from '../Diagram.astro';
+---
+
+<Diagram caption="With many more shards than nodes, adding a node means moving a few whole shards — the key-to-shard mapping never changes, only the shard-to-node assignment.">
+  <svg viewBox="0 0 720 330" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="fixedshard-title">
+    <title id="fixedshard-title">A new node joining a cluster and taking over whole shards from the existing nodes</title>
+
+    <!-- BEFORE row -->
+    <text x="20" y="28" font-size="13" font-weight="600" fill="var(--diagram-muted)">Before: 12 shards on 3 nodes</text>
+
+    <g font-size="12">
+      <rect x="20" y="42" width="200" height="70" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+      <text x="120" y="62" text-anchor="middle" font-weight="600" fill="var(--diagram-stroke)">Node 0</text>
+      <text x="120" y="84" text-anchor="middle" fill="var(--diagram-stroke)">s0 s1 s2 <tspan fill="var(--diagram-accent)" font-weight="600">s3</tspan></text>
+
+      <rect x="260" y="42" width="200" height="70" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+      <text x="360" y="62" text-anchor="middle" font-weight="600" fill="var(--diagram-stroke)">Node 1</text>
+      <text x="360" y="84" text-anchor="middle" fill="var(--diagram-stroke)">s4 s5 s6 <tspan fill="var(--diagram-accent)" font-weight="600">s7</tspan></text>
+
+      <rect x="500" y="42" width="200" height="70" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+      <text x="600" y="62" text-anchor="middle" font-weight="600" fill="var(--diagram-stroke)">Node 2</text>
+      <text x="600" y="84" text-anchor="middle" fill="var(--diagram-stroke)">s8 s9 s10 <tspan fill="var(--diagram-accent)" font-weight="600">s11</tspan></text>
+    </g>
+
+    <!-- Move arrows -->
+    <line x1="120" y1="112" x2="300" y2="218" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <polygon points="293,216 305,222 296,226" fill="var(--diagram-accent)"/>
+    <line x1="360" y1="112" x2="360" y2="212" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <polygon points="355,210 360,220 365,210" fill="var(--diagram-accent)"/>
+    <line x1="600" y1="112" x2="420" y2="218" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <polygon points="424,226 415,222 427,216" fill="var(--diagram-accent)"/>
+
+    <text x="480" y="165" font-size="12" fill="var(--diagram-muted)">one whole shard moves per node</text>
+
+    <!-- AFTER row -->
+    <text x="20" y="206" font-size="13" font-weight="600" fill="var(--diagram-muted)">After: same 12 shards on 4 nodes</text>
+
+    <g font-size="12">
+      <rect x="20" y="220" width="150" height="70" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+      <text x="95" y="240" text-anchor="middle" font-weight="600" fill="var(--diagram-stroke)">Node 0</text>
+      <text x="95" y="262" text-anchor="middle" fill="var(--diagram-stroke)">s0 s1 s2</text>
+
+      <rect x="195" y="220" width="150" height="70" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+      <text x="270" y="240" text-anchor="middle" font-weight="600" fill="var(--diagram-stroke)">Node 1</text>
+      <text x="270" y="262" text-anchor="middle" fill="var(--diagram-stroke)">s4 s5 s6</text>
+
+      <rect x="370" y="220" width="150" height="70" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+      <text x="445" y="240" text-anchor="middle" font-weight="600" fill="var(--diagram-stroke)">Node 2</text>
+      <text x="445" y="262" text-anchor="middle" fill="var(--diagram-stroke)">s8 s9 s10</text>
+
+      <rect x="545" y="220" width="155" height="70" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-accent)" stroke-width="2"/>
+      <text x="622" y="240" text-anchor="middle" font-weight="600" fill="var(--diagram-accent)">Node 3 (new)</text>
+      <text x="622" y="262" text-anchor="middle" fill="var(--diagram-accent)">s3 s7 s11</text>
+    </g>
+
+    <text x="360" y="318" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">hash(key) % 12 still picks the same shard for every key &#8212; no records change shard</text>
+  </svg>
+</Diagram>

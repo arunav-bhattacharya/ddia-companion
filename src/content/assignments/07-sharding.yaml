@@ -1,0 +1,52 @@
+assignments:
+  - id: ch07-a01
+    title: "Shard a smart-meter ingestion platform"
+    scenario: |
+      GridSense ingests readings from 4 million electricity smart meters, one reading per meter every 30 seconds — about 133,000 writes per second, far beyond one node. Each reading is keyed by meter and timestamp. The two dominant queries are: (a) "all readings for meter M between two dates" (customer dashboards, billing), and (b) "regional consumption for the last hour" (grid operations, touching many meters). The team's first prototype sharded by key range on timestamp alone and fell over within a day. You're asked to redesign the sharding scheme and the rebalancing story for 5 years of growth (meter count expected to triple).
+    tasks:
+      - "Diagnose precisely why the timestamp-keyed key-range prototype fell over, using the chapter's vocabulary for the failure mode."
+      - "Propose a partition key and sharding scheme that serves query (a) efficiently while spreading the write load, and explain what query (b) costs under your design."
+      - "Choose between a fixed number of shards and hash-range sharding with splitting for the 5-year growth path, and justify the choice with the trade-offs of each."
+    hints:
+      - "Which queries need keys to be adjacent, and adjacent to what?"
+      - "What happens to a fixed shard count when the dataset triples?"
+    modelAnswer: |
+      The prototype created a hot shard: with timestamp as the partition key, key-range sharding maps "now" to a single shard, so all 133,000 writes per second from every meter landed on the shard owning the current time range while the rest of the cluster idled. The data was evenly distributed; the write load was maximally skewed.
+
+      Use a compound key: partition by meter ID (hashed), sort by timestamp within the partition. Concurrent writes from 4 million meters then spread uniformly across shards, and query (a) — one meter's readings over a date range — stays efficient because all records sharing a partition key sit together in sorted order on one shard. Query (b) becomes a scatter/gather: regional rollups span many meters and therefore many shards, so it must query shards in parallel and merge, with tail latency amplification risk. Since grid operations is an aggregate, hourly-granularity workload, precomputing regional rollups on ingest (a materialized view, Chapter 2's write-time trick) is the practical mitigation rather than fighting the sharding scheme.
+
+      For growth, prefer hash-range sharding with shard splitting over a fixed shard count. A fixed count must be guessed now; with the dataset tripling (plus 5 years of accumulating history), shards each hold a fixed fraction of an ever-growing total, eventually becoming so large that rebalancing and recovery are slow — and resharding later is an expensive full rewrite. Hash-range shards split when they exceed a size or write-rate threshold, so the shard count adapts. Splitting is expensive per occurrence, so pre-split generously based on the known meter population, and schedule splits off-peak with a human approving rebalancing plans.
+  - id: ch07-a02
+    title: "Tenant sharding for a clinical-trials SaaS"
+    scenario: |
+      TrialBase sells trial-management software to pharmaceutical companies. It has 900 customers: 880 small biotechs (under 5 GB each), 18 mid-size firms, and 2 giants whose datasets are around 4 TB each and growing — too big for the largest node TrialBase can buy. European customers' data must stay in the EU under GDPR, and a recent near-miss saw a permissions bug almost expose one sponsor's trial data to a competitor. Currently everyone shares one large multi-tenant database. The CTO wants a sharding strategy organized around tenants.
+    tasks:
+      - "Lay out a tenant-sharding design covering all three customer sizes, and name which multitenancy benefits from the chapter it captures."
+      - "Explain why the two giant customers break pure tenant-per-shard, and what you must do for them."
+      - "Describe how the design handles a mid-size tenant that grows 10x, and what cross-tenant features (e.g., industry benchmarking dashboards) will cost."
+    hints:
+      - "Tenant-per-shard assumes something about tenant size — what?"
+      - "Many tiny tenants per shard creates which operational problem later?"
+    modelAnswer: |
+      Use the tenant ID as the partition key. The 18 mid-size firms get one shard each; the 880 small biotechs are grouped several-per-shard to avoid the overhead of 880 separate databases. This directly buys the chapter's multitenancy benefits: permission isolation (the near-miss bug can't cross a physical shard boundary), resource isolation (one sponsor's heavy report doesn't slow others), per-tenant backup and restore, simple GDPR export/deletion (a tenant's data is one shard or one slice), and data residency — EU tenants' shards are pinned to EU regions. Schema migrations can roll out tenant by tenant, catching problems early.
+
+      The giants violate tenant-per-shard's core assumption: each tenant fits on one node. At 4 TB and growing, they need sharding *within* the tenant — partition their trial data by a second-level key (e.g., hash of study ID) across multiple nodes, while keeping all their shards region-pinned and logically grouped for backup and permissions.
+
+      Growth of a grouped small tenant is the known weak point: plan from day one for moving a tenant out of a shared shard into its own (copy, double-write, verify, cut over — the Notion-style migration), and monitor per-tenant size so moves happen before a tenant makes its shared shard hot. Cross-tenant benchmarking fights the design: it must join data across many shards. Don't run it as live scatter/gather queries; export anonymized data asynchronously into a separate analytics store built for parallel multi-shard aggregation.
+  - id: ch07-a03
+    title: "Search routing for a hotel-booking marketplace"
+    scenario: |
+      StayFinder lists 2 million hotel properties, sharded by hash of property ID across 40 shards. Property lookups by ID are fast, but the search page — filter by city, star rating, and amenity tags — uses local secondary indexes, so every search fans out to all 40 shards. Search traffic is 30x write traffic and p99 search latency is now 2.8 seconds, dominated by the slowest shard. Separately, clients currently connect to a random node which forwards requests, and during last month's rebalance a stale shard map caused a burst of misrouted writes. You own the redesign.
+    tasks:
+      - "Explain why p99 search latency degrades as StayFinder adds shards, naming the two chapter concepts involved."
+      - "Propose moving city (and other search terms) to a global secondary index: what improves, what new costs appear on the write path, and why does StayFinder's read/write ratio make this favorable?"
+      - "Redesign request routing to prevent stale-map misrouting, choosing among the three routing approaches and naming the coordination machinery."
+    hints:
+      - "What fraction of shards does one search touch today, and how does that scale?"
+      - "Who should hold the authoritative shard-to-node map, and what notifies routers?"
+    modelAnswer: |
+      Today every search is a scatter/gather across all 40 local (document-partitioned) indexes, so each query's latency is set by the slowest shard — tail latency amplification: at 40 parallel calls, even a rare per-shard slow response becomes a common slow search. And adding shards doesn't add search throughput, because every shard still processes every query; it only adds storage. Growth makes both problems worse.
+
+      A global, term-partitioned index inverts the economics. Terms like city:paris or amenity:pool are themselves sharded (by term range or term hash), so a single-condition search reads one index shard for the complete postings list instead of 40 — no fan-out, no 40-way tail. Multi-condition searches (city AND amenity) may intersect postings lists from two index shards, which is fine while lists stay modest. The new cost lands on writes: updating one property touches every index shard owning one of its terms, requiring either a distributed transaction or asynchronous index updates that can serve briefly stale search results. With reads outnumbering writes 30:1, paying more per write to make every read cheap is exactly the right trade, and slightly stale search results are acceptable for hotel listings — DynamoDB makes the same call for its global indexes.
+
+      For routing, replace random-node forwarding with a routing tier that holds the shard map, fed by a consensus-backed coordination service (ZooKeeper or etcd). Nodes register there; the service holds the authoritative shard-to-node assignment and notifies the routing tier the moment ownership changes during a rebalance, eliminating the stale-map window. Clients find the routing tier via DNS, which is fine for slow-changing addresses.

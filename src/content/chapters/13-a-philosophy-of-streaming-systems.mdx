@@ -1,0 +1,271 @@
+---
+title: "A Philosophy of Streaming Systems"
+chapter: 13
+description: "Composing specialized systems with event logs: derived data, unbundled databases, write and read paths, and correctness from end-to-end identifiers instead of distributed transactions."
+readingMinutes: 27
+keyTakeaways:
+  - "No single tool suits every access pattern, so real applications compose several storage systems — and the safe way to compose them is to designate one system of record and derive everything else from its ordered log of changes."
+  - "Writing directly to two systems (say, a database and a search index) lets them process concurrent writes in different orders and disagree forever; funneling all writes through one ordered log makes every derived view consistent with the source."
+  - "A total order of events is consensus, and it stops scaling at one node, one datacenter, one service — so causal ordering across sharded, geo-distributed, offline-capable systems remains a genuinely open problem."
+  - "Reprocessing an immutable log lets you evolve applications gradually: maintain old and new views side by side, shift users over slowly, and keep every step reversible — the railway dual-gauge trick applied to data."
+  - "CREATE INDEX is a database reprocessing its own data into a new derived view; batch and stream pipelines do the same thing across team and technology boundaries. Federation unifies reads; unbundling unifies writes."
+  - "The write path is eager precomputation, the read path is lazy evaluation, and the derived dataset is where they meet — caches, indexes, and materialized views just shift that boundary, sometimes all the way to the user's device."
+  - "Exactly-once is an end-to-end property: TCP, transactions, and stream processors each suppress duplicates within their own layer, but only an operation ID generated at the client and checked at the database survives the whole journey."
+  - "Uniqueness constraints require consensus, but a log shard processed sequentially provides it scalably — and multi-shard operations can be made atomic through one atomic append plus deterministic, idempotent downstream processing."
+  - "Consistency conflates timeliness (am I reading fresh state? violations heal by waiting) with integrity (is the data correct at all? violations are permanent until repaired) — and most businesses need integrity far more than timeliness."
+  - "Many 'hard' constraints are soft in practice: overselling, overbooking, and overdrafts are handled with apologies and compensating transactions, which lets coordination-avoiding systems run fast across regions while preserving integrity."
+  - "Hardware corrupts data and software has bugs, so don't blindly trust guarantees: audit end to end, design event-sourced systems whose derivations can be re-run and verified, and borrow lightweight cryptographic tools like Merkle trees."
+references:
+  - title: "Turning the Database Inside-Out with Apache Samza"
+    url: "https://martin.kleppmann.com/2015/03/04/turning-the-database-inside-out.html"
+    type: video
+    author: "Martin Kleppmann"
+    note: "The talk where this chapter's unbundling thesis was first laid out: treat the replication log as the heart of the system and derive materialized views from immutable events."
+  - title: "End-to-End Arguments in System Design"
+    url: "https://web.mit.edu/saltzer/www/publications/endtoend/endtoend.pdf"
+    type: paper
+    author: "J.H. Saltzer, D.P. Reed, D.D. Clark"
+    note: "The 1984 original. Reading it makes clear how the same argument covers duplicate suppression, checksums, and encryption — decades before anyone applied it to streaming."
+  - title: "Life beyond Distributed Transactions: an Apostate's Opinion"
+    url: "https://www.cidrdb.org/cidr2007/papers/cidr07p15.pdf"
+    type: paper
+    author: "Pat Helland"
+    note: "Helland's position paper arguing that scalable systems must drop cross-entity transactions in favor of per-entity state and messages carrying operation identifiers."
+  - title: "Online Event Processing: Achieving Consistency Where Distributed Transactions Have Failed"
+    url: "https://martin.kleppmann.com/2019/05/01/olep-cacm.html"
+    type: paper
+    author: "Martin Kleppmann, Alastair R. Beresford, Boerge Svingen"
+    note: "Formalizes this chapter's multi-shard payment example: how append-only logs provide atomicity and constraint enforcement without an atomic commit protocol."
+  - title: "Questioning the Lambda Architecture"
+    url: "https://www.oreilly.com/radar/questioning-the-lambda-architecture/"
+    type: article
+    author: "Jay Kreps"
+    note: "The article that killed the dual-codebase lambda approach and proposed kappa: reprocess history by replaying a retained log through one stream processor."
+  - title: "View Maintenance: A New Approach to Data Processing"
+    url: "https://materialize.com/blog/olvm/"
+    type: article
+    author: "Frank McSherry"
+    note: "Frames incremental view maintenance as a third workload beside OLTP and OLAP — the production-grade version of this chapter's spreadsheet-for-data-systems dream."
+  - title: "Pattern: Saga"
+    url: "https://microservices.io/patterns/data/saga.html"
+    type: docs
+    author: "Chris Richardson"
+    note: "The microservices community's take on multi-shard processing: a sequence of local transactions with compensating actions, matching this chapter's apology workflows."
+---
+
+import Callout from '../../components/mdx/Callout.astro';
+import Term from '../../components/mdx/Term.astro';
+import EventLogDerivedSystems from '../../components/diagrams/ch13/EventLogDerivedSystems.astro';
+import UnbundledDatabase from '../../components/diagrams/ch13/UnbundledDatabase.astro';
+import WritePathReadPath from '../../components/diagrams/ch13/WritePathReadPath.astro';
+import EndToEndRequestId from '../../components/diagrams/ch13/EndToEndRequestId.astro';
+import MultiShardTransfer from '../../components/diagrams/ch13/MultiShardTransfer.astro';
+
+Most chapters of this book lay out competing designs and tell you when each wins. This one makes an argument. Having covered the parts — storage engines, replication, sharding, transactions, consensus, batch and stream processing — it proposes one way to assemble them: represent every change as an event in a log, derive all other state from that log with deterministic functions, and put correctness at the endpoints rather than trusting any single layer to provide it.
+
+It is openly opinionated. The reward is a coherent answer to two questions that haunt every real system: how do you keep five copies of the same data consistent, and how do you know your data is correct at all?
+
+## Data Integration
+
+A theme of the whole book is that any problem has several solutions, each suited to different circumstances. Every piece of software — including anything sold as a "general-purpose" database — is built around assumptions about how it will be used, and a tool that tries to be everything does each thing worse than a specialist. Vendors won't volunteer which workloads their product handles badly; the earlier chapters were partly about giving you the questions to ask. And even perfect tool selection doesn't get you off the hook, because in any non-trivial application the *same data* is used in several ways. One tool rarely covers them all, so you run several and keep them fed.
+
+### Combining Specialized Tools by Deriving Data
+
+The classic pairing is an OLTP database plus a full-text search index. PostgreSQL's built-in search is fine for simple cases, but serious search needs a dedicated information-retrieval system — and a search index makes a poor durable system of record, so you run both. Add a warehouse, a cache or two, denormalized objects, a recommendation model, and a notification pipeline, and the copy count climbs fast.
+
+**Reasoning about dataflows.** Once copies multiply, the saving discipline is being explicit about inputs and outputs: where is data written *first*, and what derives from what? If every write goes to the system-of-record database and change data capture replays the changes into the search index *in the same order*, the index is fully derived and consistent with its source (software bugs aside). If the application writes directly to both, two concurrent writes can be applied in different orders by the two systems — neither is in charge of ordering, so they disagree forever.
+
+<EventLogDerivedSystems />
+
+The principle: funnel all input through one place that decides a total order of writes, then derive everything else by processing that order. This is state machine replication wearing streaming clothes; whether the log comes from CDC or event sourcing matters less than the existence of the order. Log-driven updates can usually be made deterministic and idempotent, which makes fault recovery pleasantly boring.
+
+**Derived data versus distributed transactions.** The classical answer to "keep two systems consistent" is a distributed transaction. The two approaches reach the same goal differently: transactions via atomic commit, logs via deterministic retry plus idempotence. The real gap is timeliness — a transaction lets you read your write immediately; derived systems update asynchronously and promise no such thing. Since XA's fault-tolerance and performance record is poor and no better cross-system protocol is on the horizon, log-based derivation is the most promising integration approach we have. But "eventual consistency, deal with it" is not guidance; the second half of this chapter builds stronger guarantees on top.
+
+**The limits of total ordering.** A totally ordered log is easy at modest scale — every single-leader database builds one. The trouble starts when:
+
+- throughput exceeds one machine, so the log must be sharded, and order across shards is undefined;
+- the system spans datacenters, each with its own leader, so events from different regions have no order;
+- microservices keep their durable state separate, so events from different services have no order;
+- clients update local state offline, so clients and servers see events in different orders.
+
+Deciding a total order of events is **total order broadcast**, which Chapter 10 showed is equivalent to <Term id="consensus">consensus</Term> — and consensus algorithms assume one node can process the whole stream. Nobody has a good general mechanism for many nodes to share the ordering work.
+
+**Ordering events to capture causality.** Often the missing order is harmless: concurrent events can be ordered arbitrarily, and updates to one object can be routed to one shard. But causality sneaks across system boundaries. A user unfriends an ex, then posts a message complaining about them. Friendships live in one system, messages in another; the notification service is effectively a join between the two, and if it processes the message before the unfriend event, the ex gets notified about a message they were never meant to see. Partial remedies exist — logical timestamps; logging an identifier for "the state the user saw" so later events can reference it; conflict resolution (good for state, useless for side effects like a sent notification) — but in general this is unsolved.
+
+### Batch and Stream Processing
+
+If data integration's slogan is "the right data, in the right form, in all the right places," batch and stream processors are how you get there, turning inputs into derived datasets: search indexes, materialized views, recommendations, metrics. The two share most principles; the fundamental difference is that batch inputs are finite and streams are not.
+
+**Maintaining derived state.** Batch processing has a strongly functional flavor — deterministic functions, immutable inputs, append-only outputs — and stream processing keeps that while adding managed, fault-tolerant state. Determinism isn't just a fault-tolerance trick; it's what lets you reason about an organization's dataflows as pipelines deriving one thing from another. You *could* maintain derived state synchronously, the way a database updates a secondary index inside the writing transaction. But asynchrony is what makes log-based systems resilient: a slow or crashed consumer is buffered and contained, while a distributed transaction responds to one failed participant by aborting everyone, amplifying the fault.
+
+**Reprocessing data for application evolution.** Stream processing keeps views fresh; batch processing can chew through years of history to build *new* views. That second ability is an underrated evolution mechanism: without reprocessing, schema changes are limited to bolting on optional fields; with it, you can restructure a dataset into a completely different model.
+
+<Callout type="example" title="Schema migration, railway edition">
+Nineteenth-century English railways had competing track gauges, and a train built for one couldn't run on another. After a standard was chosen in 1846, lines were converted without closing: add a third rail, run old and new trains on *dual gauge* track for years, and remove the obsolete rail when nothing needs it. That is a gradual schema migration — old and new views coexisting on the same underlying data — and like its software cousin it is expensive enough that some non-standard gauges (San Francisco's BART among them) survive today.
+</Callout>
+
+Derived views make migrations gradual and reversible: keep old and new schemas as two independently derived views of the same log, route a trickle of users to the new one, ramp up as confidence grows, then drop the old view. Every stage has a working system to retreat to — and lowering the cost of being wrong is what lets you move fast.
+
+**Unifying batch and stream.** The early **lambda architecture** ran a batch layer and a stream layer side by side, computing the same results twice — maintaining the same logic in two systems — and has fallen out of use. The successor (sometimes called **kappa**) is one engine for both: reprocessing history is just replaying the log through the same processor that handles live events. It needs three ingredients: a replayable log, exactly-once semantics so failed tasks leave no partial output, and windowing by *event* time, since processing time is meaningless during a replay. Apache Beam's API, running on Flink or Google Cloud Dataflow, is the standard expression of this style.
+
+## Unbundling Databases
+
+Step back far enough and databases, batch/stream processors, and operating systems all do the same job: store data, then let you process and query it — with different philosophies. Unix gives programmers a thin, low-level abstraction: files as byte sequences, pipes for composition. The relational tradition hides on-disk structures, concurrency, and crash recovery behind declarative SQL. Both emerged in the early 1970s, the argument was never settled (NoSQL was partly the Unix instinct applied to distributed OLTP storage), and this section tries to take the best of both.
+
+### Composing Data Storage Technologies
+
+List the features databases provide — secondary indexes, materialized views, replication logs, full-text search — then look at what people build with batch and stream pipelines: search indexes, view maintenance, change replication into derived systems. The parallel is hard to miss.
+
+Consider what `CREATE INDEX` actually does: scan a consistent snapshot of the table, sort the indexed values, write out the index, process the backlog of writes that happened during the scan, then keep the index updated forever after. That is the same procedure as setting up a new replication follower, and the same as bootstrapping CDC. Running `CREATE INDEX` is the database *reprocessing its own dataset into a new derived view*.
+
+<Callout type="insight" title="The meta-database of everything">
+Squint at the dataflow across a whole organization and it looks like one enormous database. Every batch, stream, and ETL job plays the role of the internal subsystem that keeps indexes and materialized views current; the search cluster and the warehouse are just unusual index types — maintained not by one product in one process, but by different software on different machines run by different teams.
+</Callout>
+
+If no single data model fits all access patterns, there are two ways to compose specialized stores:
+
+- **Federation (unifying reads).** One query interface over many storage engines — PostgreSQL's foreign data wrappers, federated engines like Trino. The relational tradition: an elegant high-level interface over a complicated implementation. It answers queries across systems but says nothing about keeping writes in sync.
+- **Unbundling (unifying writes).** Make sure every change reliably reaches every place it belongs, even across faults — the database's index-maintenance machinery, extracted and made to work across technologies via CDC and event logs. The Unix tradition: small tools, one job each. The log is the pipe.
+
+<UnbundledDatabase />
+
+**Making unbundling work.** Writes are the harder half, and the traditional answer — distributed transactions across heterogeneous systems — founders on the lack of a standard protocol and dismal fault behavior. An ordered log with <Term id="idempotent">idempotent</Term> consumers is a much simpler abstraction, which is exactly why it works across systems built by different teams. The loose coupling pays twice: at the system level, a slow or failed consumer falls behind on the log and catches up later instead of escalating into an outage; at the human level, teams build and fix their components independently behind a stable interface.
+
+**Where unbundling stops.** None of this replaces databases — you still need them to hold processor state and serve pipeline outputs. Many moving parts carry a real operational price, and an integrated product often beats a kit assembled with application code on the workloads it was designed for. Unbundling buys breadth, not depth: it earns its complexity only when no single product covers your requirements; adopting it for scale you don't have is premature optimization. The tooling improves yearly — Debezium extracts change streams from most databases, Kafka's protocol is a de facto standard for events, incremental view maintenance engines keep complex query results updated — but something is missing. We have the pipes; we don't yet have the shell: no high-level, fault-tolerant way to declare "this view derives from those inputs" and have the wiring, deployment, and recovery handled for you. The unbundled database is still waiting for its operating system.
+
+### Designing Applications Around Dataflow
+
+Spreadsheets solved a version of this in 1979: put a formula in a cell and whenever any input changes, the result recalculates. That is what we want from data infrastructure — change a record and every dependent index, cache, and aggregate updates itself. VisiCalc had it; most data architectures still don't, because data systems must also be fault-tolerant, durable, and spread across technologies written by different teams in different decades.
+
+**Application code as a derivation function.** Every derived dataset is the output of a transformation. For a secondary index the function is so standard that databases hide it behind `CREATE INDEX`. Further along it gets custom: a full-text index applies stemming and synonym handling; an ML model is derived from training data (and its predictions from the model plus fresh input); a cache holds data pre-aggregated into the shape a UI screen needs, so a redesign means rebuilding it. The custom end is where databases struggle: triggers, stored procedures, and user-defined functions exist, but have always been an afterthought.
+
+**Separating application code and state.** In principle a database could host arbitrary application code. In practice databases are terrible deployment environments: no dependency management, version control, rolling upgrades, or real monitoring — everything Kubernetes and Docker were purpose-built to provide. So the industry settled on stateless application services on one side, state in databases on the other.
+
+<Callout type="note" title="The separation of Church and state">
+Functional programmers joke that this upholds "the separation of Church and state" — Alonzo Church invented the lambda calculus, a model of computation with no mutable state. The joke has a barb: in this architecture the database is one big mutable shared variable, and like a variable in most languages, you cannot *subscribe* to it — only poll and hope you didn't miss anything. The spreadsheet is still ahead of the database here.
+</Callout>
+
+**Dataflow between state changes and application logic.** Thinking in dataflow renegotiates the relationship between code and state: instead of code manipulating a passive database, code *responds to* state changes in one place by *producing* state changes in another. We've met the idea as CDC, the actor model, triggers, and incremental view maintenance — unbundling applies it outside the primary database, with stream processors as the engine. Two properties are non-negotiable: stable ordering (views derived from the same log stay mutually consistent only if they apply events in the same order) and reliable delivery (one lost message means a permanently diverged view). Steep demands, but far cheaper than distributed transactions, and modern stream processors meet them at scale.
+
+**Stream processors and services.** Today's dominant decomposition is microservices talking via synchronous request/response. Dataflow keeps the organizational benefits — independent teams and deployment — but swaps the communication for one-directional asynchronous streams, and the swap can buy performance. Suppose a purchase is priced in one currency and paid in another. The service approach queries an exchange-rate service during checkout: a synchronous call on the critical path, and a hard dependency on that service being up. The dataflow approach subscribes to rate updates ahead of time and keeps the current rate in a local table; at purchase time the lookup is local. A round trip you never make can be neither slow nor lost. The RPC has become a stream join between purchases and rate updates — with the caveat that joins are time-dependent: reprocessing last month's purchases means joining against last month's rates.
+
+### Observing Derived State
+
+All this machinery exists so someone can eventually look something up, and it helps to name the two halves of the journey. The **write path** is everything that happens eagerly when data arrives: events logged, processors run, derived datasets updated — whether or not anyone reads them. The **read path** is what happens lazily when a user asks: query the derived dataset, post-process, respond. The derived dataset is where the paths meet — eager versus lazy evaluation.
+
+<WritePathReadPath />
+
+**Materialized views and caching.** A search index splits the work: writes update postings lists, reads combine lookups with Boolean logic. Remove the index and writes get cheaper while reads degenerate into grep over every document. The other extreme — precompute results for *all possible queries* — makes reads trivial and the write path impossible, since the query space is effectively infinite. Between them sits something practical: precompute the most common queries (a cache — equally a materialized view, since it needs maintenance as documents arrive) and serve rare ones from the index. Caches, indexes, and materialized views are all the same move: shifting the boundary between write-path and read-path work. Chapter 2's timeline cache was exactly this, and its celebrity hybrid showed the boundary can differ per user.
+
+**Stateful, offline-capable clients.** The boundary can be pushed past the datacenter wall. Browsers used to be stateless terminals; single-page and mobile apps hold real state, work offline, and sync in the background. Through this chapter's lens: on-device state is a cache of server state, the pixels are a materialized view of the client's model objects, and the model objects are a replica of data in a datacenter.
+
+**Pushing state changes to clients.** A loaded web page is a point-in-time snapshot — a stale cache that updates only if you poll (RSS is polling in a trench coat). Server-sent events and WebSockets let the server push changes as they happen, extending the write path to the device. Devices go offline, but log consumers already solved that: track your offset, reconnect, replay what you missed. Each device is a very small subscriber to a very small stream.
+
+**End-to-end event streams.** Client frameworks in the React and Elm tradition already recompute the UI from local state changes. Feed server-pushed events into that pipeline and a state change can flow from one user's tap, through logs and processors, onto another user's screen in under a second. Messaging apps and multiplayer games already live this way; everything else doesn't because request/response is fossilized into our databases, libraries, and protocols — asking for a *stream of changes* to an answer is still exotic. Moving toward publish/subscribe dataflow means rethinking entrenched software; the prize is interfaces that are faster, fresher, and offline-tolerant.
+
+**Reads are events too.** Stream processors maintain internal state for joins and aggregations, and some frameworks let clients query it, making the processor a modest database. Push the symmetry further: write *read requests* into the log as events and have the processor emit answers to an output stream. A read becomes a transient stream-table join between queries and data; a subscription, a persistent one. This sounds baroque, but it records something valuable — what the user actually saw. In an online shop, the shipping estimate and stock status shown probably influenced the purchase; you can only analyze that if the read was recorded. Logging reads costs storage and I/O and remains a research topic.
+
+**Multi-partition data processing.** For single-shard queries this is overkill. The interesting case is queries combining data from many shards, where the stream infrastructure for routing and joining becomes a distributed query engine. Storm's distributed RPC computed, for a given URL, the union of the follower sets of everyone who shared it; fraud systems score a purchase by joining it against reputation data for the IP, email, billing, and shipping addresses, each sharded on a different key. If a database offers the multi-shard joins you need, use it; reads-as-streams is what you reach for past the edge of off-the-shelf.
+
+## Aiming for Correctness
+
+A stateless service that only reads can shrug off bugs: fix, redeploy, move on. Stateful systems remember things — including the consequences of bugs — indefinitely. For forty years the answer has been transactions, but the foundations are shakier than they look: weak isolation levels confuse experts, some communities abandoned transactions for vaguely defined "weak consistency," and Jepsen testing keeps finding daylight between claimed guarantees and behavior under faults. Serializability and atomic commit exist, but they live mostly in single datacenters and cap scale and fault tolerance. They are not the last word, so this section approaches correctness from the dataflow side.
+
+### The End-to-End Argument for Databases
+
+Start with an uncomfortable observation: an application on a serializable database can still corrupt its data, because serializability does nothing about application code that writes the wrong thing. (Hence the standing argument for immutable, append-only data — code that cannot overwrite anything cannot destroy it — though immutability alone is no cure.)
+
+**Exactly-once, revisited.** When processing fails midway, you drop the message (data loss) or retry — and the retry might repeat work that actually succeeded, you just never got the acknowledgment. Processing twice is corruption too: a customer charged twice, a counter double-incremented. *Exactly-once* means arranging the computation so the final effect is as if it ran once, regardless of retries. The workhorse is idempotence, but non-idempotent operations need scaffolding: remembering which operation IDs have been applied, plus fencing tokens during failover.
+
+**Duplicate suppression has layers, and every layer leaks.** TCP deduplicates packets — within one connection. Suppose that connection carries a money transfer:
+
+```sql
+BEGIN;
+UPDATE accounts SET balance = balance + 11.00 WHERE account_id = 1234;
+UPDATE accounts SET balance = balance - 11.00 WHERE account_id = 4321;
+COMMIT;
+```
+
+If the connection dies after `COMMIT` is sent but before the reply arrives, the client doesn't know whether the transaction landed. Retrying on a new connection is outside TCP's dedup scope, and the transaction isn't idempotent — retry it and $22 moves instead of $11. The textbook atomicity example is, end to end, incorrect; real banks don't work this way. Two-phase commit doesn't rescue it, because the duplicate can originate further out: a user on flaky cellular submits a POST, the response never arrives, the browser asks "submit this form again?", and the user — reasonably — says yes. To every layer below the user's intent, that's a brand-new request.
+
+**Operation identifiers.** The fix is to give the *operation itself* an identity that survives every hop: generate a unique request ID in the client (a UUID in a hidden form field, or a hash of the form contents), so a resubmission carries the same ID, and enforce it at the database:
+
+```sql
+ALTER TABLE requests ADD UNIQUE (request_id);
+
+BEGIN;
+INSERT INTO requests (request_id, from_account, to_account, amount)
+  VALUES ('a1b2-...', 4321, 1234, 11.00);
+-- balance updates here, or derived downstream from the event
+COMMIT;
+```
+
+A duplicate insert violates the constraint and aborts the retry — and databases enforce uniqueness correctly even at weak isolation levels, where a hand-rolled check-then-insert would not be. Notice the bonus: the `requests` table is an event log, and the balance updates could be derived downstream from the request event, processed exactly once using the same ID. Event sourcing falls out of doing deduplication properly.
+
+<EndToEndRequestId />
+
+**The end-to-end argument itself.** This is an instance of a principle Saltzer, Reed, and Clark articulated in 1984: certain functions can only be implemented completely and correctly with the help of the application at the endpoints; lower layers can contribute performance, not correctness. Duplicate suppression is one such function. Integrity checking is another: Ethernet, TCP, and TLS checksums catch network corruption but not a sender-side bug or disk rot; catching everything takes end-to-end checksums. Encryption is a third: WiFi passwords stop local snoopers, TLS stops attackers on the path, and only end-to-end encryption survives a compromised server. The low-level mechanisms are still worth having — they make problems rarer — they just can't finish the job alone.
+
+<Callout type="warning" title='"Exactly-once" on the box is not exactly-once end to end'>
+A stream processor advertising exactly-once semantics is promising that *its own* state and output will be as if each message were processed once. It cannot know that two distinct messages were the same human intention submitted twice. Deduplication needs an identifier minted at the true endpoint — the client — and checked at the final point of effect.
+</Callout>
+
+The frustrating consequence: applications must implement their own end-to-end measures, and application code is exactly where concurrency and partial-failure reasoning goes to die. Transactions were a wonderful simplification — collapsing crashes, races, and constraint violations into commit-or-abort — but they're insufficient, and expensive across heterogeneous systems. What we'd like, and don't yet have, is an abstraction that makes end-to-end correctness as easy as transactions made atomicity.
+
+### Enforcing Constraints
+
+The anchor case is uniqueness: usernames, file names, two people and one theater seat. Most other constraints — a balance that never goes negative, stock that isn't sold twice, no double-booked rooms — yield to the same techniques.
+
+**Uniqueness needs consensus.** If several concurrent requests claim the same value, something must pick one winner and reject the rest — and that decision is consensus. The usual implementation is a single leader, which works until throughput outgrows one node; you can scale by sharding on the constrained value — every claim for a given username routes, by hash, to the same shard. What you *cannot* have is asynchronous multi-leader replication, where two leaders may both accept "alice" with no honest way to un-accept one. If a constraint must reject violations immediately, synchronous coordination is the price.
+
+**Uniqueness in log-based messaging.** A log gives all consumers the same message order — total order broadcast, consensus in log form — so it can enforce uniqueness directly. Append every username claim to a shard chosen by hash of the username. A single-threaded stream processor reads its shard sequentially, keeping a local table of taken names: the first claim emits a success event to an output stream, later claims emit rejections, and the requesting client waits for its verdict. Throughput scales by adding shards. The pattern generalizes: route all potentially conflicting writes to the same shard, process them in sequence, and the processor can apply *any* validation logic.
+
+**Multi-shard request processing.** It gets interesting when one operation spans shards. The transfer in our SQL example touches three things — request ID, payer account, payee account — with no reason to live together. The traditional answer is atomic commit across all three shards, which drags every transaction into a cross-shard total order and strangles throughput. The log-based alternative gets equivalent correctness without it:
+
+<MultiShardTransfer />
+
+1. The client gives the transfer a unique request ID and appends it to the log shard for the *source* account. That single append is the atomic action everything else flows from.
+2. A stream processor on that shard reads the request, ignores it if the ID was already processed, checks the balance in its local log-derived state, reserves the amount, and emits events carrying the same ID: an outgoing-payment event to its own shard, an incoming-payment event to the destination shard, a fee event to the fees shard.
+3. Processors on the destination and fees shards apply the events, deduplicating by request ID. When the outgoing-payment event circles back, the source processor finalizes the payment it reserved.
+
+Now inject a crash anywhere. At-least-once delivery means the request gets reprocessed; determinism means the processor reaches the same decision and emits identical events; deduplication means downstream consumers drop the repeats. Every request affects payer and payee exactly once — the same guarantee atomic commit gives — without cross-shard coordination. A client that wants the outcome subscribes to the source shard and waits for the outgoing-payment (or explicitly emitted declined-payment) event.
+
+### Timeliness and Integrity
+
+That word "waits" deserves a look. Transactions bundle a convenience: the moment commit returns, everyone can see the write. Staged log processing makes no such promise. A client *may* block until its outcome event appears, but the waiting only informs the user; the *correctness* of the balance check doesn't depend on anyone waiting. That observation splits "consistency" into two requirements with different personalities:
+
+| | Timeliness | Integrity |
+|---|---|---|
+| Question | Am I seeing up-to-date state? | Is the data actually correct? |
+| Violation | Temporary — resolves if you wait and retry | Permanent — wrong until explicitly repaired |
+| Strong form | Linearizability (weaker: read-after-write) | Correct derivations, no loss, no contradictions |
+
+A timeliness violation heals itself; an integrity violation is forever, or until someone repairs it. And the two are nowhere near equally important. A credit card statement missing this morning's transaction is normal — banks settle asynchronously. A balance that doesn't equal the sum of its transactions, or a charge that debited you without crediting the merchant, is a catastrophe at any speed.
+
+ACID systems deliver both together, so the distinction rarely matters there. Dataflow systems *decouple* them: timeliness is weak unless you build waiting into the client, but integrity is the core competency. Everything in this chapter has quietly been an integrity mechanism — a write captured as one atomically appendable event, deterministic derivation functions, end-to-end request IDs, immutable logs that let you reprocess your way out of bugs. Exactly-once semantics *is* integrity preservation.
+
+**Loosely interpreted constraints.** Strict enforcement requires consensus per shard — no streaming trick avoids that. But interrogate your "hard" constraints and many turn out negotiable. Sell more items than the warehouse holds and you order stock, apologize, and offer a discount — a workflow you need *anyway* for the day a forklift flattens a pallet you thought you had. Airlines and hotels overbook deliberately; the compensation processes must exist regardless, because weather and strikes violate "constraints" no database can protect. A bank handles an overdraft with a fee, exposure bounded by daily withdrawal limits. Interbank settlement is reconciled after the fact as a matter of course. The pattern is the **compensating transaction**: allow the violation, detect it, fix it, apologize. The cost of an apology is usually low and always a business question; when acceptable, write optimistically and check afterward, reserving synchronous validation for actions you cannot take back. These applications still demand integrity (no lost reservations, no vanished money); what they don't demand is timely enforcement.
+
+<Callout type="insight" title="The apology budget">
+Coordination is not free correctness — it trades one kind of apology for another. Synchronous checking means fewer apologies for inconsistencies, but the coordination reduces availability, which means more apologies for outages. You cannot apologize zero times; you can only choose the mix — and most businesses, on reflection, choose far less coordination than their engineers assumed was mandatory.
+</Callout>
+
+**Coordination-avoiding data systems.** Combine the two findings — dataflow preserves integrity without atomic commit, linearizability, or cross-shard coordination; and many applications tolerate loose constraints while integrity holds — and you get systems that avoid coordination almost everywhere yet remain trustworthy. Such a system can run multi-leader across regions, replicating asynchronously, each datacenter operating independently through faults in the others: weak timeliness, strong integrity. Serializable transactions still earn their keep at small scope, and synchronous coordination can be added exactly where an unrecoverable action demands it — the whole system needn't pay for what one corner needs.
+
+### Trust, but Verify
+
+Everything above rests on a **system model**: processes crash and networks drop messages — but fsync'd data survives, RAM doesn't flip bits, the CPU multiplies correctly. Models treat assumptions as binary; reality deals in probabilities, and at sufficient scale "almost never" happens on a schedule — earlier chapters put numbers on corrupting disks, memory, and networks.
+
+**Software bugs are part of the model too.** MySQL has shipped bugs that let duplicates into unique indexes; PostgreSQL's serializable isolation has exhibited write skew. Those are two of the most battle-tested databases in existence; application code — with a fraction of the scrutiny — is far worse, and studies find many applications don't even use the integrity features their databases offer. ACID consistency assumes bug-free transactions moving a database between consistent states, which makes "we're consistent because we use transactions" a circular comfort.
+
+**Don't just blindly trust.** Checking data integrity is called **auditing**, and it isn't just for accountants — finance is merely honest enough to assume mistakes happen. Mature systems audit themselves: HDFS and S3 do not trust disks; background processes continually re-read files, compare replicas, and repair rot. If you want to know your data is still there, you have to read it and check — the same reason you must occasionally restore a backup. An untested backup is a hypothesis. Few systems make such provisions today; self-validating systems that continuously verify their own integrity are an overdue idea.
+
+**Designing for auditability.** A transaction log records that rows changed, not *why* — the application decision behind the mutation is gone. Event-sourced systems keep it: user intent is one immutable event, and every state update derives from it deterministically. Replay the log through the same code and you must get the same state — which means you can *check*: hash the event log to detect tampering or rot, re-run derivations to verify views, even run a redundant derivation in parallel and compare. Explicit dataflow gives provenance, and something close to time-travel debugging: reconstruct exactly what the system saw when it made a decision.
+
+**The end-to-end argument, one last time.** Since no component can be fully trusted, integrity checks are most valuable end to end: a check spanning the whole derived pipeline implicitly covers every disk, network, and algorithm along it, leaving corruption nowhere to hide. Continuous end-to-end auditing works like a test suite for your data — it catches damage quickly, and the confidence it builds is what lets you change systems fast.
+
+**Tools for auditable data systems.** Blockchains are, beneath the noise, shared append-only logs with cryptographic integrity checks: transactions are events, smart contracts are stream processors, and their consensus protocols are Byzantine fault-tolerant — replicas continually audit each other and survive participants with corrupted data. The overhead is far too high for most applications, but the cryptographic ingredients travel light: Merkle trees efficiently prove a record belongs to a dataset, and certificate transparency uses signed append-only logs plus Merkle trees to audit TLS certificates with a single leader per log instead of heavyweight consensus. Expect these techniques to keep seeping into ordinary data systems.
+
+<Callout type="insight" title="Where this chapter points">
+This chapter completes the technical arc of the book: you have the parts and a philosophy for composing them — logs as the spine, derivation as the muscle, end-to-end identifiers as the immune system. The final chapter changes the question. Systems built this way log everything, derive everything, and remember everything — which is exactly what makes them powerful, and exactly what makes them dangerous to the people whose lives are in the data. Chapter 14 asks not whether we *can* build these systems, but how to build them without doing harm.
+</Callout>

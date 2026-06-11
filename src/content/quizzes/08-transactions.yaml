@@ -1,0 +1,109 @@
+questions:
+  - id: ch08-q01
+    prompt: "A payment service inserts an order row and increments a daily-revenue counter inside one transaction. The process crashes after the insert but before the counter update. Under ACID, what state is the database in once recovery completes?"
+    options:
+      - "The order exists but the counter is stale, and the app must reconcile them"
+      - "Neither the order nor the counter change exists — the transaction was rolled back, so a retry is safe"
+      - "Both changes exist, because the write-ahead log replays unfinished work"
+      - "The order exists only if another transaction read it before the crash"
+    answerIndex: 1
+    explanation: "Atomicity means abortability: an interrupted transaction's writes are discarded entirely, so the application knows nothing changed and can retry. Replaying unfinished work would violate atomicity — the log replays only transactions whose commit record made it to disk."
+  - id: ch08-q02
+    prompt: "Why did the chapter argue that 'atomicity' is a misleading name for the A in ACID?"
+    options:
+      - "Transactions can never really be all-or-nothing on modern hardware"
+      - "Atomicity in databases only applies to single rows, not multiple objects"
+      - "ACID atomicity is about surviving faults mid-transaction (abortability), not about concurrent access, which 'atomic' means in multithreaded programming"
+      - "The term was coined for marketing rather than engineering reasons"
+    answerIndex: 2
+    explanation: "In multithreaded code, atomic means no one can observe a half-finished operation — a concurrency property. ACID files concurrency under isolation; its atomicity says that on a fault, partial writes are discarded so retries are safe. 'Abortability' would be the honest name."
+  - id: ch08-q03
+    prompt: "Your dashboard runs on read committed. A user mid-transfer sees account A at $500 (before the incoming $100) and account B at $400 (after the outgoing $100), totalling $900. Which anomaly is this, and does read committed permit it?"
+    options:
+      - "Dirty read — no, read committed should have prevented it"
+      - "Lost update — yes, read committed permits it"
+      - "Read skew — yes, every value read was committed, so read committed permits it"
+      - "Write skew — no, this requires two writers"
+    answerIndex: 2
+    explanation: "Each individual read returned committed data, so no dirty read occurred — but the two reads observed different points in time. That's read skew (nonrepeatable read), which read committed allows; snapshot isolation fixes it by freezing one consistent view per transaction."
+  - id: ch08-q04
+    prompt: "In a PostgreSQL-style MVCC database, transaction 12 starts, then transaction 13 changes a balance from $500 to $400 and commits. Transaction 12 now reads that account. What does it see, and why?"
+    options:
+      - "$400 — transaction 13 committed before the read happened"
+      - "$500 — the version deleted by txid 13 is still visible, because 13 had not committed when 12 started"
+      - "An error — the row is locked until transaction 12 finishes"
+      - "$400 — readers always see the newest committed version"
+    answerIndex: 1
+    explanation: "Visibility is determined by the reader's snapshot, not by wall-clock commit order: writes by transactions still in progress when the reader started are ignored even if they commit later. Old versions stick around precisely so in-flight snapshots stay consistent — readers never block writers, and vice versa."
+  - id: ch08-q05
+    prompt: "Two clinicians use an app that reads a patient's medication list, applies a dosage edit in application code, and writes the whole list back. Occasionally one edit disappears. Which fix does NOT address this lost-update bug?"
+    options:
+      - "Wrapping the read-modify-write in SELECT ... FOR UPDATE"
+      - "Adding a version column and updating only WHERE version matches (compare-and-set)"
+      - "Running at an isolation level that detects lost updates and aborts the loser"
+      - "Switching the reads to a consistent snapshot so both clinicians see the same starting list"
+    answerIndex: 3
+    explanation: "A consistent snapshot fixes what readers see, not what writers clobber — both transactions would still write back lists missing each other's edit. Locking serializes the cycles, compare-and-set fails the stale write, and automatic detection aborts one transaction for retry; all three actually prevent the loss."
+  - id: ch08-q06
+    prompt: "A coworking-space app checks that a desk has no overlapping reservation, then inserts the booking, all under snapshot isolation. Two users book the same desk simultaneously and both succeed. Why didn't SELECT ... FOR UPDATE on the conflicting reservations help?"
+    options:
+      - "FOR UPDATE only works at the read committed isolation level"
+      - "The conflicting reservation didn't exist yet when each transaction checked — there were no rows to lock (a phantom)"
+      - "Snapshot isolation silently ignores FOR UPDATE clauses"
+      - "Row locks are released as soon as the SELECT finishes"
+    answerIndex: 1
+    explanation: "Each transaction's check searched for rows that were absent, so FOR UPDATE attached locks to nothing; the other transaction's insert then changed the search result — a phantom causing write skew. Options are serializable isolation, or materializing conflicts with a slot table as a last resort."
+  - id: ch08-q07
+    prompt: "Which statement correctly contrasts two-phase locking with serializable snapshot isolation?"
+    options:
+      - "2PL is optimistic and aborts at commit; SSI is pessimistic and blocks on conflict"
+      - "2PL blocks — readers and writers wait for each other; SSI never blocks but may abort a transaction at commit if its premise went stale"
+      - "Both block, but SSI uses coarser-grained locks for speed"
+      - "2PL prevents write skew; SSI prevents everything except write skew"
+    answerIndex: 1
+    explanation: "2PL is pessimistic: shared/exclusive locks make readers and writers mutually blocking, which is exactly what makes its tail latencies fragile. SSI is optimistic: transactions run without blocking on a snapshot, and serialization conflicts are detected at commit time, aborting the second committer. Both prevent write skew — they're both serializable."
+  - id: ch08-q08
+    prompt: "A VoltDB-style system runs transactions serially as in-memory stored procedures, one per CPU core via sharding. Which workload change would hurt it most?"
+    options:
+      - "Doubling the number of read-only analytical queries"
+      - "A new feature whose transactions must read and write rows in several shards"
+      - "Increasing the size of each transaction's result set by 20%"
+      - "Adding more replicas for fault tolerance"
+    answerIndex: 1
+    explanation: "Cross-shard transactions require lockstep coordination across the serial loops — VoltDB measured roughly 1,000 cross-shard writes/second, orders of magnitude below single-shard throughput and not fixable by adding machines. Analytical reads run separately on snapshots, and replication runs the same deterministic procedures on each replica."
+  - id: ch08-q09
+    prompt: "During 2PC, a participant votes yes on prepare, then the coordinator crashes before sending any phase-2 message. What may the participant safely do?"
+    options:
+      - "Abort after a timeout, since no commit arrived"
+      - "Commit after a timeout, since it already promised it could"
+      - "Nothing unilaterally — it must hold its locks and wait for the coordinator to recover and read its decision log"
+      - "Poll the other participants and adopt the majority's outcome, per the 2PC spec"
+    answerIndex: 2
+    explanation: "After voting yes, the participant has surrendered its right to abort, and committing unilaterally risks diverging from a coordinator decision to abort. It is in doubt: only the coordinator's log knows the outcome. (Participants agreeing among themselves isn't part of 2PC — that idea leads toward consensus protocols.)"
+  - id: ch08-q10
+    prompt: "Why are database-internal distributed transactions (Spanner, FoundationDB, CockroachDB) much less fragile than XA heterogeneous transactions, despite often using 2PC themselves?"
+    options:
+      - "They skip the prepare phase, halving the failure window"
+      - "They control both ends of the protocol: consensus-replicated coordinators with failover, direct coordinator-shard communication, replicated participants, and integrated concurrency control"
+      - "They only allow read-only transactions to span shards"
+      - "They relax atomicity to eventual consistency across shards"
+    answerIndex: 1
+    explanation: "XA is a lowest common denominator riding inside unreplicated application code, so a crashed app server strands in-doubt locks. Internal protocols owe no compatibility to anyone: the coordinator is replicated via consensus, shards talk to it directly, and atomic commit integrates with distributed concurrency control — still 2PC in shape, without the single points of failure."
+  - id: ch08-q11
+    prompt: "An order-processing worker consumes messages from a broker and writes to a single database. You need each message's effects applied exactly once despite crashes and redelivery, but the broker doesn't support XA. What's the standard solution?"
+    options:
+      - "It can't be done without an atomic commit protocol spanning broker and database"
+      - "Store processed message IDs in a database table, check-and-insert the ID in the same transaction as the processing writes, and acknowledge only after commit"
+      - "Have the worker acknowledge the message before processing so it's never redelivered"
+      - "Use snapshot isolation so redelivered messages see their earlier writes and skip themselves"
+    answerIndex: 1
+    explanation: "Recording the message ID transactionally makes processing idempotent: a redelivery after a crash either finds no ID (transaction aborted, clean retry) or finds the ID and drops the duplicate. Acknowledging first risks losing messages entirely; isolation levels don't deduplicate. This is the Kafka Streams approach — exactly-once without cross-system atomic commit."
+  - id: ch08-q12
+    prompt: "Your e-commerce API runs at snapshot isolation, and a penetration tester drains a gift card below zero by firing 50 concurrent redemption requests, each checking the balance before inserting a redemption row. What is the most accurate diagnosis?"
+    options:
+      - "A dirty write — the database failed to lock the balance row"
+      - "Write skew via concurrent inserts: every request's check saw sufficient balance on its own snapshot, and only serializable isolation (or explicit locking) prevents it"
+      - "A lost update — the redemption rows overwrote each other"
+      - "Read skew — the attacker observed the card at two points in time"
+    answerIndex: 1
+    explanation: "Each transaction read the same data (balance and redemptions), then wrote a different row — the check-then-insert pattern that snapshot isolation does not protect, and that attackers can trigger deliberately. Nothing was overwritten, so it's neither a dirty write nor a lost update; the fix is serializable isolation, or materializing the conflict on the card row with FOR UPDATE."

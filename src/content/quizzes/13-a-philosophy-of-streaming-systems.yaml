@@ -1,0 +1,109 @@
+questions:
+  - id: ch13-q01
+    prompt: "Your application writes each product update to PostgreSQL and to Elasticsearch directly, in parallel. Months later the two disagree about hundreds of products. What is the root cause?"
+    options:
+      - "Elasticsearch is not a durable system of record, so it loses writes"
+      - "Concurrent writes were applied in different orders by the two systems, and neither one decided the ordering"
+      - "PostgreSQL's full-text search conflicts with Elasticsearch's analyzers"
+      - "The two systems use different consistency levels for reads"
+    answerIndex: 1
+    explanation: "With dual writes, no single system decides a total order, so two concurrent updates can be applied database-first in one store and index-first in the other — a permanent disagreement. Durability isn't the issue; the fix is funneling all writes through one ordered log (e.g., CDC) and deriving the index from it."
+  - id: ch13-q02
+    prompt: "Your team needs to restructure a dataset into a completely different schema without downtime or a risky big-bang switch. Which approach does the chapter recommend?"
+    options:
+      - "Run an ALTER TABLE migration during a maintenance window"
+      - "Maintain old and new schemas as two derived views of the same log, gradually shifting users to the new view"
+      - "Write to both schemas from the application during a transition period"
+      - "Freeze writes, batch-convert the data, then re-enable writes"
+    answerIndex: 1
+    explanation: "Reprocessing the log lets both views coexist (like dual-gauge railway track), so you can shift a trickle of users, test, ramp up, and drop the old view — every stage reversible. Dual writes from the application reintroduce the inconsistency problem this chapter starts with."
+  - id: ch13-q03
+    prompt: "Why did the lambda architecture fall out of use?"
+    options:
+      - "Stream processors could not achieve exactly-once semantics"
+      - "Its batch layer could not handle large historical datasets"
+      - "The same processing logic had to be implemented and maintained in two separate systems"
+      - "It required all events to pass through a single leader node"
+    answerIndex: 2
+    explanation: "Lambda computed every result twice — once in a batch layer, once in a speed layer — which meant duplicating and forever synchronizing the same logic. The kappa approach replaced it: one engine, with reprocessing done by replaying the retained log."
+  - id: ch13-q04
+    prompt: "According to the chapter, running CREATE INDEX is most closely analogous to:"
+    options:
+      - "Acquiring a table lock and rewriting the heap in sorted order"
+      - "Setting up a new follower replica or bootstrapping CDC — reprocessing the dataset into a new derived view"
+      - "Running a federated query across multiple storage engines"
+      - "Executing a distributed transaction across shards"
+    answerIndex: 1
+    explanation: "All three follow the same recipe: snapshot scan, catch up on the backlog of writes, then maintain continuously. That parallel is the heart of unbundling — derived data systems are index maintenance externalized across tools and teams."
+  - id: ch13-q05
+    prompt: "A checkout service calls a currency-rate service synchronously on every purchase, and outages of the rate service take checkout down. What is the dataflow-style fix?"
+    options:
+      - "Add a retry loop with exponential backoff around the RPC"
+      - "Cache rates in the checkout service and refresh them on each cache miss"
+      - "Subscribe to the stream of rate updates ahead of time and read the current rate from a local table at purchase time"
+      - "Move the rate service into the same Kubernetes cluster to cut latency"
+    answerIndex: 2
+    explanation: "Subscribing turns the RPC into a stream join: the rate is already local when the purchase arrives, so the lookup can be neither slow nor lost, and a rate-service outage just delays updates rather than blocking checkout. Cache-on-miss still puts a network call on the critical path at the worst moments."
+  - id: ch13-q06
+    prompt: "A search team precomputes results for the 1,000 most common queries and serves the rest from the inverted index. In write-path/read-path terms, what did they do?"
+    options:
+      - "Eliminated the read path for common queries"
+      - "Shifted the boundary between write path and read path further toward write time for common queries"
+      - "Moved the entire write path to the client"
+      - "Replaced lazy evaluation with polling"
+    answerIndex: 1
+    explanation: "Caches, indexes, and materialized views all shift where write-time work ends and read-time work begins. The common-query cache pushes the boundary toward the write path (more precomputation, cheaper reads) for those queries only — a read path still exists, it's just shorter."
+  - id: ch13-q07
+    prompt: "Your payment pipeline uses a stream processor with exactly-once semantics and a serializable database, yet customers occasionally get charged twice after mobile network timeouts. What is missing?"
+    options:
+      - "Two-phase commit between the stream processor and the database"
+      - "A client-generated request ID checked by a uniqueness constraint at the database"
+      - "Upgrading the database isolation level to strict serializability"
+      - "TCP keepalives so connections survive the network timeout"
+    answerIndex: 1
+    explanation: "The duplicate originates at the user resubmitting after a timeout — a fresh request that no lower layer can recognize. The end-to-end argument: only an operation ID minted at the client and enforced at the point of effect suppresses it. Stronger isolation or 2PC operate below the duplicate's origin."
+  - id: ch13-q08
+    prompt: "Can a system enforce unique usernames while using asynchronous multi-leader replication across two regions?"
+    options:
+      - "Yes, if conflicts are resolved with last-writer-wins"
+      - "Yes, if each region validates against its local replica before accepting"
+      - "No — two leaders can concurrently accept the same name; immediate uniqueness enforcement requires consensus and synchronous coordination"
+      - "No — multi-leader replication cannot replicate unique indexes"
+    answerIndex: 2
+    explanation: "Uniqueness means picking one winner among concurrent claims, which is consensus. Async multi-leader lets both regions say yes, and last-writer-wins would silently revoke a granted username. You can scale enforcement by sharding the decision on hash(username), but each decision point must be synchronous."
+  - id: ch13-q09
+    prompt: "In the log-based multi-shard payment design, the source-account processor crashes after emitting some (but maybe not all) of its output events. Why is correctness preserved?"
+    options:
+      - "The log broker rolls back the partially emitted events automatically"
+      - "Reprocessing is deterministic, so the same events are re-emitted, and downstream consumers drop duplicates by request ID"
+      - "The destination shard detects the crash and pauses until manual repair"
+      - "A two-phase commit coordinator replays the in-doubt transaction"
+    answerIndex: 1
+    explanation: "At-least-once redelivery re-runs the request; determinism guarantees identical decisions and identical output events; request-ID dedup makes the repeats harmless. Atomicity came from the single append of the request event — no rollback or coordinator exists or is needed."
+  - id: ch13-q10
+    prompt: "A transaction you made this morning is missing from your banking app, but the displayed balance always equals the sum of all posted transactions. In the chapter's terms, the system has:"
+    options:
+      - "An integrity violation but good timeliness"
+      - "A timeliness violation but intact integrity"
+      - "Violated both timeliness and integrity"
+      - "Violated neither, since banks settle asynchronously"
+    answerIndex: 1
+    explanation: "Stale data that will appear after settlement is a timeliness issue — temporary, healed by waiting. Integrity (no contradictions, sums that add up) is intact. The chapter's point is that this trade is usually acceptable, whereas the reverse — fresh but contradictory data — never is."
+  - id: ch13-q11
+    prompt: "An online retailer wants to stop ever overselling, which would require synchronous cross-region coordination on every order. The chapter would most likely advise:"
+    options:
+      - "Pay the coordination cost — overselling is an integrity violation"
+      - "Allow optimistic writes and handle rare oversells with a compensating workflow (backorder, apology, discount), since that workflow is needed anyway"
+      - "Switch to a single global region so coordination is cheap"
+      - "Use eventually consistent counters and accept silent stock loss"
+    answerIndex: 1
+    explanation: "Overselling is a loosely interpretable constraint, not an integrity violation: a forklift accident creates the same situation, so the apology workflow must exist regardless. Coordination trades apologies for inconsistency against apologies for outages; integrity (no lost orders, no vanished money) must still hold throughout."
+  - id: ch13-q12
+    prompt: "HDFS and S3 run background processes that continually re-read stored files and compare them against replicas. What principle is this?"
+    options:
+      - "Read repair, to fix stale quorum reads"
+      - "Trust, but verify — auditing for silent corruption instead of assuming disks work"
+      - "Write-ahead logging, to recover from crashes"
+      - "Byzantine fault tolerance against malicious storage nodes"
+    answerIndex: 1
+    explanation: "Disks mostly work, but at scale silent corruption is routine, so these systems audit themselves rather than blindly trust the hardware. Read repair fixes replication staleness (a timeliness mechanism), which is a different problem from detecting rot in data nobody is reading."

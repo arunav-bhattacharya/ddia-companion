@@ -1,0 +1,55 @@
+cards:
+  - id: ch13-f01
+    front: "Why is letting the application write directly to both a database and a search index dangerous?"
+    back: "Two concurrent writes can be applied in different orders by the two systems. Neither system decides the ordering, so they can disagree permanently. Fix: funnel all writes through one ordered log and derive the index from it."
+  - id: ch13-f02
+    front: "Derived data vs. distributed transactions — how does each keep systems consistent, and what does the log approach give up?"
+    back: "Transactions use atomic commit; logs use deterministic retry plus idempotent consumers. The log approach gives up timeliness: derived systems update asynchronously, so you can't always read your own write immediately."
+  - id: ch13-f03
+    front: "Name three situations where a total order of events becomes infeasible."
+    back: "Throughput beyond one machine (sharded logs have no cross-shard order); multiple datacenters with a leader each; microservices with separate durable state; offline-capable clients. Total order broadcast is equivalent to consensus, which assumes one node handles the stream."
+  - id: ch13-f04
+    front: "What does the unfriend-then-complain example illustrate?"
+    back: "Causal dependencies can span systems: if friendships and messages live in different systems, a notification service joining them may process events out of causal order and notify the ex. Capturing causality without total order broadcast is an open problem."
+  - id: ch13-f05
+    front: "Lambda vs. kappa architecture — what's the difference?"
+    back: "Lambda ran separate batch and stream layers computing the same results, so logic was maintained twice; it fell out of use. Kappa uses one engine: reprocessing history is just replaying the retained log through the same stream processor."
+  - id: ch13-f06
+    front: "What three features does a system need to unify batch and stream processing?"
+    back: "A replayable log of historical events; exactly-once semantics so failed tasks leave no partial output; and windowing by event time, since processing time is meaningless during a replay (e.g., Apache Beam on Flink or Cloud Dataflow)."
+  - id: ch13-f07
+    front: "What does CREATE INDEX reveal about derived data?"
+    back: "It scans a consistent snapshot, processes the backlog of writes, then maintains the index forever — the same procedure as setting up a new replica or bootstrapping CDC. An index is just the database reprocessing its data into a derived view."
+  - id: ch13-f08
+    front: "Federation vs. unbundling — distinction?"
+    back: "Federation unifies reads: one query interface over many stores (foreign data wrappers, Trino). Unbundling unifies writes: CDC and event logs make sure every change reaches every derived system — the database's index maintenance, externalized."
+  - id: ch13-f09
+    front: "When is unbundling worth its complexity?"
+    back: "Only when no single product covers your requirements. It buys breadth, not depth: an integrated database usually beats a composed kit on its designed workload, and unbundling for scale you don't have is premature optimization."
+  - id: ch13-f10
+    front: "How does the dataflow approach handle the currency-exchange-rate lookup differently from microservices?"
+    back: "Instead of a synchronous RPC to a rate service during checkout, the purchase processor subscribes to rate updates beforehand and keeps a local table — a stream join. A round trip you never make can be neither slow nor lost."
+  - id: ch13-f11
+    front: "Define the write path and the read path. What do caches, indexes, and materialized views do to them?"
+    back: "Write path: eager precomputation done when data arrives. Read path: lazy work done when someone queries. The derived dataset is where they meet; caches, indexes, and materialized views shift the boundary between the two."
+  - id: ch13-f12
+    front: "How can the write path extend all the way to an end-user device?"
+    back: "Server-sent events or WebSockets push state changes to clients; offline devices catch up like log consumers, replaying from their last offset. On-device state becomes a cache of server state; the pixels are a materialized view."
+  - id: ch13-f13
+    front: "Why don't TCP dedup plus database transactions guarantee a money transfer runs exactly once?"
+    back: "Each suppresses duplicates only within its own scope (connection, session, pipeline). A user resubmitting a timed-out POST creates a fresh request that no lower layer recognizes. Only an end-to-end operation ID, minted at the client and checked at the database, survives the whole journey."
+  - id: ch13-f14
+    front: "How does log-based messaging enforce a uniqueness constraint scalably?"
+    back: "Shard the log by hash of the constrained value, so conflicting claims land in one shard. A single-threaded processor reads sequentially, tracks taken values, and emits success/rejection events. Consensus per shard; throughput scales by adding shards."
+  - id: ch13-f15
+    front: "In the multi-shard payment example, where does atomicity come from without atomic commit?"
+    back: "From the single atomic append of the request event to the source account's log. Deterministic processing plus at-least-once delivery plus request-ID dedup guarantee all downstream events eventually apply exactly once."
+  - id: ch13-f16
+    front: "Timeliness vs. integrity — definitions and which matters more?"
+    back: "Timeliness: users see up-to-date state; violations are temporary and heal by waiting. Integrity: no corruption, loss, or contradiction; violations are permanent until repaired. Most applications need integrity far more — a late transaction is fine, a wrong balance never is."
+  - id: ch13-f17
+    front: "What is a compensating transaction, and why does it justify loosely enforced constraints?"
+    back: "A follow-up action that corrects a violated constraint: backorder and discount for oversold stock, rebooking for an overbooked flight, an overdraft fee. If the apology is cheap, you can write optimistically and validate afterward, avoiding coordination."
+  - id: ch13-f18
+    front: "What does 'trust, but verify' mean for data systems? Give an example."
+    back: "Hardware and software corrupt data eventually, so audit rather than assume: HDFS and S3 continually re-read files and compare replicas; event-sourced systems can re-run deterministic derivations to verify views; restore backups before you need them."

@@ -1,0 +1,34 @@
+---
+import Diagram from '../Diagram.astro';
+---
+
+<Diagram caption="A time-of-day clock can be stepped backward by NTP when it has drifted ahead; a monotonic clock only ever moves forward, so it is the safe choice for measuring durations.">
+  <svg viewBox="0 0 700 300" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="clocks-title">
+    <title id="clocks-title">Chart comparing a time-of-day clock that jumps backward during an NTP reset with a monotonic clock that always moves forward</title>
+
+    <!-- axes -->
+    <line x1="60" y1="250" x2="660" y2="250" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <line x1="60" y1="250" x2="60" y2="30" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="360" y="284" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">actual elapsed time</text>
+    <text x="30" y="140" text-anchor="middle" font-size="12" fill="var(--diagram-muted)" transform="rotate(-90 30 140)">clock reading</text>
+
+    <!-- monotonic clock: straight, always increasing -->
+    <line x1="60" y1="240" x2="640" y2="60" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="560" y="58" font-size="12" font-weight="600" fill="var(--diagram-stroke)">monotonic clock</text>
+    <text x="560" y="74" font-size="11" fill="var(--diagram-muted)">rate may be slewed, never jumps</text>
+
+    <!-- time-of-day clock: drifts fast, then stepped back by NTP -->
+    <polyline points="60,235 320,130" fill="none" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <line x1="320" y1="130" x2="320" y2="175" stroke="var(--diagram-accent)" stroke-width="1.5" stroke-dasharray="4 3"/>
+    <path d="M 320 175 l -4 -8 h 8 z" fill="var(--diagram-accent)"/>
+    <polyline points="320,175 640,95" fill="none" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <text x="335" y="120" font-size="12" font-weight="600" fill="var(--diagram-accent)">time-of-day clock</text>
+    <text x="335" y="160" font-size="11" fill="var(--diagram-accent)">NTP reset: clock jumps backward</text>
+
+    <!-- annotation of drift before reset -->
+    <text x="150" y="200" font-size="11" fill="var(--diagram-muted)">quartz drift: running fast</text>
+
+    <!-- caption note inside -->
+    <text x="360" y="44" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">a duration measured across the jump would come out negative</text>
+  </svg>
+</Diagram>

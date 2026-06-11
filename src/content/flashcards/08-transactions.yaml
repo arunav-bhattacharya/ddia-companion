@@ -1,0 +1,61 @@
+cards:
+  - id: ch08-f01
+    front: "What does ACID atomicity actually mean — and what does it NOT mean?"
+    back: "It means abortability: if a fault interrupts a multi-write transaction, all its writes are discarded, so a retry is safe. It does NOT mean concurrency safety — that's isolation's job."
+  - id: ch08-f02
+    front: "Why is the C in ACID mostly the application's responsibility?"
+    back: "Consistency means application-specific invariants (e.g., credits equal debits) hold after every transaction. The database can only enforce invariants expressible as constraints (foreign keys, uniqueness, checks); everything else depends on the application writing correct transactions."
+  - id: ch08-f03
+    front: "Dirty read vs. dirty write — what's the difference?"
+    back: "Dirty read: seeing another transaction's writes before it commits. Dirty write: overwriting a value an uncommitted transaction wrote. Read committed prevents both — via row locks for writes and old-value bookkeeping for reads."
+  - id: ch08-f04
+    front: "How do most databases prevent dirty reads without read locks?"
+    back: "For each row being modified, they keep both the old committed value and the uncommitted new value, serving the old one to readers until the writer commits. This avoids readers queueing behind long-running write transactions."
+  - id: ch08-f05
+    front: "What is read skew, and which workloads can't tolerate it?"
+    back: "Seeing different parts of the database as of different points in time (e.g., $500 + $400 instead of $1,000 mid-transfer). Fatal for backups (inconsistency becomes permanent on restore) and long analytical scans or integrity checks."
+  - id: ch08-f06
+    front: "What is the key performance principle of snapshot isolation?"
+    back: "Readers never block writers, and writers never block readers. Long read-only queries run on a consistent snapshot while writes proceed normally — no lock contention between the two."
+  - id: ch08-f07
+    front: "In MVCC, what happens internally when a transaction updates a row?"
+    back: "The update becomes a delete plus an insert: the old version is stamped deleted_by = txid and a new version is inserted with inserted_by = txid. Both coexist until garbage collection removes versions no transaction can see."
+  - id: ch08-f08
+    front: "State the MVCC visibility rules in one breath."
+    back: "Ignore writes by transactions in progress when you started (even if since committed), by transactions that started after you, and by aborted transactions. Equivalently: a version is visible if its inserter committed before your transaction began and its deleter hadn't."
+  - id: ch08-f09
+    front: "Why does 'repeatable read' mean different things in different databases?"
+    back: "The SQL standard predates snapshot isolation, so vendors map it to the nearest label: in PostgreSQL 'repeatable read' is snapshot isolation, in Oracle snapshot isolation is called 'serializable', MySQL's repeatable read is weaker, and Db2's means serializability."
+  - id: ch08-f10
+    front: "Name four single-database techniques for preventing lost updates."
+    back: "Atomic write operations (UPDATE ... SET value = value + 1), explicit locking (SELECT ... FOR UPDATE), automatic lost-update detection with abort-and-retry (e.g., PostgreSQL repeatable read), and compare-and-set (update only if value unchanged)."
+  - id: ch08-f11
+    front: "Why don't locks or compare-and-set prevent lost updates under multi-leader replication?"
+    back: "Both assume a single up-to-date copy of the data. Multi-leader and leaderless systems accept concurrent writes on different nodes, so they instead create sibling versions and merge them — safe for commutative ops (CRDTs), lossy under last-write-wins."
+  - id: ch08-f12
+    front: "What is write skew, and how does it relate to lost updates?"
+    back: "Two transactions read the same objects, then update different objects based on what they read, invalidating each other's premise (e.g., both doctors go off call). It generalizes the lost update, which is the special case of updating the same object."
+  - id: ch08-f13
+    front: "What is a phantom, and why does it defeat SELECT FOR UPDATE?"
+    back: "A write in one transaction that changes the result of another transaction's search query. When the check is for the absence of rows (no conflicting booking), there are no rows to lock — FOR UPDATE has nothing to attach to."
+  - id: ch08-f14
+    front: "What is materializing conflicts, and when should you use it?"
+    back: "Artificially creating rows (e.g., a room/time-slot table) purely as lock targets, turning a phantom into a lock conflict on real rows. A last resort: it leaks concurrency control into the data model and is error-prone. Prefer serializable isolation."
+  - id: ch08-f15
+    front: "What constraints make actual serial execution viable for serializability?"
+    back: "Transactions must be small and fast (submitted as deterministic stored procedures, no interactive round trips), the active dataset should fit in memory, and write throughput must fit one CPU core — or shard cleanly so each transaction stays in one shard."
+  - id: ch08-f16
+    front: "In two-phase locking, where does the name 'two-phase' come from?"
+    back: "A growing phase, during execution, when shared and exclusive locks are acquired; and a shrinking phase, at commit or abort, when all locks are released. The phases never overlap — no new locks after any release."
+  - id: ch08-f17
+    front: "Predicate locks vs. index-range locks — what's the trade-off?"
+    back: "Predicate locks cover all objects matching a search condition (including future phantoms) but are slow to check. Index-range locks approximate them by locking a wider region of an index — less precise, far cheaper, and safe because over-locking can't break serializability."
+  - id: ch08-f18
+    front: "How does serializable snapshot isolation (SSI) detect that a transaction's premise went stale?"
+    back: "Two checks at commit: (1) did an MVCC-ignored uncommitted write later commit (stale read)? (2) did another transaction write to data this one previously read (tracked via index entries as non-blocking tripwires)? If so, abort the transaction that commits second."
+  - id: ch08-f19
+    front: "In 2PC, what exactly are the two 'points of no return'?"
+    back: "A participant's yes vote on prepare — it must have made commit unconditionally possible and surrenders the right to abort; and the coordinator writing its decision to its log (the commit point) — after that, the decision is enforced via retries, forever."
+  - id: ch08-f20
+    front: "Why is an in-doubt XA transaction so disruptive, and what's the escape hatch?"
+    back: "An in-doubt participant must hold its row locks (across restarts) until the coordinator's verdict, blocking every transaction touching those rows. The escape hatch is a heuristic decision — unilaterally committing or aborting — which probably breaks atomicity."

@@ -1,0 +1,92 @@
+---
+import Diagram from '../Diagram.astro';
+---
+
+<Diagram wide caption="Two broker philosophies: an AMQP/JMS-style broker deletes each message once a consumer acknowledges it, while a log-based broker appends messages to a durable log that every consumer reads at its own pace.">
+  <svg viewBox="0 0 780 300" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="brokerstyles-title">
+    <title id="brokerstyles-title">Comparison of AMQP-style message broker and log-based message broker</title>
+
+    <!-- Left panel: AMQP/JMS style -->
+    <text x="190" y="26" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-stroke)">AMQP / JMS style</text>
+
+    <rect x="30" y="120" width="80" height="32" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="70" y="140" text-anchor="middle" font-size="12" fill="var(--diagram-stroke)">producer</text>
+
+    <!-- queue -->
+    <rect x="140" y="112" width="120" height="48" rx="6" fill="none" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="200" y="104" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">queue</text>
+    <rect x="148" y="122" width="22" height="28" rx="4" fill="var(--diagram-fill)" stroke="var(--diagram-muted)" stroke-width="1.5"/>
+    <rect x="176" y="122" width="22" height="28" rx="4" fill="var(--diagram-fill)" stroke="var(--diagram-muted)" stroke-width="1.5"/>
+    <rect x="204" y="122" width="22" height="28" rx="4" fill="var(--diagram-fill)" stroke="var(--diagram-muted)" stroke-width="1.5"/>
+    <!-- deleted message (dashed, faded) -->
+    <rect x="232" y="122" width="22" height="28" rx="4" fill="none" stroke="var(--diagram-accent)" stroke-width="1.5" stroke-dasharray="3 3"/>
+    <line x1="236" y1="126" x2="250" y2="146" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <line x1="250" y1="126" x2="236" y2="146" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+
+    <line x1="110" y1="136" x2="138" y2="136" stroke="var(--diagram-stroke)" stroke-width="1.5" marker-end="url(#bs-arrow)"/>
+
+    <!-- consumers -->
+    <rect x="300" y="78" width="84" height="32" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="342" y="98" text-anchor="middle" font-size="12" fill="var(--diagram-stroke)">consumer 1</text>
+    <rect x="300" y="162" width="84" height="32" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="342" y="182" text-anchor="middle" font-size="12" fill="var(--diagram-stroke)">consumer 2</text>
+
+    <line x1="262" y1="126" x2="296" y2="98" stroke="var(--diagram-stroke)" stroke-width="1.5" marker-end="url(#bs-arrow)"/>
+    <line x1="262" y1="148" x2="296" y2="174" stroke="var(--diagram-stroke)" stroke-width="1.5" marker-end="url(#bs-arrow)"/>
+
+    <!-- ack arrow back -->
+    <line x1="318" y1="118" x2="258" y2="116" stroke="var(--diagram-accent)" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#bs-arrow-accent)"/>
+    <text x="288" y="132" text-anchor="middle" font-size="11" fill="var(--diagram-accent)">ack</text>
+
+    <text x="190" y="232" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">ack deletes the message — reading is destructive,</text>
+    <text x="190" y="248" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">redelivery may reorder messages</text>
+
+    <!-- divider -->
+    <line x1="400" y1="40" x2="400" y2="270" stroke="var(--diagram-muted)" stroke-width="1.5" stroke-dasharray="4 5"/>
+
+    <!-- Right panel: log-based -->
+    <text x="590" y="26" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-stroke)">log-based</text>
+
+    <rect x="420" y="120" width="80" height="32" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="460" y="140" text-anchor="middle" font-size="12" fill="var(--diagram-stroke)">producer</text>
+
+    <!-- log: append-only sequence with offsets -->
+    <text x="608" y="104" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">append-only log (offsets)</text>
+    <g>
+      <rect x="526" y="112" width="28" height="28" rx="4" fill="var(--diagram-fill)" stroke="var(--diagram-muted)" stroke-width="1.5"/>
+      <text x="540" y="131" text-anchor="middle" font-size="11" fill="var(--diagram-stroke)">0</text>
+      <rect x="558" y="112" width="28" height="28" rx="4" fill="var(--diagram-fill)" stroke="var(--diagram-muted)" stroke-width="1.5"/>
+      <text x="572" y="131" text-anchor="middle" font-size="11" fill="var(--diagram-stroke)">1</text>
+      <rect x="590" y="112" width="28" height="28" rx="4" fill="var(--diagram-fill)" stroke="var(--diagram-muted)" stroke-width="1.5"/>
+      <text x="604" y="131" text-anchor="middle" font-size="11" fill="var(--diagram-stroke)">2</text>
+      <rect x="622" y="112" width="28" height="28" rx="4" fill="var(--diagram-fill)" stroke="var(--diagram-muted)" stroke-width="1.5"/>
+      <text x="636" y="131" text-anchor="middle" font-size="11" fill="var(--diagram-stroke)">3</text>
+      <rect x="654" y="112" width="28" height="28" rx="4" fill="var(--diagram-accent)" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+      <text x="668" y="131" text-anchor="middle" font-size="11" fill="var(--bg)">4</text>
+    </g>
+    <line x1="500" y1="136" x2="522" y2="128" stroke="var(--diagram-stroke)" stroke-width="1.5" marker-end="url(#bs-arrow)"/>
+    <text x="690" y="131" font-size="11" fill="var(--diagram-accent)">append</text>
+
+    <!-- consumers reading at own offsets -->
+    <rect x="540" y="198" width="92" height="32" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="586" y="218" text-anchor="middle" font-size="12" fill="var(--diagram-stroke)">consumer A</text>
+    <rect x="654" y="198" width="92" height="32" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="700" y="218" text-anchor="middle" font-size="12" fill="var(--diagram-stroke)">consumer B</text>
+
+    <line x1="572" y1="144" x2="580" y2="194" stroke="var(--diagram-stroke)" stroke-width="1.5" marker-end="url(#bs-arrow)"/>
+    <text x="556" y="172" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">at 1</text>
+    <line x1="668" y1="144" x2="700" y2="194" stroke="var(--diagram-stroke)" stroke-width="1.5" marker-end="url(#bs-arrow)"/>
+    <text x="702" y="172" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">at 4</text>
+
+    <text x="590" y="262" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">reading never deletes — each consumer keeps its own offset</text>
+
+    <defs>
+      <marker id="bs-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--diagram-stroke)"/>
+      </marker>
+      <marker id="bs-arrow-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--diagram-accent)"/>
+      </marker>
+    </defs>
+  </svg>
+</Diagram>

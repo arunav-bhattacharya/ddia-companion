@@ -1,0 +1,58 @@
+assignments:
+  - id: ch13-a01
+    title: "Untangle dual writes at a real-estate listings platform"
+    scenario: |
+      HearthList runs property listings for 40 cities. The system of record is PostgreSQL, but the application also writes every listing change directly to Elasticsearch (search), Redis (map-tile cache), and a Kafka topic consumed by the analytics warehouse — four writes from the app server, in parallel, best-effort. Agents report that price drops sometimes show in search but not on the map for hours, and the warehouse row counts drift from PostgreSQL by about 0.5% per month. Meanwhile, product wants to restructure listings from one-row-per-property to one-row-per-unit (for apartment buildings) without a downtime window.
+    tasks:
+      - "Diagnose why the four-way dual write produces both the temporary disagreements and the permanent drift, using the chapter's reasoning about dataflows and ordering."
+      - "Redesign the integration around a single ordered source of changes, specifying what becomes derived and how a crashed consumer recovers without losing or duplicating updates."
+      - "Plan the property-to-unit schema migration using derived views so that every stage is reversible."
+      - "State what guarantee the new design gives up relative to the old synchronous writes, and how you'd mitigate it for the 'edit listing, then immediately view it' flow."
+    hints:
+      - "Who decides the order of two concurrent edits to the same listing today? Nobody — that's the bug."
+      - "The railway gauge story is the migration plan."
+    modelAnswer: |
+      With dual writes, no system decides a total order: two concurrent edits can reach Elasticsearch in one order and Redis in another, and a failed best-effort write is simply lost — temporary disagreement from reordering, permanent drift from dropped writes (an integrity violation that never heals on its own).
+
+      The fix is log-based derivation. PostgreSQL stays the system of record; change data capture (e.g., Debezium) turns its changes into one ordered log, and Elasticsearch, Redis, and the warehouse each become derived consumers applying changes in log order with idempotent writes. A crashed consumer just resumes from its offset and catches up — nothing is lost, duplicates are suppressed, and a slow consumer can't take the others down. This is the unbundled-database pattern: index maintenance externalized.
+
+      For the migration, derive the new per-unit view from the same log while the per-property view keeps running — dual gauge. Route a small share of read traffic to the new view, compare results, ramp gradually, and only drop the old view when nothing reads it. Every stage has a working system to retreat to.
+
+      The cost is timeliness: derived views update asynchronously, so an agent might edit a listing and not see the change in search immediately. Mitigate read-your-writes specifically — serve the editing agent's own listing from PostgreSQL (or wait for the consumer to acknowledge the edit's offset) while everyone else tolerates a second of lag. Integrity is preserved throughout; only freshness is negotiated.
+  - id: ch13-a02
+    title: "Kill duplicate donations at a fundraising platform"
+    scenario: |
+      GiveBridge processes about 200,000 donations a day for nonprofits. The stack is modern: a stream processor with exactly-once semantics moves donation events from the API gateway into the payments database, which runs serializable transactions. Yet support handles roughly 60 double-charge complaints a week, almost all from mobile users in areas with poor connectivity. Logs show the pattern: the donor's POST times out, the app (or the donor) retries, and two distinct donation records are created. Each donation must also update three differently sharded datasets: the donor's giving history, the campaign's running total, and the platform's fee ledger.
+    tasks:
+      - "Explain, using the end-to-end argument, why exactly-once stream processing and serializable transactions failed to prevent the double charges."
+      - "Design the duplicate-suppression fix end to end, specifying where the operation ID is generated, how it travels, and where it is enforced."
+      - "Show how the three differently sharded updates can all be applied exactly once without an atomic commit across shards."
+      - "Explain to a skeptical PM whether donors will always instantly see their donation in the campaign total, and why that's acceptable."
+    hints:
+      - "The duplicate is born in the donor's thumb, not in your pipeline."
+      - "One atomic append can stand in for a three-shard transaction."
+    modelAnswer: |
+      The retry happens above every layer that deduplicates: TCP dedupes within one connection, the stream processor within its own pipeline, the database within one transaction. A resubmitted POST is a brand-new request to all of them. The end-to-end argument says duplicate suppression can only be completed by the endpoints — so the fix must start in the client.
+
+      The app generates a UUID when the donor first taps "donate" and reuses it on every retry of that intent. The ID travels in the request, into the donation event, and is enforced where the money moves: a uniqueness constraint on request_id in the donations table (reliable even at weak isolation), or dedup state in the stream processor keyed by that ID.
+
+      For the three shards, use the multi-shard log pattern: the client's donation event is appended once, atomically, to the log shard for the donor. A deterministic processor reads it, dedupes by request ID, and emits events carrying the same ID to the campaign-total shard and the fee-ledger shard. If the processor crashes, at-least-once redelivery replays the request, determinism reproduces identical outputs, and downstream consumers drop duplicates by ID. Every shard applies the donation exactly once, with no cross-shard commit protocol.
+
+      Donors may see the campaign total lag by a moment — a timeliness gap, which heals by itself and matches how money already works (banks settle asynchronously). What the design guarantees is integrity: no donation lost, none counted twice. That is the promise worth keeping.
+  - id: ch13-a03
+    title: "Survive the on-sale stampede at a ticketing company"
+    scenario: |
+      VenueWorks sells tickets for arenas across three continents. Every seat is enforced as strictly unique by one global, serializable PostgreSQL cluster in Frankfurt — which melts during big on-sales (300,000 checkout attempts in two minutes for a 18,000-seat arena), and gives Australian buyers 350 ms of extra latency on every request. Leadership wants regional deployments and on-sale survival, but the CTO insists "two people in one seat is unacceptable, so we need global serializability." Separately, finance notes that about 2% of sold tickets are refunded or reissued for ordinary reasons (event changes, access issues) through an existing support workflow.
+    tasks:
+      - "Evaluate the CTO's claim: which constraints here genuinely require consensus, and at what scope?"
+      - "Design seat allocation using sharded logs and stream processors so that on-sale throughput scales with the number of shards, and describe what the buyer experiences while waiting."
+      - "Identify which parts of the flow could use loosely interpreted constraints with compensating workflows, and quantify the trade with the apology-budget framing."
+    hints:
+      - "Consensus is needed per seat, not per planet."
+      - "A 2% compensation workflow already exists — what does that tell you about the cost of an apology?"
+    modelAnswer: |
+      The CTO is right that seat uniqueness requires consensus — picking one winner among concurrent claims — but wrong about scope. Consensus is needed per seat, not globally: shard the allocation log by event ID (or seat block), and all claims for a given seat land in the same shard. Nothing about a Sydney concert needs to coordinate with Frankfurt.
+
+      Design: a buyer's claim, carrying a client-generated request ID, is appended to the event's log shard. A single-threaded stream processor consumes the shard in order, tracks seat state in local log-derived storage, and emits "allocated" or "sold out" events to an output stream; the buyer's session subscribes and waits for its verdict — typically milliseconds, but gracefully queueing under stampede load instead of melting. Throughput scales by adding shards (one per event is natural), and regional deployments host the shards for their own events, eliminating the 350 ms tax. Crashes are safe: deterministic replay plus request-ID dedup means each claim is decided exactly once.
+
+      Loose constraints fit everything around the seat decision: payment authorization can complete asynchronously after a short hold, with the rare failed payment compensated by releasing the seat and apologizing — the same workflow finance already runs on 2% of tickets. The apology budget makes the trade explicit: today VenueWorks pays in outage-apologies (melted on-sales, lost revenue) to keep inconsistency-apologies near zero. Moving a known-cheap apology (support already handles reissues) buys availability and regional latency. Integrity — no seat sold twice, no payment lost — is preserved throughout; only synchronous global coordination is dropped.

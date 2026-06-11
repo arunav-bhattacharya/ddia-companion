@@ -1,0 +1,52 @@
+assignments:
+  - id: ch12-a01
+    title: "Sync a hotel-booking platform's derived stores"
+    scenario: |
+      StayFinder, a hotel-booking platform, stores rooms, rates, and availability in PostgreSQL (about 4 million rows, roughly 900 updates/second at peak). Search runs on Elasticsearch, hot availability lookups hit Redis, and analysts query a Snowflake warehouse loaded by a nightly dump. Today the application code performs all the writes itself: update PostgreSQL, then Elasticsearch, then invalidate Redis. Support tickets about phantom rooms — bookable in search but sold out in the database — arrive weekly, and engineers can never reproduce them. The team also wants to launch a price-alert feature ("notify me when this hotel drops below 120 EUR"), which the nightly dump is far too slow for.
+    tasks:
+      - "Explain the two failure modes of the current write path that produce phantom rooms, and why no error ever shows up in the logs."
+      - "Design a CDC-based architecture for keeping Elasticsearch, Redis, and Snowflake in sync. Specify what plays leader, what transport you'd use and why ordering matters, and how a brand-new derived store gets bootstrapped."
+      - "Explain how the price-alert feature fits into your architecture as a stream consumer, and which 'search on streams' technique it resembles."
+    hints:
+      - "Two clients updating the same room concurrently may not arrive in the same order everywhere."
+      - "Log compaction can stand in for the initial snapshot."
+    modelAnswer: |
+      Phantom rooms are classic dual-write damage. First, a race: two concurrent updates to the same room can reach PostgreSQL in one order and Elasticsearch in the other, so the index keeps the loser's value forever. Second, partial failure: the database write commits but the Elasticsearch write or Redis invalidation fails (timeout, deploy, crash), and nothing reconciles them. Neither case raises an application error — both systems accepted writes successfully; they just disagree.
+
+      The fix is to stop having two leaders. PostgreSQL becomes the sole system of record; a CDC connector (e.g., Debezium on logical replication) extracts every committed change in commit order into a log-based broker like Kafka, partitioned by room ID so each room's changes stay totally ordered. Elasticsearch, Redis, and Snowflake become independent consumers applying the same changes in the same order — fan-out is free, and a slow Snowflake loader can't affect the others. Bootstrapping a new store uses either a consistent snapshot tied to a log position, or better, a log-compacted topic where each event carries the row's full new value: a new consumer reads from offset 0 and gets the latest value of every key, then keeps following.
+
+      Price alerts become one more consumer, but with the query/data relationship inverted, like CEP or Elasticsearch percolation: the standing queries ("hotel X under 120 EUR") are stored long-term, and each rate-change event flowing past is matched against them, emitting a notification event on match. No nightly dump involved — alert latency drops from a day to roughly the CDC pipeline's replication lag.
+  - id: ch12-a02
+    title: "Fix the phantom rush hour in fleet telemetry"
+    scenario: |
+      HaulWatch monitors 12,000 delivery trucks. Each truck's onboard unit emits a speed-and-location event every 5 seconds, buffering locally when cellular coverage drops (tunnels, rural routes — gaps of minutes to hours are routine) and uploading the backlog when connectivity returns. A stream job computes per-region average speed in 1-minute windows to detect congestion, and an alerting job pages dispatchers when a region's average drops sharply. Dispatchers complain about two things: congestion alerts that fire an hour after the jam has cleared yet show it starting 'now', and weird bursts where a region's vehicle count triples for a minute. The current job windows events by the processing machine's clock, and trusts each truck's onboard clock for nothing.
+    tasks:
+      - "Diagnose both complaints using the event-time versus processing-time distinction."
+      - "Redesign the windowing: which timestamp should events carry, how do you correct for untrusted onboard clocks, and which window type fits the 1-minute congestion metric?"
+      - "Define a straggler policy for events uploaded hours late, and explain the trade-off between the two options the chapter offers."
+    hints:
+      - "Three timestamps are enough to estimate a device clock's offset."
+      - "Is a late-corrected congestion average still useful to a dispatcher?"
+    modelAnswer: |
+      Both complaints are processing-time artifacts. A truck exits a tunnel and uploads 40 minutes of buffered events; the job, windowing by its own clock, treats them as happening now — so a long-gone jam 'starts' at upload time, and a region's apparent vehicle count triples because one truck contributes 40 minutes' worth of events to a single 1-minute window.
+
+      Window by event time instead. Each event should carry three timestamps: when it occurred and when it was sent (both by the truck's clock), and when the server received it (server clock). Received minus sent estimates each truck's clock offset, assuming small network delay; applying that offset to the occurrence time gives a trustworthy event time even from a skewed onboard clock. For the metric itself, a 1-minute tumbling window matches the requirement directly; a 5-minute hopping window with a 1-minute hop is worth considering for smoother alerts. Either way the processor must hold windows open briefly for late events, using a timeout or per-truck watermarks — with the caveat that tracking thousands of producers' watermarks, and trucks joining or leaving the fleet, adds real bookkeeping.
+
+      For stragglers beyond the grace period: congestion alerting should ignore them but count drops and alert if the dropped fraction grows — a correction to a 60-minute-old traffic average helps no dispatcher, and timeliness is the product. Any historical analytics view, though, should accept corrections, republishing updated window values so route-planning analysis stays accurate. The trade-off is timeliness and simplicity versus completeness; the right answer differs per consumer, which is itself an argument for keeping the raw event log and deriving both views from it.
+  - id: ch12-a03
+    title: "Exactly-once payouts for a creator platform"
+    scenario: |
+      ClipShare, a video platform, pays creators per qualified view. View events flow through Kafka (about 80,000 events/second, partitioned by video ID). A stream job validates each view, aggregates qualified views per creator per hour, writes running totals to a payouts database, and emits a 'milestone' message to a notification service when a creator crosses a payout threshold. During last month's broker incident, the job crashed and restarted several times: some creators were paid for duplicate views, and a few received the same milestone push notification four times. Finance now demands that totals be exactly right even across crashes; product wants notifications to stop repeating.
+    tasks:
+      - "Explain why restart-after-crash caused double-counting, in terms of consumer offsets and at-least-once delivery."
+      - "Propose a design achieving effectively-once payout totals. Compare the idempotent-write approach against transactional output, and state the assumptions each requires."
+      - "The notification side effect leaves the framework's control once sent. Explain why checkpointing alone can't fix the repeated pushes, and propose a mitigation."
+    hints:
+      - "What can you store alongside a running total to detect a replayed message?"
+      - "'Exactly-once' really means the visible effect happens once."
+    modelAnswer: |
+      The broker records consumer offsets periodically, not per message. Each crash meant the restarted job resumed from the last recorded offset and reprocessed every event handled since — at-least-once delivery. Reprocessed views were added to running totals again, and threshold crossings re-fired notifications.
+
+      For the totals, idempotence is the cheap, effective route: store, with each creator's hourly aggregate, the highest offset applied per input partition. On replay, an incoming event whose offset is at or below the stored value is skipped — performing the update twice has the effect of doing it once. The assumptions are real: the log must replay the same messages in the same order (Kafka's partitions guarantee this), processing must be deterministic, and only one writer may own a given aggregate — so partition the job's state by creator the same way as its input, and fence failed-over nodes so a presumed-dead worker can't issue stale writes. The alternative is transactional output (Kafka transactions): state changes, output messages, and the offset advance commit atomically, amortized over batches of events. It's cleaner but keeps everything inside the Kafka ecosystem; the external payouts database would need to participate via the idempotent pattern anyway.
+
+      A push notification, once sent, can't be rolled back by discarding a checkpoint — replay simply sends it again, which is exactly what happened. Mitigation: make the effect idempotent at the boundary. Emit milestone messages keyed by a deterministic ID (creator, threshold), and have the notification service deduplicate on that ID before sending — multiple deliveries, one push. Effectively-once is the honest goal: events may be processed repeatedly, but each visible effect happens once.

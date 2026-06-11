@@ -1,0 +1,61 @@
+cards:
+  - id: ch09-f01
+    front: "What is a partial failure, and why is it the defining trouble of distributed systems?"
+    back: "Some parts of the system are broken while others work fine — unlike a single computer, which fails completely. Partial failures are nondeterministic: the same operation may succeed, fail, or leave you unsure whether it succeeded."
+  - id: ch09-f02
+    front: "What does an asynchronous packet network promise about message delivery?"
+    back: "Nothing. You can send a packet, but the network guarantees neither when it arrives nor whether it arrives at all. Delays are unbounded — there is no cap you can rely on."
+  - id: ch09-f03
+    front: "You sent a request and got no response. What are the possible causes, and which can you distinguish?"
+    back: "Request lost, request queued, remote node crashed, node temporarily unresponsive (e.g., GC pause), or response lost/delayed. From the sender's side they're indistinguishable — silence is silence. A timeout declares failure without proving it."
+  - id: ch09-f04
+    front: "TCP acknowledged your packet. What does that prove about your request?"
+    back: "Only that the remote kernel received the bytes. The application may have crashed before reading them, and TCP can't dedupe across reconnections. Only a positive application-level response proves a request was processed."
+  - id: ch09-f05
+    front: "How common and how strange are network faults in practice?"
+    back: "One medium datacenter study: ~12 faults/month, half isolating one machine, half a whole rack. Faults can be asymmetric (A reaches B but not C; a NIC that sends but drops all inbound). Redundant gear helps little against human misconfiguration."
+  - id: ch09-f06
+    front: "Name some explicit dead-node signals — and the catch that applies to all of them."
+    back: "TCP RST/FIN when the process is dead but machine up; a supervisor broadcasting process death; querying switches; ICMP unreachable. All best-effort: they ride the same unreliable network, so you must still be ready for total silence plus retries and a timeout."
+  - id: ch09-f07
+    front: "What goes wrong if a failure-detection timeout is too short?"
+    back: "Live-but-slow nodes get declared dead: in-flight actions may be done twice by a successor, and the 'dead' node's load shifts to already-strained neighbors — which can snowball into a cascading failure where everyone declares everyone dead."
+  - id: ch09-f08
+    front: "Where does variable network delay mostly come from? Name the queueing points."
+    back: "Queueing: the sender's OS (TCP congestion control), switch port buffers, the receiver's OS when CPUs are busy, and hypervisors pausing VMs. Queues grow explosively near capacity, so delays are worst exactly when the system is busiest."
+  - id: ch09-f09
+    front: "Circuit-switched vs packet-switched networks — what's the trade?"
+    back: "A circuit reserves fixed bandwidth end to end: no queueing, bounded delay, but idle capacity is wasted. Packet networks share bandwidth dynamically for bursty traffic: high utilization, unbounded delay. Bounded latency is purchasable — with mostly idle, statically partitioned resources."
+  - id: ch09-f10
+    front: "Time-of-day clock vs monotonic clock — when do you use each?"
+    back: "Time-of-day (CLOCK_REALTIME) gives the date/time, is NTP-synced, but can jump backward when stepped — use for points in time. Monotonic (CLOCK_MONOTONIC, nanoTime) only moves forward but its absolute value is meaningless across machines — use for durations and timeouts."
+  - id: ch09-f11
+    front: "How accurate can you expect NTP-synchronized clocks to be, and what limits them?"
+    back: "Quartz drifts (Google budgets 200 ppm — 6 ms per 30 s sync interval); NTP accuracy is capped by network delay (~35 ms over the internet, worse under congestion); misconfigured servers can be off by hours; leap seconds break assumptions (mitigated by smearing)."
+  - id: ch09-f12
+    front: "Why does last-write-wins with wall-clock timestamps silently lose data?"
+    back: "A causally later write stamped by a slow clock gets a smaller timestamp than the earlier write from a fast clock, so conflict resolution discards it — no error, no log. A lagging node can't overwrite a fast node's values until the skew elapses."
+  - id: ch09-f13
+    front: "Physical clocks vs logical clocks — distinction?"
+    back: "Physical clocks (time-of-day, monotonic) measure actual elapsed time. Logical clocks are counters that track only relative order — did this happen before that? Logical clocks are the safe way to order events, since ordering needs error smaller than network delay, which physical sync can't deliver."
+  - id: ch09-f14
+    front: "How do TrueTime and commit-wait turn unreliable clocks into a usable ordering tool?"
+    back: "TrueTime returns an interval — earliest and latest possible time — instead of a point. If two intervals don't overlap, their order is certain. Spanner waits out the interval's length before committing, so transaction timestamps respect causality; GPS/atomic clocks shrink the wait to ~7 ms."
+  - id: ch09-f15
+    front: "Why can't a node safely check a lease's validity and then act on it?"
+    back: "The thread can be paused between check and action — GC, VM suspension/live migration, swapping/thrashing, CPU steal, SIGSTOP — for seconds or minutes. It resumes unaware time passed, and may complete a write after the lease expired and another node took over."
+  - id: ch09-f16
+    front: "Why must important decisions in a distributed system go to a quorum rather than any single node?"
+    back: "A node can't trust its own judgment: its outbound link may be dead, or it may have been paused and deposed without noticing. A majority quorum decides — and since only one majority can exist at a time, two conflicting decisions can't both win."
+  - id: ch09-f17
+    front: "What is a zombie, and what's the reliable defense against it?"
+    back: "A former leaseholder that doesn't know it's been deposed. You can't prevent zombies — pauses and delayed packets are facts of life — so fence them: hand out monotonically increasing fencing tokens, have storage remember the highest token seen and reject anything older."
+  - id: ch09-f18
+    front: "What is a Byzantine fault, and when is tolerating it worth the cost?"
+    back: "A node that 'lies' — sends arbitrary corrupted or malicious messages. BFT matters for aerospace (radiation-corrupted hardware) and mutually untrusting parties (blockchains). In a single-organization datacenter, skip it: a software bug makes every node a 'traitor' at once, defeating any protocol."
+  - id: ch09-f19
+    front: "Which system model do practical distributed algorithms usually target, and why?"
+    back: "Partially synchronous with crash-recovery faults. Timing is well-behaved most of the time but occasionally arbitrary — matching real networks, pauses, and clocks. Nodes can crash and return with disk intact but memory lost. (Watch out for limping/'fail-slow' nodes — alive but useless.)"
+  - id: ch09-f20
+    front: "Safety vs liveness properties — distinction, and why it matters?"
+    back: "Safety: nothing bad ever happens; a violation occurs at a definite moment and can't be undone (e.g., two identical fencing tokens). Liveness: something good eventually happens; it can be unsatisfied now yet still come true. Demand safety unconditionally; liveness may carry conditions like 'a majority is up.'"

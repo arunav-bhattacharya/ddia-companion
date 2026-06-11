@@ -1,0 +1,61 @@
+cards:
+  - id: ch12-f01
+    front: "What is an event in stream processing, and how does it relate to a batch record?"
+    back: "A small, self-contained, immutable object describing something that happened at a point in time, usually with a timestamp. It's the streaming equivalent of a record; a topic groups related events the way a filename groups related records."
+  - id: ch12-f02
+    front: "A messaging system's producers outpace its consumers. What are the three possible responses?"
+    back: "Drop messages, buffer them in a queue, or apply backpressure (block the producer, as Unix pipes and TCP do). If buffering, ask what happens as the queue grows — spill to disk? throughput collapse?"
+  - id: ch12-f03
+    front: "Load balancing vs. fan-out across multiple consumers — what's the difference?"
+    back: "Load balancing delivers each message to ONE consumer in a group, sharing the work. Fan-out delivers each message to ALL consumers, so independent subscribers get the full stream. Kafka consumer groups combine both: one consumer per group, every group gets everything."
+  - id: ch12-f04
+    front: "Why does combining load balancing with acknowledgments cause message reordering in AMQP/JMS brokers?"
+    back: "An unacked message from a crashed consumer is redelivered to a different consumer, which may have already moved past it — so it processes m4, then m3, then m5. Avoid by giving each consumer its own queue."
+  - id: ch12-f05
+    front: "What is a dead letter queue and what problem does it solve?"
+    back: "A separate queue for messages that repeatedly fail processing (e.g., a malformed 'poison' message that crashes every consumer). Moving them there unblocks the stream; monitoring alerts an operator to drop, repair, or fix the consumer."
+  - id: ch12-f06
+    front: "How does a log-based broker track consumer progress without per-message acks?"
+    back: "Each consumer group records one offset per partition. Everything below the offset is processed; everything above is unseen — the same idea as a replication log sequence number (broker = leader, consumer = follower)."
+  - id: ch12-f07
+    front: "When is an AMQP/JMS-style broker the better choice over a log-based one?"
+    back: "When messages are expensive to process, ordering doesn't matter, and you want per-message parallelism across many workers. Logs win for high throughput, fast per-message work, and order-sensitive streams."
+  - id: ch12-f08
+    front: "What happens to a log-based broker's other consumers when one consumer falls hopelessly behind or crashes?"
+    back: "Nothing — that's the operational advantage. Each consumer only owns an offset; a lagging or experimental consumer disrupts no one. It only loses data if it lags beyond the disk retention window (the log is a big ring buffer)."
+  - id: ch12-f09
+    front: "Why are dual writes (app writes DB, then search index) dangerous?"
+    back: "Concurrent writes can arrive at the two systems in different orders (race), and one write can fail while the other succeeds (partial failure). Either way the systems end up permanently inconsistent, with no error reported."
+  - id: ch12-f10
+    front: "What is change data capture (CDC)?"
+    back: "Observing all changes committed to a database (usually via its replication log) and extracting them as an ordered event stream, so derived systems — search index, cache, warehouse — become followers that apply the same changes in the same order."
+  - id: ch12-f11
+    front: "How does log compaction let a changelog replace database snapshots?"
+    back: "Compaction keeps only the latest value per key (tombstones mark deletes), so size depends on current contents, not write history. If each CDC event holds the record's full new value, scanning the compacted log from offset 0 yields a complete copy of the database."
+  - id: ch12-f12
+    front: "CDC vs. event sourcing — distinction?"
+    back: "CDC extracts low-level row changes from a mutable database the app uses normally; compaction works because each event holds the full new value. Event sourcing builds the app on immutable intent-level events; later events don't supersede earlier ones, so full history is kept and compaction doesn't apply."
+  - id: ch12-f13
+    front: "Command vs. event in an event-sourced system?"
+    back: "A command is a request that can still be rejected (seat may be taken). Once validated, it becomes an event — an immutable fact appended to the log. Validation must happen before the append, because history isn't vetoed retroactively."
+  - id: ch12-f14
+    front: "In what sense are state and an event log 'two sides of the same coin'?"
+    back: "Current state is the result of integrating all change events over time; the change stream is the derivative of state. Store the log durably and state becomes reproducible — the database is just a cache of the log's latest values."
+  - id: ch12-f15
+    front: "Your event log is immutable, but the GDPR demands real deletion of a user's data. Options?"
+    back: "Appending a 'deleted' event isn't enough — you must rewrite history (Datomic's excision) or use crypto-shredding: store the data encrypted and destroy the key. Copies in backups, SSDs, and exports make true deletion genuinely hard."
+  - id: ch12-f16
+    front: "Event time vs. processing time — and what artifact appears if you confuse them?"
+    back: "Event time = when it happened (timestamp in the event); processing time = when the operator handles it. Windowing by processing time turns a backlog replay (e.g., after a restart) into a phantom traffic spike that never occurred."
+  - id: ch12-f17
+    front: "What is a straggler event and what are the two standard responses?"
+    back: "An event arriving after its event-time window was declared complete. Either ignore it (track the drop rate, alert if it grows) or publish a correction — an updated window value, possibly retracting the earlier output."
+  - id: ch12-f18
+    front: "Tumbling vs. hopping vs. sliding vs. session windows — one line each."
+    back: "Tumbling: fixed length, no overlap, each event in exactly one window. Hopping: fixed length, overlapping by a hop, for smoothing. Sliding: all events within an interval of each other, no fixed grid. Session: no fixed length; closes after user inactivity."
+  - id: ch12-f19
+    front: "Why is a stream join time-dependent, and what is the warehouse name for this problem?"
+    back: "Join state changes over time and ordering across streams isn't guaranteed, so reruns can interleave inputs differently — nondeterminism. Warehouses call it a slowly changing dimension; fixes are versioned record IDs (kills compaction) or denormalizing the value into each event."
+  - id: ch12-f20
+    front: "How can a non-idempotent write be made effectively idempotent in a stream pipeline?"
+    back: "Store the offset of the message that produced the write together with the value. On retry, the consumer sees the update already applied and skips it. Requires deterministic processing, ordered replay (a log gives this), and no concurrent writers — plus fencing on failover."

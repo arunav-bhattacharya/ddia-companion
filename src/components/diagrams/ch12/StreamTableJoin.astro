@@ -1,0 +1,63 @@
+---
+import Diagram from '../Diagram.astro';
+---
+
+<Diagram caption="A stream–table join: the processor keeps a local copy of the user profiles table, kept fresh by the database's CDC changelog, and enriches each activity event with profile data — no per-event round trip to the database.">
+  <svg viewBox="0 0 720 320" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="stjoin-title">
+    <title id="stjoin-title">Stream–table join where CDC keeps the processor's local table copy up to date</title>
+
+    <!-- activity event stream in -->
+    <text x="20" y="56" font-size="12" fill="var(--diagram-muted)">activity events</text>
+    <g>
+      <rect x="20" y="68" width="64" height="28" rx="4" fill="var(--diagram-fill)" stroke="var(--diagram-muted)" stroke-width="1.5"/>
+      <text x="52" y="87" text-anchor="middle" font-size="11" fill="var(--diagram-stroke)">click u42</text>
+      <rect x="92" y="68" width="64" height="28" rx="4" fill="var(--diagram-fill)" stroke="var(--diagram-muted)" stroke-width="1.5"/>
+      <text x="124" y="87" text-anchor="middle" font-size="11" fill="var(--diagram-stroke)">view u17</text>
+      <rect x="164" y="68" width="64" height="28" rx="4" fill="var(--diagram-fill)" stroke="var(--diagram-muted)" stroke-width="1.5"/>
+      <text x="196" y="87" text-anchor="middle" font-size="11" fill="var(--diagram-stroke)">click u17</text>
+    </g>
+    <line x1="232" y1="82" x2="296" y2="82" stroke="var(--diagram-stroke)" stroke-width="1.5" marker-end="url(#st-arrow)"/>
+
+    <!-- profile database + CDC -->
+    <rect x="20" y="210" width="130" height="44" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="85" y="229" text-anchor="middle" font-size="12" fill="var(--diagram-stroke)">profiles DB</text>
+    <text x="85" y="244" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">system of record</text>
+
+    <line x1="150" y1="232" x2="296" y2="232" stroke="var(--diagram-accent)" stroke-width="1.5" marker-end="url(#st-arrow-accent)"/>
+    <text x="222" y="222" text-anchor="middle" font-size="11" fill="var(--diagram-accent)">CDC changelog</text>
+    <text x="222" y="250" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">window back to the</text>
+    <text x="222" y="264" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">beginning of time</text>
+
+    <!-- stream processor -->
+    <rect x="300" y="48" width="220" height="220" rx="8" fill="none" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="410" y="74" text-anchor="middle" font-size="12" font-weight="600" fill="var(--diagram-stroke)">stream processor</text>
+
+    <text x="410" y="106" text-anchor="middle" font-size="11" fill="var(--diagram-stroke)">for each event: look up user ID</text>
+    <text x="410" y="121" text-anchor="middle" font-size="11" fill="var(--diagram-stroke)">in the local table, attach profile</text>
+
+    <!-- local state -->
+    <rect x="324" y="150" width="172" height="96" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <text x="410" y="172" text-anchor="middle" font-size="11" font-weight="600" fill="var(--diagram-stroke)">local copy of profiles</text>
+    <text x="410" y="192" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">u17 → name, plan, region</text>
+    <text x="410" y="208" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">u42 → name, plan, region</text>
+    <text x="410" y="230" text-anchor="middle" font-size="11" fill="var(--diagram-accent)">updated by each change event</text>
+
+    <!-- output -->
+    <line x1="520" y1="82" x2="566" y2="82" stroke="var(--diagram-stroke)" stroke-width="1.5" marker-end="url(#st-arrow)"/>
+    <text x="640" y="56" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">enriched events</text>
+    <rect x="572" y="64" width="128" height="36" rx="4" fill="var(--diagram-fill)" stroke="var(--diagram-muted)" stroke-width="1.5"/>
+    <text x="636" y="80" text-anchor="middle" font-size="11" fill="var(--diagram-stroke)">click u42 + profile</text>
+    <text x="636" y="94" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">ready for analytics</text>
+
+    <text x="20" y="300" font-size="12" fill="var(--diagram-stroke)">the local table is itself derived state: lose it in a crash, rebuild it by replaying the compacted changelog.</text>
+
+    <defs>
+      <marker id="st-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--diagram-stroke)"/>
+      </marker>
+      <marker id="st-arrow-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--diagram-accent)"/>
+      </marker>
+    </defs>
+  </svg>
+</Diagram>

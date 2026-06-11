@@ -1,0 +1,73 @@
+---
+import Diagram from '../Diagram.astro';
+---
+
+<Diagram wide caption="A search for red cars with a local (document-partitioned) index must scatter to every shard and gather the results; with a global (term-partitioned) index it reads one index shard, at the cost of more complicated writes.">
+  <svg viewBox="0 0 880 340" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="lvg-title">
+    <title id="lvg-title">Local secondary indexes require scatter gather queries while global secondary indexes serve a term from one shard</title>
+
+    <!-- divider -->
+    <line x1="440" y1="15" x2="440" y2="325" stroke="var(--diagram-muted)" stroke-width="1.5" stroke-dasharray="4 5"/>
+
+    <text x="220" y="30" text-anchor="middle" font-size="14" font-weight="600" fill="var(--diagram-stroke)">Local index (document-partitioned)</text>
+    <text x="660" y="30" text-anchor="middle" font-size="14" font-weight="600" fill="var(--diagram-stroke)">Global index (term-partitioned)</text>
+
+    <!-- LEFT: query box -->
+    <rect x="135" y="48" width="170" height="34" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="220" y="70" text-anchor="middle" font-size="12" fill="var(--diagram-stroke)">query: color = red</text>
+
+    <!-- LEFT: three shards each with own index -->
+    <g font-size="11">
+      <rect x="25" y="140" width="120" height="78" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+      <text x="85" y="160" text-anchor="middle" font-size="12" font-weight="600" fill="var(--diagram-stroke)">Shard 0</text>
+      <text x="85" y="180" text-anchor="middle" fill="var(--diagram-muted)">cars 0 &#8211; 499</text>
+      <text x="85" y="200" text-anchor="middle" fill="var(--diagram-accent)">red: 17, 348</text>
+
+      <rect x="160" y="140" width="120" height="78" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+      <text x="220" y="160" text-anchor="middle" font-size="12" font-weight="600" fill="var(--diagram-stroke)">Shard 1</text>
+      <text x="220" y="180" text-anchor="middle" fill="var(--diagram-muted)">cars 500 &#8211; 999</text>
+      <text x="220" y="200" text-anchor="middle" fill="var(--diagram-accent)">red: 612</text>
+
+      <rect x="295" y="140" width="120" height="78" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+      <text x="355" y="160" text-anchor="middle" font-size="12" font-weight="600" fill="var(--diagram-stroke)">Shard 2</text>
+      <text x="355" y="180" text-anchor="middle" fill="var(--diagram-muted)">cars 1000 &#8211; 1499</text>
+      <text x="355" y="200" text-anchor="middle" fill="var(--diagram-accent)">red: 1024, 1382</text>
+    </g>
+
+    <!-- LEFT: scatter arrows to ALL shards -->
+    <line x1="185" y1="82" x2="95" y2="132" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <polygon points="96,125 87,136 99,135" fill="var(--diagram-accent)"/>
+    <line x1="220" y1="82" x2="220" y2="132" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <polygon points="215,130 220,140 225,130" fill="var(--diagram-accent)"/>
+    <line x1="255" y1="82" x2="345" y2="132" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <polygon points="341,125 353,136 338,135" fill="var(--diagram-accent)"/>
+
+    <text x="220" y="250" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">scatter to every shard, gather and merge replies;</text>
+    <text x="220" y="268" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">writes touch only the record&#8217;s own shard</text>
+
+    <!-- RIGHT: query box -->
+    <rect x="575" y="48" width="170" height="34" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="660" y="70" text-anchor="middle" font-size="12" fill="var(--diagram-stroke)">query: color = red</text>
+
+    <!-- RIGHT: index shards -->
+    <g font-size="11">
+      <rect x="480" y="140" width="170" height="78" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-accent)" stroke-width="2"/>
+      <text x="565" y="160" text-anchor="middle" font-size="12" font-weight="600" fill="var(--diagram-stroke)">Index shard: terms a &#8211; r</text>
+      <text x="565" y="180" text-anchor="middle" fill="var(--diagram-accent)">red: 17, 348, 612,</text>
+      <text x="565" y="196" text-anchor="middle" fill="var(--diagram-accent)">1024, 1382</text>
+
+      <rect x="670" y="140" width="170" height="78" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+      <text x="755" y="160" text-anchor="middle" font-size="12" font-weight="600" fill="var(--diagram-stroke)">Index shard: terms s &#8211; z</text>
+      <text x="755" y="180" text-anchor="middle" fill="var(--diagram-muted)">silver: 23, 590</text>
+      <text x="755" y="196" text-anchor="middle" fill="var(--diagram-muted)">white: 8, 1207</text>
+    </g>
+
+    <!-- RIGHT: one arrow to one index shard -->
+    <line x1="630" y1="82" x2="580" y2="132" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <polygon points="581,125 572,136 584,135" fill="var(--diagram-accent)"/>
+
+    <text x="660" y="250" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">one index shard returns the whole postings list;</text>
+    <text x="660" y="268" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">but one write may update several index shards,</text>
+    <text x="660" y="286" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">and fetching the records still spans shards</text>
+  </svg>
+</Diagram>

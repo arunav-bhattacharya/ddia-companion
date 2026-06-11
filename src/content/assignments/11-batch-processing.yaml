@@ -1,0 +1,52 @@
+assignments:
+  - id: ch11-a01
+    title: "Right-size the freight analytics pipeline"
+    scenario: |
+      You run data infrastructure at HaulLine, a freight logistics company. Every truck reports a GPS ping with timestamp, truck ID, route ID, and fuel reading every 30 seconds; the fleet produces about 60 GB of newline-delimited log data per day, kept as daily files. Operations wants a nightly report: per route, the ten slowest segments and total idle time per truck. A contractor has quoted a 12-node Spark cluster with HDFS, YARN, and Airflow. Your sysadmin counters that the existing single server (64 cores, 256 GB RAM, fast NVMe disks) can do it with a few Unix tools and a Python script. Reports must be ready by 6 a.m.; data volume is growing roughly 30% per year.
+    tasks:
+      - "Make the case for the single-machine approach using the chapter's reasoning about working sets, sorting versus in-memory aggregation, and what GNU sort does when data exceeds memory."
+      - "Sketch the nightly job as a Unix-style pipeline or short script: what is the 'mapper-like' step, what is the 'reducer-like' step, and where does sorting happen?"
+      - "Define the concrete signals that would tell you it's time to move to a distributed framework, and describe what you'd adopt first when that day comes."
+    hints:
+      - "The working set is the number of distinct trucks and route segments, not the number of pings."
+      - "One command-line pipeline famously beat a Hadoop cluster by 235x — why?"
+    modelAnswer: |
+      The working set is small: tens of thousands of distinct truck IDs and route segments, each with a counter or running aggregate — megabytes, not gigabytes. 60 GB of pings stream through sequentially, and even if an aggregation ever outgrew RAM, the sorting approach degrades gracefully: GNU sort spills sorted segments to NVMe and merges them with sequential I/O, parallelized across the 64 cores. The bottleneck is disk read rate, and NVMe will chew 60 GB in minutes. A 12-node cluster adds HDFS, YARN, and Airflow operations overhead to solve a problem the laptop-scale math says doesn't exist — the same lesson as Drake's 235x command-line-versus-Hadoop result.
+
+      Nightly job: a mapper-like awk/Python step parses each ping and emits (route_segment, transit_time) and (truck_id, idle_flag) records — stateless, one record at a time. sort brings identical keys adjacent; a reducer-like pass (uniq-style or a small Python loop) aggregates per key, holding only one key's state at a time. A final numeric sort plus head ranks the ten slowest segments. Inputs stay immutable, so a bad run is fixed by rerunning — human fault tolerance for free.
+
+      Move to a distributed framework when: the input approaches the machine's disk or read-bandwidth ceiling (at +30%/year, roughly 8-10 years away), the 6 a.m. deadline is missed because the job is I/O-bound, or multiple teams need to build a DAG of dependent jobs on the data. First step then isn't a cluster — it's putting the files in object storage and running Spark or DuckDB over them, keeping the orchestrator (a workflow scheduler like Airflow) as the only new moving part.
+  - id: ch11-a02
+    title: "Design the joins for an ad-impressions warehouse"
+    scenario: |
+      AdMeridian, an advertising platform, lands 5 TB of impression events per day in an object store as Parquet files sharded by hour. Each event has user_id, campaign_id, placement_id, and a timestamp. Analysts need a daily dataset joining impressions with three other tables: a 50 MB campaign-metadata table, a 1.8 TB user-profile table sharded by hash of user_id (the impressions are not), and a placement table. One wrinkle: 0.4% of traffic comes from a handful of viral placements whose placement_ids account for nearly 30% of all impressions, and the current Spark job has one straggler task that runs six hours longer than the rest.
+    tasks:
+      - "Choose a join strategy for each of the three tables (campaign metadata, user profiles, placements) and justify each with the chapter's taxonomy."
+      - "Diagnose the six-hour straggler and propose two distinct mitigations."
+      - "Explain what a cost-based optimizer would need to know to make these choices automatically, and where you'd still override it."
+    hints:
+      - "How big is each table relative to executor memory? Which tables share sharding with the impressions?"
+      - "30% of records carrying a handful of keys is a textbook symptom."
+    modelAnswer: |
+      Campaign metadata at 50 MB is a textbook broadcast hash join: copy the whole table to every task, build an in-memory hash table, and stream the 5 TB of impressions past it locally — the big side never crosses the network. The 1.8 TB user-profile table is too large to broadcast and the impressions aren't sharded by user_id, so this is a sort-merge join: shuffle both sides by user_id so matching keys meet at the same reducer, merging sorted runs. If we re-shard the daily impressions by user_id as a standing preprocessing stage, future runs can use a partitioned hash join against the profile table's existing sharding and skip the sort. The placement table is almost certainly small (thousands of placements), so broadcast it too.
+
+      The straggler is key skew: the viral placement_ids hash to one shuffle partition, so one task receives ~30% of 5 TB while its peers split the rest, and the job waits on it. Mitigations: (1) salt the hot keys — split each viral placement_id into N subkeys and replicate the placement table's matching rows to each, recombining after aggregation; (2) route hot keys through a broadcast join while the long tail takes the normal shuffled path. Spark's Adaptive Query Execution can also split oversized partitions automatically.
+
+      A cost-based optimizer needs table statistics — row counts, sizes, key cardinality and distribution — to pick broadcast versus sort-merge and order the joins to minimize intermediate data. I'd still override on skew: histograms often miss a handful of pathological keys, so the salting decision stays manual until AQE proves it catches them.
+  - id: ch11-a03
+    title: "Ship the catalog: batch-built search for an online pharmacy"
+    scenario: |
+      MedCabinet, an online pharmacy, rebuilds its product search index and per-customer refill recommendations nightly with a Spark workflow: 90 minutes, output to an object store. The current delivery step is a Python script inside the final task that writes each of 40 million records into the production PostgreSQL and Elasticsearch instances with individual upserts. Last Tuesday the job died at 70% complete and was retried; customers saw a mix of yesterday's and today's recommendations for six hours, and the upsert storm pushed p99 search latency past 4 seconds during the overnight retry. Compliance also wants batch infrastructure kept out of the production network.
+    tasks:
+      - "Explain precisely which batch-processing guarantees the current delivery design violates, and connect each to a symptom from Tuesday's incident."
+      - "Design a better delivery path for both outputs (search index and recommendations), covering ordering, throttling, atomic cutover, and the network-isolation requirement."
+      - "The recommendations table needs small intraday corrections (recalls, stock-outs) between nightly runs. Extend your design to support this without abandoning nightly rebuilds."
+    hints:
+      - "All-or-nothing output is a property of writing to the job's own filesystem, not to external systems."
+      - "One delivery pattern doubles as a security boundary; another makes version switching atomic."
+    modelAnswer: |
+      Batch jobs normally guarantee all-or-nothing output: a successful job's result looks like every task ran exactly once, and a failed job produces nothing. Writing upserts to external systems from inside the job leaks side effects that break this — Tuesday's 70%-complete failure left partial output visible (the mixed-day recommendations), and the retry re-wrote records already written (duplicate work, prolonged inconsistency). The latency spike came from hundreds of parallel tasks issuing per-record writes at batch throughput into stores tuned for live traffic — a self-inflicted overload. The direct connection from batch to production also violates the compliance boundary.
+
+      Better path: the job writes its 40 million records to the object store as usual, then publishes them to a Kafka topic sitting in a DMZ between the batch and production networks — satisfying isolation. Elasticsearch and the recommendation store ingest from the topic at their own throttled pace, protecting live p99s; one topic feeds both consumers. To restore all-or-nothing semantics, the job emits a completion marker when (and only when) it succeeds; consumers load into an inactive index/dataset version and atomically switch on the marker — read-committed-style invisibility until commit. For the search index specifically, an even cleaner option is building the index files inside the job and bulk-loading them, swapping versions atomically.
+
+      For intraday corrections, use a hybrid store in the Venice style: nightly runs perform full version swaps, while recalls and stock-outs flow as row-level updates through the same Kafka topic during the day. The next nightly rebuild reabsorbs them, so corrections never fork from the system of record.

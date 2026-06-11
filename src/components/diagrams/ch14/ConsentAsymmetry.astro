@@ -1,0 +1,42 @@
+---
+import Diagram from '../Diagram.astro';
+---
+
+<Diagram caption="The GDPR considers consent valid only if it is freely given, informed, and refusable without detriment — a bar the typical terms-of-service relationship rarely clears.">
+  <svg viewBox="0 0 720 330" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="ch14-consent-title">
+    <title id="ch14-consent-title">Asymmetric consent: the service sets all the terms, while the user can only accept everything or leave</title>
+    <defs>
+      <marker id="ch14-consent-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--diagram-accent)"/>
+      </marker>
+    </defs>
+
+    <!-- Service panel -->
+    <rect x="40" y="16" width="640" height="120" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="70" y="44" font-size="14" font-weight="600" fill="var(--diagram-stroke)">The service</text>
+    <circle cx="78" cy="66" r="2.5" fill="var(--diagram-stroke)"/>
+    <text x="92" y="70" font-size="12" fill="var(--diagram-stroke)">writes the terms — and can change them later</text>
+    <circle cx="78" cy="88" r="2.5" fill="var(--diagram-stroke)"/>
+    <text x="92" y="92" font-size="12" fill="var(--diagram-stroke)">knows exactly what is collected, and combines it with other datasets</text>
+    <circle cx="78" cy="110" r="2.5" fill="var(--diagram-stroke)"/>
+    <text x="92" y="114" font-size="12" fill="var(--diagram-stroke)">keeps the derived profiles to itself</text>
+
+    <!-- One-way arrow -->
+    <line x1="360" y1="136" x2="360" y2="192" stroke="var(--diagram-accent)" stroke-width="1.5" marker-end="url(#ch14-consent-arrow)"/>
+    <text x="378" y="168" font-size="12" fill="var(--diagram-muted)">terms offered one way — no negotiation</text>
+
+    <!-- User panel -->
+    <rect x="40" y="198" width="640" height="116" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="70" y="226" font-size="14" font-weight="600" fill="var(--diagram-stroke)">You</text>
+    <text x="125" y="226" font-size="12" fill="var(--diagram-muted)">— your complete set of options:</text>
+
+    <rect x="120" y="244" width="160" height="42" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <text x="200" y="270" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-accent)">Accept all</text>
+
+    <text x="330" y="270" font-size="12" fill="var(--diagram-muted)">or</text>
+
+    <rect x="380" y="244" width="220" height="42" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-muted)" stroke-width="1.5" stroke-dasharray="5 4"/>
+    <text x="490" y="270" text-anchor="middle" font-size="13" fill="var(--diagram-muted)">Stop using the service</text>
+    <text x="490" y="304" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">(and the social network everyone you know is on)</text>
+  </svg>
+</Diagram>

@@ -1,0 +1,286 @@
+---
+title: "Consistency and Consensus"
+chapter: 10
+description: "What linearizability really guarantees and what it costs, why quorums alone don't deliver it, how Lamport clocks order events, and how consensus algorithms like Raft make leader election and shared logs fault-tolerant."
+readingMinutes: 27
+keyTakeaways:
+  - "Linearizability makes a replicated system behave as if there were a single copy of the data with atomic operations — its defining feature is the recency guarantee: once any client has seen a new value, no later read may return an older one."
+  - "Linearizability and serializability are different guarantees: serializability is about transactions on multiple objects behaving as if run in some serial order (stale reads allowed); linearizability is about single-object recency. Together they form strict serializability."
+  - "Leader election, locks, and hard uniqueness constraints all need linearizability — and so do systems with cross-channel timing dependencies, where a faster side channel can race ahead of replication."
+  - "Quorum reads and writes (w + r > n) in leaderless systems are not linearizable by themselves: variable network delays let a later reader see an older value. Fixing it requires synchronous read repair, and a linearizable CAS needs full consensus."
+  - "The CAP theorem says only that during a network partition you must choose between linearizability and availability. Its definitions are narrow, most real systems are neither CP nor AP, and the everyday cost of linearizability is latency, not just partition behavior."
+  - "Lamport timestamps and hybrid logical clocks give a total order consistent with causality using just a counter and a node ID — but they cannot tell you whether a value is up to date, and they order concurrent events arbitrarily (vector clocks detect concurrency, at a space cost)."
+  - "A linearizable ID generator is a single replicated counter; batching amortizes the persistence cost at the price of gaps. Spanner achieves the same ordering without a central node by waiting out its clock's uncertainty interval."
+  - "Single-value agreement, linearizable CAS, shared logs (total order broadcast), atomic commitment, and locks are all equivalent: solve one fault-tolerantly and you can build the others. Fetch-and-add is the odd one out, with consensus number 2."
+  - "Consensus algorithms break the leader-election chicken-and-egg with epochs and two rounds of overlapping quorum votes — making them, in effect, single-leader replication with automatic failover that cannot lose committed writes or split-brain."
+  - "Consensus costs a strict majority, a quorum round-trip per operation, and delicate timeout tuning; coordination services like ZooKeeper and etcd let you outsource it to a small cluster that provides locks, leases, fencing tokens, failure detection, and change notifications."
+references:
+  - title: "In Search of an Understandable Consensus Algorithm (Extended Version)"
+    url: "https://raft.github.io/raft.pdf"
+    type: paper
+    author: "Diego Ongaro and John Ousterhout"
+    note: "The original Raft paper: leader election, log replication, safety, and membership changes, designed explicitly to be easier to understand than Paxos."
+  - title: "Raft: Understandable Distributed Consensus (The Secret Lives of Data)"
+    url: "https://thesecretlivesofdata.com/raft/"
+    type: article
+    author: "Ben Johnson"
+    note: "Step-by-step animated visualization of Raft leader election and log replication, including what happens during network partitions."
+  - title: "Please stop calling databases CP or AP"
+    url: "https://martin.kleppmann.com/2015/05/11/please-stop-calling-databases-cp-or-ap.html"
+    type: article
+    author: "Martin Kleppmann"
+    note: "The full-length version of this chapter's CAP critique: why the theorem's narrow definitions mean most real databases are neither CP nor AP."
+  - title: "Consistency Models (Jepsen)"
+    url: "https://jepsen.io/consistency"
+    type: docs
+    author: "Kyle Kingsbury (Jepsen)"
+    note: "A reference map placing linearizability, sequential consistency, and serializability in one hierarchy — useful when vendors' 'strong consistency' claims get vague."
+  - title: "Time, Clocks, and the Ordering of Events in a Distributed System"
+    url: "https://lamport.azurewebsites.net/pubs/time-clocks.pdf"
+    type: paper
+    author: "Leslie Lamport"
+    note: "The 1978 paper that introduced the happens-before relation and Lamport clocks — short, readable, and one of the most-cited papers in distributed systems."
+  - title: "MIT 6.5840 Lab 3: Raft"
+    url: "https://pdos.csail.mit.edu/6.824/labs/lab-raft1.html"
+    type: course
+    author: "MIT PDOS (6.5840 Distributed Systems)"
+    note: "Implement Raft yourself in Go — leader election, log replication, persistence — against a test harness that injects the failures this chapter only describes."
+  - title: "Distributed Systems lecture series (University of Cambridge)"
+    url: "https://www.youtube.com/playlist?list=PLeKd45zvjcDFUEv_ohr_HdUFe97RItdiB"
+    type: video
+    author: "Martin Kleppmann"
+    note: "Free undergraduate lectures by the book's author covering logical time, broadcast ordering, and Raft with worked examples and proofs sketched on slides."
+  - title: "ZooKeeper: A Distributed Coordination Service for Distributed Applications"
+    url: "https://zookeeper.apache.org/doc/current/zookeeperOver.html"
+    type: docs
+    author: "Apache Software Foundation"
+    note: "The official tour of znodes, ephemeral nodes, watches, and ordering guarantees — the concrete API behind this chapter's coordination services section."
+---
+
+import Callout from '../../components/mdx/Callout.astro';
+import Term from '../../components/mdx/Term.astro';
+import FinalScore from '../../components/diagrams/ch10/FinalScore.astro';
+import QuorumRace from '../../components/diagrams/ch10/QuorumRace.astro';
+import LamportChat from '../../components/diagrams/ch10/LamportChat.astro';
+import ConsensusFaces from '../../components/diagrams/ch10/ConsensusFaces.astro';
+import EpochElection from '../../components/diagrams/ch10/EpochElection.astro';
+
+Chapter 9 cataloged everything that can go wrong in a distributed system; this chapter is about getting useful guarantees anyway. Replication is our main tool for fault tolerance, but several copies of the data can disagree: reads land on stale replicas, concurrent writes conflict. Two philosophies compete here. **Eventual consistency** makes the replication visible and hands you, the application developer, the job of coping — the multi-leader and leaderless world of Chapter 6. **Strong consistency** says the system should hide all of it and behave as if it were a single node: simpler for you, but slower, and some faults that an eventually consistent system shrugs off will take a strongly consistent one down.
+
+This chapter digs into the strong side of that trade. First we pin down what "strong consistency" even means — the precise version is called linearizability. Then a detour that turns out not to be a detour at all: generating IDs and timestamps. And finally the machinery that makes strong consistency fault-tolerant: consensus algorithms. Along the way we'll hit genuine impossibility results — hard limits on what any distributed system can do. Fair warning: this is the corner of the field where systems most often look fine in testing and fall apart under an unlucky interleaving of faults nobody considered.
+
+## Linearizability
+
+If a replicated database is to be as easy to use as possible, it should behave as though it weren't replicated at all: one copy of the data, every operation atomic. That is <Term id="linearizable">linearizability</Term> (also called atomic, strong, immediate, or external consistency). The moment one client completes a write, every client reading afterwards must see that value — no stale caches or lagging replicas peeking through the abstraction. In one phrase: linearizability is a **recency guarantee**.
+
+Here's a violation. Aaliyah and Bryce are in the same room, both refreshing a sports site for the final score. Aaliyah refreshes, sees the result, cheers. Bryce, hearing her, refreshes too — but his request hits a lagging replica, and his phone insists the game is still in progress. Bryce initiated his read *after* Aaliyah's completed, so he reasonably expects a result at least as fresh as hers. Getting an older one is precisely what linearizability forbids.
+
+<FinalScore />
+
+### What Makes a System Linearizable?
+
+To make that precise, distributed systems theory talks about a **register**: a single object — one key in a key-value store, one row, one document — that clients read and write. Picture each request as a bar on a timeline, starting when the request is sent and ending when the response arrives. Thanks to variable network delays, the client doesn't know when *within* that bar the database processed the operation — only that it happened somewhere in between.
+
+Suppose the register x starts at 0, client C writes 1, and clients A and B poll it with reads while the write is in flight. Three rules fall out:
+
+- A read that completes *before* the write begins must return the old value, 0.
+- A read that begins *after* the write completes must return the new value, 1.
+- A read that *overlaps* the write may return either 0 or 1 — it's concurrent with the write, and we can't know whether the write had taken effect yet.
+
+The third rule has a trap in it. If concurrent reads can return either value, could the value flip-flop — one reader sees 1, another then sees 0, then 1 again — while the write is in progress? A system pretending to be a single copy must not allow that. So linearizability adds the constraint that gives it teeth: at some instant within the write's time bar, the value **atomically flips** from 0 to 1, and once any read has returned the new value, every read starting afterwards — on any client — must also return it.
+
+You can visualize this by placing a marker inside each operation's bar at the moment it "took effect," then joining the markers in order. The history is linearizable if that line only ever moves forward in time and the sequence is valid for a register (each read returns the latest preceding write). The book's worked example adds an atomic **compare-and-set** — CAS(x, v_old, v_new) sets x to v_new only if it currently equals v_old, else errors — and shows legal-looking quirks: a read may return a value whose write request was sent *later* (the requests were concurrent), and a reader may see a write before the writer receives its OK response. What can never appear is a read returning an older value than one some client already read: that drags the line backwards, and the history is not linearizable.
+
+This is checkable: record the timings of all requests and responses and search for a valid sequential order, as Jepsen does — expensive, but it turns "are we linearizable?" from a marketing claim into a testable property.
+
+Linearizability sits at the top of a hierarchy: the replication-lag guarantees from Chapter 6 — read-after-write, monotonic reads, consistent prefix reads — are weaker models that it implies. It is the strongest consistency model in common use.
+
+### Linearizability Versus Serializability
+
+The two words sound interchangeable — both promise something about "a sequential order" — and they are routinely confused. They are different guarantees about different things:
+
+| | Serializability | Linearizability |
+|---|---|---|
+| Applies to | Transactions touching many objects | Reads/writes of one object |
+| Promise | Equivalent to *some* serial execution of the transactions | Each operation sees the latest state (recency) |
+| Allows stale reads? | Yes — the serial order may differ from real-time order | No |
+| Prevents write skew? | Yes | No — it's a single-object guarantee |
+
+Serializability is an *isolation level*: transactions behave as if executed one after another, but that imagined order may differ from the order in which they actually ran — a serializable system can serve stale data with a straight face. Linearizability is a *recency* guarantee on individual objects: if operation B starts after A finishes, B must observe a state at least as new. It says nothing about grouping operations, so it doesn't prevent multi-object anomalies like write skew.
+
+A system can offer both at once: **strict serializability** (or strong one-copy serializability). Single-node databases usually provide it without trying. Distributed ones vary: CockroachDB offers serializability with some recency guarantees but stops short of strict serializability — full real-time ordering between transactions costs too much coordination — while Spanner and FoundationDB offer it. Usefully, consistency model and isolation level are largely independent dials.
+
+### Relying on Linearizability
+
+When does this guarantee actually matter? Sports scores that are a few seconds stale hurt nobody. But a handful of patterns genuinely break without linearizability.
+
+**Locking and leader election.** A single-leader system must guarantee there is one leader, not two — otherwise you get <Term id="split-brain">split brain</Term>. A common election mechanism is a lease: every starting node tries to acquire it, one succeeds and becomes leader. However the lease is implemented, it must be linearizable; two nodes concluding "I hold the lease" at the same moment defeats the point. Coordination services like Apache ZooKeeper and etcd implement linearizable operations with consensus algorithms precisely for this, and libraries like Apache Curator package the subtle parts (fencing among them — Chapter 9's zombie-leader problem) into recipes. A detail worth knowing: ZooKeeper makes writes linearizable but allows stale reads by default; etcd v3 serves linearizable reads out of the box. Locking also exists at much finer grain — Oracle RAC takes a linearizable lock per disk page, hot enough that deployments run a dedicated interconnect network for them.
+
+**Uniqueness constraints.** A username must identify one user; a file path must name one file. Enforcing that *at write time* — two concurrent registrations, one gets an error — requires linearizability. Registering a username is morally identical to acquiring a lock on it, and identical again to a CAS: set the username to your user ID, provided it's unclaimed. The same shape recurs wherever a single up-to-date value must be agreed on: a bank balance that mustn't go negative, stock you mustn't oversell, a seat two people are booking. Some constraints can be treated loosely — airlines overbook and compensate — but a hard uniqueness constraint, the kind a relational database enforces, requires linearizability. (Foreign-key and attribute constraints, interestingly, do not.)
+
+**Cross-channel timing dependencies.** Look back at Aaliyah and Bryce: the staleness was only *observable* because information traveled through a second channel — her voice. Computer systems build the same trap for themselves. Say users upload videos and a background transcoder produces low-bandwidth versions: the web server writes the video to file storage, then puts a "transcode this" instruction on a message queue (the file is too big for the queue itself). If the storage isn't linearizable, the queue can race ahead of the storage's internal replication — the transcoder fetches an old version of the file, or nothing, and the original and transcoded videos end up permanently inconsistent. Same bug, different costume: a push notification arriving before the data it announces has reached the replica the app will read. Linearizability is not the only fix — if you control the extra channel, read-your-writes techniques work — but it is the easiest to reason about.
+
+### Implementing Linearizable Systems
+
+The literal-minded implementation — actually keep just one copy of the data — is linearizable and useless: lose that node and you lose the data, or at least access to it. The interesting question is which *replication* strategies from Chapter 6 can be made linearizable:
+
+- **Single-leader replication: potentially.** If all reads and writes go through the leader, you're likely linearizable — *if* you actually know who the leader is. A node that wrongly believes it is still leader will serve stale reads, and asynchronous <Term id="failover">failover</Term> can drop committed writes entirely, violating durability and linearizability at once. Sharding doesn't change the analysis, since linearizability is a per-object guarantee; cross-shard transactions are a separate fight.
+- **Consensus algorithms: likely.** Consensus is essentially single-leader replication with split-brain protection built in, which is how ZooKeeper (Zab) and etcd (Raft) offer linearizable storage safely. But "uses consensus" is not a magic phrase: a node serving reads without confirming it is still leader can serve stale ones.
+- **Multi-leader replication: no.** Multiple nodes accept writes concurrently and replicate asynchronously; conflicting writes are expected and resolved after the fact — the opposite of a single-copy illusion.
+- **Leaderless replication: probably not.** The tempting claim is that <Term id="quorum">quorum</Term> reads and writes (w + r > n) give "strong consistency." Last-write-wins resolution using time-of-day clocks (Cassandra, ScyllaDB) is almost certainly non-linearizable — clock skew decouples timestamp order from real order. And even with strict quorums, the math has a hole.
+
+The hole deserves a picture. Three replicas (n = 3), a writer updating x from 0 to 1 with w = 3, the write arriving at the replicas at different moments — as network delays guarantee it sometimes will. Reader A (r = 2) reads during the write and gets the new value from one replica. Reader B starts *after A has finished*, reads a different pair of replicas the write hasn't reached, and gets the old value from both. Quorum condition satisfied; linearizability violated; Aaliyah and Bryce all over again.
+
+<QuorumRace />
+
+You *can* rescue Dynamo-style quorums, at a price: readers must perform read repair synchronously before returning, and writers must first read a quorum to find the latest timestamp and write with a greater one. Riak skips synchronous read repair for performance; Cassandra waits for it on quorum reads but loses linearizability anyway to its wall-clock LWW timestamps. Even done right, the rescue covers only reads and writes — a linearizable CAS cannot be built this way at all, because it genuinely requires consensus. The safe working assumption: a leaderless system is not linearizable, quorums or no.
+
+### The Cost of Linearizability
+
+So why doesn't everyone just run linearizable systems? Consider a database replicated across two regions, with a network interruption between them — clients can reach their local region, but the regions can't reach each other. That's a **network partition**.
+
+With multi-leader replication, life goes on: each region keeps accepting writes, which queue up and replicate when the link heals. With single-leader replication, the leader lives in one region — and every write and every linearizable read must go to it. Clients in the follower region can still read stale data locally, but if the application demands linearizability, they are simply out of service until the network recovers.
+
+This isn't an artifact of any particular implementation; *any* linearizable database faces it, on any unreliable network, even within one region:
+
+- Require linearizability, and replicas cut off from the rest must refuse requests — wait or error, either way **unavailable**. This stance is CP (consistent under partitions).
+- Forgo linearizability, and each replica serves requests independently through the partition — **available**, but not linearizable. This is AP.
+
+This insight is the <Term id="cap-theorem">CAP theorem</Term>, named by Eric Brewer in 2000, though database designers had known the trade-off since the 1970s. Its real contribution was cultural: it pushed engineers toward distributed shared-nothing designs and helped spark the NoSQL movement. As a formal result it is narrow — one consistency model (linearizability), one fault type (partitions, which Google's data pegs at under 8% of incidents), nothing about delays or dead nodes. Refinements exist, like PACELC: during a partition (P), choose availability or consistency; else (E), choose latency or consistency. But CAP has been superseded by more precise results, and today it is mostly of historical interest.
+
+<Callout type="warning" title="The unhelpful CAP theorem">
+"Consistency, availability, partition tolerance: pick two" is catchy and wrong. Partitions are a fault — you don't get to not pick them; the only network that never partitions is the one you don't have. Better: **either consistent or available when partitioned**. When the network works, you can have both; when it breaks, you choose. Worse, CAP's formal definitions are idiosyncratic: "consistency" means exactly linearizability, and "availability" doesn't match what practitioners mean — many genuinely fault-tolerant systems flunk CAP's definition, and some perfectly reasonable designs are neither CP nor AP. If a vendor labels their database "CP" or "AP," the most accurate response is a polite change of subject.
+</Callout>
+
+There's a quieter cost that bites even with a healthy network: latency. Surprisingly few real systems are linearizable — even the RAM in your laptop isn't. A write by one CPU core isn't guaranteed visible to another core moments later unless you pay for a memory fence: each core has its own cache and store buffer, asynchronously flushed — each core has *replicas*. CAP can't explain this, since nobody expects a core to soldier on while disconnected from its own computer. CPUs drop linearizability for **performance**, not fault tolerance — and most distributed databases that decline to offer it make the same call. Nor is it a failure of cleverness: Attiya and Welch proved linearizable reads and writes must take time at least proportional to the uncertainty in network delays — on real networks, a permanent tax. Weaker models can be much faster, which is why Chapter 13 explores how far you can get without linearizability while staying correct.
+
+## ID Generators and Logical Clocks
+
+Now for the topic that looks unrelated and isn't. Most applications assign unique IDs to records — your primary key. On a single node the standard answer is an autoincrementing integer: compact (64 bits, or a risky 32), with a bonus property that matters enormously: *the order of the IDs is the order of creation*. In a chat app, if Aaliyah's question got ID 1, Bryce's answer gets a greater ID, and sorting by ID renders the thread sensibly.
+
+That single-node counter is, in fact, a little linearizable system. Each ID request is an atomic **fetch-and-add** — increment the counter, return the old value — so if Aaliyah's message completed before Bryce's began, Bryce's ID is guaranteed greater. (Concurrent messages can be ordered either way; they just need distinct IDs.) The trouble is everything else: the node is a single point of failure, a planet-sized round trip from your other regions, and a bottleneck at high write throughput.
+
+The standard workarounds each surrender something:
+
+- **Sharded ID assignment** — one node hands out even numbers, another odd, or some ID bits name the shard. Compact, but ordering is gone: message 16 may be newer than message 17 if a different node assigned it.
+- **Preallocated blocks** — a central generator hands node A the range 1–1,000 and node B 1,001–2,000. Same story: a block-two ID can belong to an earlier message than a block-one ID.
+- **Random UUIDs** — 128 bits generated locally with no coordination at all. Wonderful operationally; useless for ordering, which is random by construction.
+- **Wall-clock-prefixed IDs** — a timestamp in the high bits, uniqueness-filler (shard plus sequence, or random bits) in the low bits: UUIDv7, X's Snowflake, ULIDs, MongoDB ObjectIDs. Ordering is now *approximately* right — but only as right as the clocks. Skewed clocks order events wrongly; a non-monotonic clock can misorder events on a single node. Not linearizable, unless you bring atomic clocks and GPS to the party.
+
+So everything distributed and cheap gives up the causal ordering that made the single-node counter so pleasant. Time for a different kind of clock.
+
+### Logical Clocks
+
+Physical clocks — time-of-day and monotonic clocks, Chapter 9 — measure seconds. A **logical clock** measures nothing of the sort: it counts *events*. Its timestamps don't tell you what time it is, only which of two things came first. A good one gives three properties: timestamps are compact and unique; any two are comparable (a <Term id="total-order">total order</Term>); and the order is consistent with <Term id="causality">causality</Term> — if A happened before B in the happens-before sense, A's timestamp is smaller.
+
+The classic construction is the **Lamport clock**, from Leslie Lamport's 1978 paper, one of the most-cited in the field. Each node keeps a counter and has a unique ID; a timestamp is the pair (counter, node ID). Two rules:
+
+1. Every time a node generates a timestamp, it increments its counter and uses the new value.
+2. Every time a node *sees* a timestamp with a higher counter than its own, it fast-forwards its counter to match.
+
+To compare: higher counter wins; ties fall back to comparing node IDs lexicographically — arbitrary but consistent, which is all a total order needs.
+
+<LamportChat />
+
+In the chat example, Aaliyah and Caleb post concurrently; both messages get counter 1, distinguished by node ID. Bryce sees both, fast-forwards to 1, and his reply gets counter 2 — correctly ordered after the question it answers, because rule 2 propagated the causal dependency. Note what Lamport clocks do *not* give you: linearizability. They order what a node has seen; they promise nothing about timestamps it hasn't seen, and they can't tell you whether a value is current.
+
+Two refinements round out the family. A **hybrid logical clock** runs the same fast-forward trick on top of a physical clock counting microseconds: timestamps stay close to wall-clock time (you can still ask "what happened on Tuesday?"), get nudged forward when a node sees a later timestamp, and increment on every use so they stay monotonic even when NTP yanks the underlying clock backwards. Result: almost a wall-clock timestamp, with ordering consistent with happens-before, on commodity hardware — CockroachDB uses one. Lamport and hybrid clocks are also a natural source of MVCC transaction IDs, since they make snapshots causally consistent.
+
+The limitation both share: concurrent events get ordered *arbitrarily*, and afterwards you can't tell they were concurrent rather than sequential. If detecting concurrency is the point — Chapter 6's concurrent-writes problem — you need a **vector clock**, which keeps one counter per node and ships the whole vector with every write. If A's vector beats B's on one node and loses on another, A and B were concurrent. The price is size: one integer per node in the system, versus a single pair.
+
+### Linearizable ID Generators
+
+Lamport-style ordering is causal, and causal is weaker than linearizable. The gap is exactly the "nodes that never communicated" case, and it produces real bugs. The book's example: a user flips their account from public to private on their laptop, then uploads an embarrassing photo from their phone. Account settings and photos live in separate databases, each assigning logical-clock timestamps to writes. The photos database never read from the accounts database, so its counter may be running behind — and the upload can receive a *lower* timestamp than the earlier privacy change. A viewer's MVCC snapshot read, timestamped between the two, then sees a world where the photo exists and the account is still public. The user did everything sequentially; the system leaked the photo anyway.
+
+You could patch this case-by-case — have the photos database read the account first, track the user's latest timestamp across devices — but each patch is easy to forget. The clean fix is an ID generator that *is* linearizable: the upload, which began after the privacy change completed, then necessarily gets the greater timestamp.
+
+Implementing one is refreshingly unclever: use a single node that atomically increments, persists the counter (a crash mustn't reissue IDs), and replicates it with single-leader replication. TiDB/TiKV runs exactly this and calls it a **timestamp oracle**, after Google's Percolator. The throughput worry has a tidy answer: don't persist every increment. Persist and replicate a record claiming a whole *batch* of IDs, hand them out from memory, and claim the next batch before this one runs dry. A crash or failover skips the rest of a batch — gaps, but never duplicates, never disorder. A node doing nothing but incrementing a number can serve a lot of requests; what you cannot do is shard it (independent shards reorder) or geo-distribute it (every region's ID requests travel to one region).
+
+There is one way to get linearizable IDs with no central node: Spanner's. Its TrueTime clocks return not a timestamp but an *uncertainty interval*, and Spanner **waits out the interval** before considering the timestamp assigned. If the true time always lies inside the interval, a request that starts after another finishes provably gets a greater timestamp — across regions, with zero coordination. The entry fee is hardware and infrastructure that keep clock uncertainty tight enough to make the waiting tolerable.
+
+One more question, because it sets consensus up. Could a linearizable ID generator — or any logical clock — enforce a uniqueness constraint? Tantalizingly close: timestamp every contender for the username, lowest timestamp wins, and a linearizable clock guarantees no later request sneaks under the winner. But a node cannot know its timestamp is the *lowest* without hearing from every node that might hold a smaller one — and one crashed or unreachable node stalls the scheme forever. That is not fault tolerance; that is a deadlock with extra steps. For locks, leases, and uniqueness under faults, we need something stronger.
+
+## Consensus
+
+Look at the pattern of this chapter so far. A linearizable register: trivial on one node, fragile the moment the node can fail. A fetch-and-add ID generator: one CPU instruction on one node, a careful replicated service otherwise. A CAS deciding who gets a lock: same story. Leader election: easy if one node decides — but who elects the decider, and how do you know the old leader is gone rather than paused? All of these are one underlying problem in different clothes: <Term id="consensus">consensus</Term> — getting multiple nodes to agree on a value despite crashes, delays, and lost messages. It is among the most fundamental problems in distributed computing, and among the easiest to get subtly, catastrophically wrong.
+
+The well-known algorithms are Viewstamped Replication, Paxos, Raft, and Zab — a family resemblance with real differences. All assume a **non-Byzantine** model: messages may be delayed or dropped, nodes may crash and restart, but nodes don't lie or deviate from the protocol. (Byzantine fault-tolerant consensus — tolerating up to a third of nodes actively misbehaving — exists and powers blockchains, but is outside this book's scope.)
+
+<Callout type="note" title="Didn't someone prove consensus is impossible?">
+Yes — sort of. The FLP result (Fischer, Lynch, Paterson) proves no algorithm can *guarantee* reaching consensus if a node may crash. The fine print rescues practice: the proof assumes a deterministic algorithm in the fully asynchronous model, with no clocks or timeouts at all. Allow timeouts — even unreliable ones, used merely to *suspect* a crash — and consensus becomes solvable; so does randomness. FLP marks a real theoretical boundary, but real systems have clocks and achieve consensus routinely. What FLP does explain is why every practical algorithm leans on timeouts somewhere.
+</Callout>
+
+### The Many Faces of Consensus
+
+The textbook formulation is **single-value consensus**: one or more nodes *propose* values, the algorithm *decides* one of them. Several nodes race to become leader, each proposing its own ID; consensus picks the winner. Two customers grab the last airplane seat; consensus picks the buyer. Formally, four properties:
+
+- **Uniform agreement** — no two nodes decide differently.
+- **Integrity** — once a node has decided, it never changes its mind.
+- **Validity** — the decided value was actually proposed by somebody (outlawing the trivial algorithm that always decides null).
+- **Termination** — every non-crashed node eventually decides.
+
+The first three are safety properties, and without fault tolerance they're easy: appoint a dictator node, let it decide. The difficulty lives in termination, a liveness property — the demand that the system *makes progress even if nodes crash and never come back* (picture your node under thirty feet of landslide mud, the book's calibration of "never"). Two facts frame what's achievable: termination provably requires a majority of nodes alive and reachable — that majority forms a quorum — but the safety properties hold *unconditionally* in good algorithms. A bad outage can stop a consensus system from deciding anything; it cannot make it decide two different things.
+
+Here is the chapter's most elegant idea: a family of seemingly different problems are all equivalent to consensus, in the strong sense that a fault-tolerant solution to any one converts into a solution for the others.
+
+<ConsensusFaces />
+
+**CAS is consensus.** Have everyone CAS the same register from null to their proposed value; whatever sticks is decided. Conversely, consensus implements CAS: propose the new values, set the register to whatever was decided, fail the rest.
+
+**A shared log is consensus.** A shared log lets any node request appends and guarantees everyone reads the same entries in the same order — formally: appends by non-crashed nodes eventually appear, no entries are lost, entries are immutable once read, and any two readers see the same sequence. The abstraction is also called **total order broadcast** (or atomic broadcast). Given a shared log, consensus is one line: everyone appends their proposal; the first entry wins. Given consensus, build a log by running one consensus instance per log slot. Single-leader replication is *almost* a shared log already — it fails only the liveness requirement, because when the leader dies, appends stop until a human intervenes.
+
+**Atomic commitment is consensus.** Distributed transactions need every participant to commit or every one to abort — Chapter 8's two-phase commit, with its single-point-of-failure coordinator. The properties differ from consensus in one interesting way: consensus may decide *any* proposed value, but atomic commit *must* abort if anyone voted abort. The reductions still go both ways — broadcast everyone's votes and run consensus on "commit" or "abort"; or implement consensus by racing transactions that CAS a register. So 2PC's coordinator fragility isn't fundamental: atomic commitment can be made as fault-tolerant as consensus itself.
+
+**Fetch-and-add is *almost* consensus** — and the exception proves the rule. Everyone increments a shared counter; whoever reads 0 wins, and knows it. But if the winner crashes before announcing itself, the losers know only that they lost, not to whom — and they can't pick someone else, because the winner might come back. Termination fails. With exactly two proposers who pre-exchange values it works (read 0: decide yours; read 1: decide theirs), which is why fetch-and-add has **consensus number 2**, while CAS and shared logs have consensus number infinity. Herlihy's wait-free synchronization hierarchy, hiding in a database book.
+
+### Consensus in Practice
+
+Of all these equivalent formulations, which do real systems expose? Shared logs, overwhelmingly. Raft, Viewstamped Replication, and Zab provide a replicated log natively; basic Paxos decides single values, but practical deployments use Multi-Paxos, which provides a log too.
+
+A shared log is the natural backbone for replication: make every entry a write, have every replica apply the same writes in the same deterministic order, and all replicas converge — **state machine replication**, the principle behind event sourcing and, as Chapter 12 will show, much of stream processing. The same trick yields serializable transactions: append deterministic stored procedures to the log and execute them in log order everywhere. Sharded databases often keep one log per shard, which scales better but weakens cross-shard guarantees (consistent snapshots and foreign keys across shards need extra coordination). And the log adapts to every other face of consensus: first-entry-wins gives single-value decisions; tag entries with seat numbers to sell out a theater safely; sum the entries for fetch-and-add. A counter on log entries makes fencing tokens — ZooKeeper's zxid is exactly that.
+
+So consensus in practice mostly means: a leader appends entries to a replicated log. Which circles back to the awkward question — who picks the leader? Electing a leader takes consensus, and our consensus design uses a leader. The way out of the loop is to require a unique leader not *ever*, only *per epoch*. Each election gets an **epoch number** — ballot number in Paxos, view number in Viewstamped Replication, term number in Raft — increasing monotonically across elections. If two nodes claim leadership from different epochs (the old leader wasn't dead, just slow — Chapter 9 again), the higher epoch wins, mechanically and unambiguously.
+
+<EpochElection />
+
+A node that stops hearing the leader's heartbeats starts an election for a new, higher epoch; nodes vote yes if they know of no higher epoch. From then on there are **two rounds of voting**: one to elect the leader, and one per log entry — before confirming an append, the leader replicates it to a quorum, and each acknowledgment doubles as "I know of no higher-epoch leader." The safety crux is that the two quorums must **overlap**: any quorum approving an entry shares at least one node with the quorum that elected the latest leader, so a deposed leader cannot get an entry approved without discovering its deposition. This looks superficially like 2PC and is deeply different: in 2PC only the coordinator calls the vote and *every* participant must say yes; in consensus, any node can call an election and a quorum suffices — which is exactly why consensus survives failures that wedge 2PC.
+
+The devil, as ever, books a room in the details. A new leader must honor entries the old one already committed: Raft only lets a node win an election if its log is at least as up-to-date as a majority's; Paxos lets anyone win but makes the new leader catch up before appending anything of its own. Equally fiddly rules cover entries the old leader proposed but never finished voting on. None of this is decoration — drop any piece and committed writes can vanish.
+
+<Callout type="warning" title="When 'available' quietly means 'unsafe'">
+The theory requires a new leader to be fully caught up before serving. Some systems let you trade that away: Kafka's unclean leader election lets a stale replica take over when no up-to-date one is available, and asynchronously replicated databases can't promise an up-to-date follower exists at all. The bargain is faster recovery — sometimes *any* recovery — in exchange for stepping outside the consensus guarantees entirely: everything works until a fault hits at the wrong moment, and then committed data is lost or overwritten. Flip a switch like this knowing you've left the theory's protection.
+</Callout>
+
+Two more practicalities. A **linearizable read** must also confirm with a quorum that the leader is still the leader — otherwise a node deposed milliseconds ago serves you yesterday's news; etcd's linearizable reads work exactly this way. And while classic algorithms assume a fixed voting membership, real clusters grow, shrink, and migrate, so production algorithms include **reconfiguration** extensions for changing the node set safely.
+
+Weigh it all up and consensus is, in the book's phrase, *single-leader replication done right*: automatic failover, no committed write ever lost, split brain structurally impossible — even under the full parade of Chapter 9 faults. Any system offering automatic failover *without* a proven consensus algorithm deserves suspicion; history is littered with homegrown election protocols that lost data. But the benefits are priced in:
+
+- You need a strict majority alive: three nodes to tolerate one failure, five to tolerate two. A minority partition is dead weight until the network heals.
+- Every write — and every linearizable read — is a quorum round-trip. Adding nodes adds voters, not throughput; the algorithm gets *slower*.
+- Failure detection rides on timeouts, and tuning them across geographically spread, variable-latency networks is hard. Too long, and recovery crawls; too short, and spurious elections thrash the cluster into spending more time choosing leaders than doing work.
+- Some algorithms have sharp edges around flaky networks: one persistently unreliable link can make Raft's leadership bounce endlessly between nodes (the algorithm gained a pre-vote phase to damp this), and leader-based Paxos has cousins of the same problem. Egalitarian Paxos (EPaxos) goes leaderless to better tolerate slow nodes and bad links.
+
+### Coordination Services
+
+Consensus shows up inside many distributed databases, but its most concentrated form is the **coordination service**: ZooKeeper, etcd, Consul. These look like small key-value stores and are easy to misjudge as such. They are not for your application data — they hold small, slow-changing, fits-in-memory state, replicated across a handful of nodes by consensus, and they exist to coordinate *other* distributed systems. Kubernetes stands on etcd; Spark and Flink in high-availability mode stand on ZooKeeper. The lineage runs back to Google's Chubby lock service.
+
+What you get is consensus plus a toolkit shaped by years of distributed-systems scar tissue:
+
+- **Locks and leases** — built on the atomic, fault-tolerant CAS that consensus makes possible. Many contenders, one winner.
+- **Fencing support** — every write gets a monotonically increasing ID (ZooKeeper's zxid, etcd's revision): ready-made fencing tokens to stop a paused ex-lockholder corrupting things when it wakes.
+- **Failure detection** — clients hold long-lived sessions kept alive by heartbeats. Brief blips don't kill a session, but heartbeats silent past the lease timeout mean the service declares the client dead and releases its locks. ZooKeeper expresses this as **ephemeral nodes**: keys that vanish with the session that created them.
+- **Change notifications** — clients watch keys and get told when they change, which is how the cluster learns "a new node joined" or "the shard-7 owner died" without polling.
+
+Only the first two need consensus; failure detection and notifications are conveniences that happen to live in the same very reliable place.
+
+<Callout type="note" title="Configuration in a coordination service?">
+Teams often park application configuration — timeouts, pool sizes, feature settings — in ZooKeeper or etcd, loading values at startup and subscribing to changes. Nothing about config management *needs* consensus; a periodically polled file or URL does the job. It's simply convenient to reuse the notification machinery of a service you're already running. Fine to do; just don't mistake it for a requirement.
+</Callout>
+
+The flagship use case is **allocating work to nodes**: choosing one leader among instances of a job scheduler or single-leader database; deciding which node owns which shard of a database, message stream, or actor system; rebalancing as nodes join, fail, and retire. All of it can be built from atomic operations, ephemeral nodes, and watches, and when built correctly the system rides through faults with no human in the loop. It is still fiddly — libraries like Apache Curator exist because raw ZooKeeper recipes are easy to get wrong — but it beats implementing consensus from scratch. The architectural trick to appreciate: the coordination service runs on a *fixed* three or five nodes and serves a system of thousands, which outsources its agreement problems to a small, well-drilled committee. The data suits the arrangement — "10.1.1.23 leads shard 7" changes over minutes or hours. State changing thousands of times per second belongs in a real database, or a replicated-log tool like Apache BookKeeper.
+
+The same trio also does **service discovery**: services register their endpoints at startup, clients look up where to connect, and failure detection plus watches keep the registry honest as VMs come and go. Here consensus is arguably overkill. Discovery doesn't need linearizability — a slightly stale address list is fine — but it desperately needs to be fast and available, because nothing works without it. So cache aggressively: clients retry past the cache on connection failure, entries carry TTLs, and DNS-based discovery stacks multiple cache layers for exactly this reason. ZooKeeper meets the use case halfway with **observers**: replicas that receive the log and serve reads but don't vote. Observer reads may be stale, but they survive partitions that would block the voting quorum, and they scale read throughput without slowing consensus down.
+
+<Callout type="insight" title="Where this chapter points">
+The shared log is this chapter's quiet protagonist: consensus systems expose one, single-leader replication approximates one, and state machine replication turns one into a database. Chapters 11 and 12 promote the log from implementation detail to organizing principle — batch and stream processing are largely the art of doing useful work with ordered logs of events. The costs tallied here (quorum latency, majority requirements, the Attiya–Welch tax) set up Chapter 13's question: how much correctness can you keep while giving linearizability up? And when you meet a system that elects leaders, holds locks, or enforces uniqueness across nodes, you now know what to ask: where's the consensus — and if the answer is "there isn't any," step carefully.
+</Callout>

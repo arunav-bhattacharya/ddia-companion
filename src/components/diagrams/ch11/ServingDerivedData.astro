@@ -1,0 +1,56 @@
+---
+import Diagram from '../Diagram.astro';
+---
+
+<Diagram caption="Getting derived data out of the batch environment: publish the job's output to a stream that serving systems ingest at their own pace, instead of writing row by row into production databases.">
+  <svg viewBox="0 0 800 320" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="serving-title">
+    <title id="serving-title">Batch job output flowing through a stream into a search index, key-value store, and OLAP store</title>
+
+    <!-- bad path: direct writes -->
+    <path d="M 90 110 C 150 20, 380 0, 500 38" fill="none" stroke="var(--diagram-muted)" stroke-width="1.5" stroke-dasharray="5 4"/>
+    <text x="300" y="26" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">not like this: per-record writes overwhelm the database</text>
+    <line x1="290" y1="32" x2="306" y2="48" stroke="var(--diagram-muted)" stroke-width="1.5"/>
+    <line x1="306" y1="32" x2="290" y2="48" stroke="var(--diagram-muted)" stroke-width="1.5"/>
+
+    <!-- batch job -->
+    <rect x="20" y="118" width="140" height="64" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="90" y="145" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-stroke)">batch job</text>
+    <text x="90" y="165" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">output on object store</text>
+
+    <!-- arrow to stream -->
+    <line x1="160" y1="150" x2="222" y2="150" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <polygon points="222,146 230,150 222,154" fill="var(--diagram-accent)"/>
+    <text x="192" y="138" text-anchor="middle" font-size="11" fill="var(--diagram-accent)">publish</text>
+
+    <!-- stream -->
+    <rect x="230" y="118" width="170" height="64" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <text x="315" y="145" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-stroke)">stream</text>
+    <text x="315" y="165" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">e.g. Kafka topic</text>
+    <text x="315" y="208" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">buffer: consumers read at</text>
+    <text x="315" y="224" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">their own pace</text>
+
+    <!-- arrows to consumers -->
+    <line x1="400" y1="132" x2="492" y2="64" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <polygon points="487,59 498,60 491,71" fill="var(--diagram-accent)"/>
+    <line x1="400" y1="150" x2="492" y2="150" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <polygon points="492,146 500,150 492,154" fill="var(--diagram-accent)"/>
+    <line x1="400" y1="168" x2="492" y2="240" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <polygon points="487,245 498,244 491,233" fill="var(--diagram-accent)"/>
+
+    <!-- consumers -->
+    <rect x="500" y="36" width="170" height="56" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="585" y="60" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-stroke)">search index</text>
+    <text x="585" y="78" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">e.g. Elasticsearch</text>
+
+    <rect x="500" y="122" width="170" height="56" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="585" y="146" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-stroke)">key-value store</text>
+    <text x="585" y="164" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">e.g. Venice</text>
+
+    <rect x="500" y="212" width="170" height="56" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="585" y="236" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-stroke)">OLAP store</text>
+    <text x="585" y="254" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">e.g. Pinot, Druid</text>
+
+    <text x="720" y="155" font-size="12" fill="var(--diagram-muted)" text-anchor="middle">serves live</text>
+    <text x="720" y="171" font-size="12" fill="var(--diagram-muted)" text-anchor="middle">traffic</text>
+  </svg>
+</Diagram>

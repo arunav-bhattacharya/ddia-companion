@@ -1,0 +1,55 @@
+cards:
+  - id: ch11-f01
+    front: "Online systems vs. batch (offline) systems — what distinguishes them?"
+    back: "Online systems answer requests as fast as possible; response time is the metric. Batch jobs process a large bounded, read-only input and generate output from scratch; throughput is the metric, and runs can take minutes to days."
+  - id: ch11-f02
+    front: "What is 'human fault tolerance' in batch processing?"
+    back: "Because inputs are immutable and outputs are regenerated from scratch, buggy code is fixed by rerunning the job (or switching back to the old output). Read/write databases lack this: rolling back code doesn't undo bad writes."
+  - id: ch11-f03
+    front: "In the awk | sort | uniq -c pipeline, why is sort needed before uniq?"
+    back: "Sorting makes identical keys adjacent, so uniq can count duplicates by comparing only neighboring lines — no per-key state in memory. MapReduce's implicit sort before the reducer exploits the same trick."
+  - id: ch11-f04
+    front: "Sorting vs. in-memory hash aggregation — when does each win?"
+    back: "The hash table's working set scales with distinct keys; if that fits in memory, it wins. Otherwise sorting wins: mergesort uses sequential disk access, and GNU sort spills to disk and parallelizes across cores automatically."
+  - id: ch11-f05
+    front: "Why do distributed filesystems use huge blocks (HDFS: 128 MB vs. ext4's 4 KB)?"
+    back: "Far less metadata to track at petabyte scale, and seek cost is amortized over bigger reads. No space is wasted: DFS blocks sit on local filesystems, so a final partial block uses only what it needs."
+  - id: ch11-f06
+    front: "Key differences between an object store (S3) and a DFS (HDFS)?"
+    back: "Objects are immutable (update = full rewrite); no appends, locks, or atomic renames (rename = copy + delete); directories are just key prefixes. HDFS can run compute on the node holding the data; object stores separate storage and compute so each scales independently."
+  - id: ch11-f07
+    front: "What three components make up a job orchestrator like Kubernetes or YARN?"
+    back: "Task executors on each node (kubelet/NodeManager) that run and isolate tasks; a resource manager holding global cluster state (in etcd/ZooKeeper); and a scheduler matching job requests to nodes."
+  - id: ch11-f08
+    front: "Why is cluster resource allocation done with heuristics like FIFO, DRF, and bin packing?"
+    back: "Optimal scheduling is NP-hard, so it's prohibitively slow for real clusters. Heuristics balance fairness and efficiency while dodging the gang-scheduling traps: idle reserved cores, deadlock, starvation, and costly preemption."
+  - id: ch11-f09
+    front: "Why are batch jobs a natural fit for cheap spot/preemptible instances?"
+    back: "Batch work isn't time-sensitive, and output is regenerated from scratch, so a preempted task is simply rerun elsewhere — the framework retries at task granularity, not whole-job granularity."
+  - id: ch11-f10
+    front: "What are the exact contracts of a mapper and a reducer in MapReduce?"
+    back: "Mapper: called once per input record, stateless, emits zero or more key-value pairs. Reducer: called once per key with an iterator over all that key's values (sorting made them adjacent). Statelessness enables parallelism and safe retries."
+  - id: ch11-f11
+    front: "What is a shuffle, and what is it not?"
+    back: "A distributed sort where both input and output are sharded — the foundational algorithm beneath joins and grouping. Despite the name, nothing is random: it produces sorted order."
+  - id: ch11-f12
+    front: "How does MapReduce's shuffle guarantee all values for a key reach one reducer?"
+    back: "Each mapper writes one locally sorted file per reducer, choosing the file by a hash of the key. Reducers fetch their file from every mapper and merge-sort them, making same-key records adjacent regardless of origin."
+  - id: ch11-f13
+    front: "Name four advantages of dataflow engines (Spark, Flink) over MapReduce."
+    back: "Whole workflow runs as one job; operators fuse when sharding doesn't change; sorting happens only where needed; intermediate state stays in memory/local disk (recovered via lineage recomputation or checkpoints) instead of being written to the DFS."
+  - id: ch11-f14
+    front: "Sort-merge vs. broadcast hash vs. partitioned hash join — when is each used?"
+    back: "Sort-merge: two large tables, shuffle both. Broadcast hash: one side fits in memory, copy it to every task so the big table never moves. Partitioned hash: both sides already sharded identically on the join key, so join partition pairs directly."
+  - id: ch11-f15
+    front: "What is skew in a shuffle-based join, and how is it handled?"
+    back: "A hot key (e.g., a celebrity's user ID) floods one reducer, and the job waits on that straggler. Fixes: split the hot key across tasks and replicate the other side's matching rows, broadcast hot keys, or rely on Spark AQE's automatic skew-partition splitting."
+  - id: ch11-f16
+    front: "Why did SQL improve batch jobs' machine-level efficiency, not just programmer productivity?"
+    back: "Declarative queries let cost-based optimizers (Hive, Trino, Spark, Flink) inspect input statistics, pick the best join algorithm, and reorder joins to minimize intermediate state — choices a handwritten MapReduce job hardcodes."
+  - id: ch11-f17
+    front: "How do distributed DataFrames (Spark) differ from local ones (Pandas)?"
+    back: "Pandas executes each call eagerly on indexed, ordered, in-memory data. Spark is lazy: it builds the whole chain into a query plan, optimizes it, then runs it on the dataflow engine — and distributed DataFrames are generally unordered."
+  - id: ch11-f18
+    front: "Why shouldn't a batch job write its output row by row into a production database?"
+    back: "Per-record network calls are orders of magnitude slower than batch throughput; hundreds of parallel tasks can overwhelm the database; and partial or duplicated output from failed tasks breaks the all-or-nothing guarantee. Publish to a stream or bulk-load instead."

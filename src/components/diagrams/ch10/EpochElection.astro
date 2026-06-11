@@ -1,0 +1,61 @@
+---
+import Diagram from '../Diagram.astro';
+---
+
+<Diagram caption="Leader election with epochs: when the epoch-1 leader stops responding, node B wins a quorum vote and leads epoch 2; every later append also needs a quorum, so the two votes always overlap in at least one node." wide>
+  <svg viewBox="0 0 740 350" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="epochelection-title">
+    <title id="epochelection-title">Three nodes over time: leader A crashes in epoch 1, node B is elected leader for epoch 2 and replicates entries to a quorum</title>
+
+    <!-- Epoch bands -->
+    <rect x="120" y="30" width="240" height="26" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-muted)" stroke-width="1.5"/>
+    <text x="240" y="48" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-muted)">epoch 1</text>
+    <rect x="400" y="30" width="300" height="26" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <text x="550" y="48" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-accent)">epoch 2 (higher epoch wins any conflict)</text>
+
+    <!-- Node rows -->
+    <g font-size="13" font-weight="600" fill="var(--diagram-stroke)">
+      <text x="30" y="105">Node A</text>
+      <text x="30" y="185">Node B</text>
+      <text x="30" y="265">Node C</text>
+    </g>
+    <line x1="120" y1="100" x2="330" y2="100" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <line x1="120" y1="180" x2="700" y2="180" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <line x1="120" y1="260" x2="700" y2="260" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+
+    <!-- A is leader, then crashes -->
+    <text x="150" y="88" font-size="12" fill="var(--diagram-muted)">leader (epoch 1)</text>
+    <text x="340" y="106" font-size="16" font-weight="700" fill="var(--diagram-accent)">✕</text>
+    <text x="340" y="124" font-size="11" fill="var(--diagram-muted)">crashes</text>
+
+    <!-- Timeout on B -->
+    <circle cx="400" cy="180" r="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="400" y="164" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">heartbeat timeout</text>
+
+    <!-- Vote request B -> C and reply -->
+    <line x1="430" y1="186" x2="490" y2="254" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <polygon points="484,248 492,260 478,256" fill="var(--diagram-accent)"/>
+    <text x="408" y="226" font-size="11" fill="var(--diagram-muted)">“vote for me,</text>
+    <text x="408" y="240" font-size="11" fill="var(--diagram-muted)">epoch 2”</text>
+
+    <line x1="510" y1="254" x2="540" y2="190" stroke="var(--diagram-accent)" stroke-width="1.5" stroke-dasharray="5 4"/>
+    <polygon points="532,192 542,184 540,198" fill="var(--diagram-accent)"/>
+    <text x="548" y="232" font-size="11" fill="var(--diagram-muted)">“yes” — B + C form</text>
+    <text x="548" y="246" font-size="11" fill="var(--diagram-muted)">a majority quorum</text>
+
+    <!-- B becomes leader -->
+    <circle cx="560" cy="180" r="6" fill="var(--diagram-accent)"/>
+    <text x="560" y="164" text-anchor="middle" font-size="12" font-weight="600" fill="var(--diagram-accent)">leader (epoch 2)</text>
+
+    <!-- Append entry with quorum ack -->
+    <line x1="610" y1="186" x2="650" y2="254" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <polygon points="644,248 652,260 638,256" fill="var(--diagram-stroke)"/>
+    <text x="664" y="220" font-size="11" fill="var(--diagram-muted)">append entry;</text>
+    <text x="664" y="234" font-size="11" fill="var(--diagram-muted)">commit after</text>
+    <text x="664" y="248" font-size="11" fill="var(--diagram-muted)">quorum ack</text>
+
+    <!-- Time axis -->
+    <line x1="120" y1="305" x2="690" y2="305" stroke="var(--diagram-muted)" stroke-width="1.5"/>
+    <polygon points="690,300 700,305 690,310" fill="var(--diagram-muted)"/>
+    <text x="405" y="330" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">time → (two rounds of voting: one to elect a leader, one per log entry — their quorums must overlap)</text>
+  </svg>
+</Diagram>

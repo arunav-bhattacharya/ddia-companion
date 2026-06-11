@@ -1,0 +1,52 @@
+---
+import Diagram from '../Diagram.astro';
+---
+
+<Diagram caption="A non-linearizable read: Bryce's query starts after Aaliyah's has finished, so a linearizable system would have to return a result at least as fresh as hers.">
+  <svg viewBox="0 0 720 330" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="finalscore-title">
+    <title id="finalscore-title">Two friends read the same score from different replicas; the lagging follower returns a stale result</title>
+
+    <!-- Leader replica -->
+    <rect x="40" y="40" width="180" height="66" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="130" y="68" text-anchor="middle" font-size="14" font-weight="600" fill="var(--diagram-stroke)">Leader replica</text>
+    <text x="130" y="88" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">score: 1–0 (final)</text>
+
+    <!-- Follower replica -->
+    <rect x="40" y="210" width="180" height="66" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="130" y="238" text-anchor="middle" font-size="14" font-weight="600" fill="var(--diagram-stroke)">Lagging follower</text>
+    <text x="130" y="258" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">score: 0–0 (ongoing)</text>
+
+    <!-- Replication arrow (dashed = async, behind) -->
+    <line x1="130" y1="106" x2="130" y2="202" stroke="var(--diagram-muted)" stroke-width="1.5" stroke-dasharray="5 4"/>
+    <polygon points="125,202 130,212 135,202" fill="var(--diagram-muted)"/>
+    <text x="142" y="160" font-size="12" fill="var(--diagram-muted)">async replication</text>
+    <text x="142" y="176" font-size="12" fill="var(--diagram-muted)">(still catching up)</text>
+
+    <!-- Aaliyah -->
+    <rect x="490" y="40" width="190" height="66" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="585" y="68" text-anchor="middle" font-size="14" font-weight="600" fill="var(--diagram-stroke)">1. Aaliyah refreshes</text>
+    <text x="585" y="88" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">sees “Final: 1–0”</text>
+
+    <!-- Bryce -->
+    <rect x="490" y="210" width="190" height="66" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <text x="585" y="238" text-anchor="middle" font-size="14" font-weight="600" fill="var(--diagram-stroke)">3. Bryce reloads</text>
+    <text x="585" y="258" text-anchor="middle" font-size="12" fill="var(--diagram-accent)">sees “game ongoing” — stale!</text>
+
+    <!-- Read arrows -->
+    <line x1="220" y1="73" x2="482" y2="73" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <polygon points="482,68 492,73 482,78" fill="var(--diagram-stroke)"/>
+    <text x="351" y="63" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">read goes to leader</text>
+
+    <line x1="220" y1="243" x2="482" y2="243" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <polygon points="482,238 492,243 482,248" fill="var(--diagram-accent)"/>
+    <text x="351" y="233" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">read goes to follower</text>
+
+    <!-- Voice channel -->
+    <line x1="585" y1="106" x2="585" y2="202" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <polygon points="580,202 585,212 590,202" fill="var(--diagram-stroke)"/>
+    <text x="597" y="160" font-size="12" fill="var(--diagram-muted)">2. “We won!”</text>
+
+    <!-- Bottom note -->
+    <text x="360" y="312" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">The second communication channel (Aaliyah’s voice) is what makes the staleness observable.</text>
+  </svg>
+</Diagram>

@@ -1,0 +1,55 @@
+---
+import Diagram from '../Diagram.astro';
+---
+
+<Diagram caption="Lamport timestamps in a chat: each node increments its counter on every event and fast-forwards it when it sees a higher one, yielding a total order consistent with causality.">
+  <svg viewBox="0 0 720 340" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="lamportchat-title">
+    <title id="lamportchat-title">Three chat participants assigning Lamport timestamps to their messages</title>
+
+    <!-- Node headers -->
+    <g font-size="14" font-weight="600" fill="var(--diagram-stroke)" text-anchor="middle">
+      <text x="140" y="34">Aaliyah</text>
+      <text x="360" y="34">Bryce</text>
+      <text x="580" y="34">Caleb</text>
+    </g>
+    <g font-size="11" fill="var(--diagram-muted)" text-anchor="middle">
+      <text x="140" y="52">counter = 0</text>
+      <text x="360" y="52">counter = 0</text>
+      <text x="580" y="52">counter = 0</text>
+    </g>
+
+    <!-- Lifelines -->
+    <line x1="140" y1="62" x2="140" y2="290" stroke="var(--diagram-muted)" stroke-width="1.5"/>
+    <line x1="360" y1="62" x2="360" y2="290" stroke="var(--diagram-muted)" stroke-width="1.5"/>
+    <line x1="580" y1="62" x2="580" y2="290" stroke="var(--diagram-muted)" stroke-width="1.5"/>
+
+    <!-- Aaliyah posts (1, Aaliyah) -->
+    <circle cx="140" cy="100" r="6" fill="var(--diagram-accent)"/>
+    <text x="128" y="104" text-anchor="end" font-size="12" fill="var(--diagram-stroke)">posts “anyone seen this bug?”</text>
+    <text x="128" y="120" text-anchor="end" font-size="12" font-weight="600" fill="var(--diagram-accent)">(1, Aaliyah)</text>
+
+    <!-- Caleb posts (1, Caleb), concurrently -->
+    <circle cx="580" cy="100" r="6" fill="var(--diagram-accent)"/>
+    <text x="592" y="104" font-size="12" fill="var(--diagram-stroke)">posts “lunch?”</text>
+    <text x="592" y="120" font-size="12" font-weight="600" fill="var(--diagram-accent)">(1, Caleb)</text>
+
+    <!-- Delivery arrows to Bryce -->
+    <line x1="146" y1="104" x2="352" y2="166" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <polygon points="350,158 360,170 344,168" fill="var(--diagram-stroke)"/>
+    <line x1="574" y1="104" x2="368" y2="166" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <polygon points="376,168 360,170 370,158" fill="var(--diagram-stroke)"/>
+
+    <circle cx="360" cy="172" r="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="374" y="176" font-size="12" fill="var(--diagram-muted)">sees counter 1 → fast-forwards to 1</text>
+
+    <!-- Bryce replies (2, Bryce) -->
+    <circle cx="360" cy="226" r="6" fill="var(--diagram-accent)"/>
+    <text x="374" y="222" font-size="12" fill="var(--diagram-stroke)">replies to Aaliyah</text>
+    <text x="374" y="238" font-size="12" font-weight="600" fill="var(--diagram-accent)">(2, Bryce)</text>
+    <line x1="354" y1="230" x2="148" y2="282" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <polygon points="156,284 140,284 152,274" fill="var(--diagram-stroke)"/>
+
+    <!-- Resulting total order -->
+    <text x="360" y="322" text-anchor="middle" font-size="13" fill="var(--diagram-stroke)">Total order: (1, Aaliyah) &lt; (1, Caleb) &lt; (2, Bryce) — ties broken by node ID</text>
+  </svg>
+</Diagram>

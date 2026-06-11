@@ -1,0 +1,55 @@
+---
+import Diagram from '../Diagram.astro';
+---
+
+<Diagram caption="The write path is precomputed eagerly; the read path runs on demand. The derived dataset is where they meet, and caches, indexes, and materialized views all shift that boundary.">
+  <svg viewBox="0 0 740 320" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="write-read-path-title">
+    <title id="write-read-path-title">The write path and read path meeting at a derived dataset</title>
+
+    <!-- Write path label -->
+    <text x="160" y="32" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-stroke)">Write path</text>
+    <text x="160" y="50" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">eager — runs whether or not anyone reads</text>
+
+    <!-- Write boxes -->
+    <rect x="20" y="70" width="130" height="60" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="85" y="96" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-stroke)">New write</text>
+    <text x="85" y="114" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">event / document</text>
+
+    <line x1="150" y1="100" x2="182" y2="100" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <polygon points="182,95 192,100 182,105" fill="var(--diagram-stroke)"/>
+
+    <rect x="196" y="70" width="160" height="60" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="276" y="96" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-stroke)">Stream / batch</text>
+    <text x="276" y="114" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">processing</text>
+
+    <!-- Arrow into derived dataset -->
+    <line x1="356" y1="100" x2="420" y2="140" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <polygon points="414,134 428,145 412,146" fill="var(--diagram-stroke)"/>
+
+    <!-- Derived dataset (the meeting point) -->
+    <rect x="424" y="130" width="180" height="80" rx="8" fill="var(--diagram-fill)" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <text x="514" y="160" text-anchor="middle" font-size="14" font-weight="600" fill="var(--diagram-stroke)">Derived dataset</text>
+    <text x="514" y="180" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">index · cache · materialized view</text>
+
+    <!-- Read path -->
+    <text x="560" y="296" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-stroke)">Read path</text>
+    <text x="560" y="314" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">lazy — runs only when someone asks</text>
+
+    <rect x="590" y="220" width="130" height="56" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="655" y="244" text-anchor="middle" font-size="13" font-weight="600" fill="var(--diagram-stroke)">User query</text>
+    <text x="655" y="262" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">request / response</text>
+
+    <line x1="630" y1="220" x2="580" y2="214" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <polygon points="582,206 570,213 580,222" fill="var(--diagram-stroke)"/>
+    <line x1="600" y1="200" x2="650" y2="208" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <polygon points="648,200 660,210 646,216" fill="var(--diagram-stroke)"/>
+    <text x="640" y="190" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">results</text>
+
+    <!-- Boundary shifting annotation -->
+    <line x1="330" y1="250" x2="470" y2="250" stroke="var(--diagram-muted)" stroke-width="1.5" stroke-dasharray="5 4"/>
+    <polygon points="338,245 326,250 338,255" fill="var(--diagram-muted)"/>
+    <polygon points="462,245 474,250 462,255" fill="var(--diagram-muted)"/>
+    <text x="400" y="240" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">precompute more, or less:</text>
+    <text x="400" y="272" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">the boundary can shift</text>
+  </svg>
+</Diagram>

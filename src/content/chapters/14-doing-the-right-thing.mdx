@@ -1,0 +1,195 @@
+---
+title: "Doing the Right Thing"
+chapter: 14
+description: "The ethics of data systems: algorithmic bias and feedback loops, surveillance as a business model, the limits of consent, and why data minimization is an engineering duty."
+readingMinutes: 21
+keyTakeaways:
+  - "Many datasets are about people — their behavior, interests, and identity — and engineers are responsible for the consequences. Ethics is not a compliance checklist; it's an ongoing process of reflection, in dialog with the people affected, with accountability for the results."
+  - "Predictive systems extrapolate from the past. Feed them data shaped by discrimination and they learn and amplify it — 'machine learning is like money laundering for bias': dirty data in, output stamped as objective."
+  - "Protected traits don't need to be inputs to be used: in a segregated city, a postal code or IP address is a strong proxy for race. Removing the column does not remove the bias."
+  - "Organizations rationally default to 'no' because a missed opportunity is cheap and a bad loan or hire is expensive — but stacked algorithmic no's can exclude a person from jobs, credit, housing, and travel: an algorithmic prison with no proof of guilt and little appeal."
+  - "Predictions are probabilistic: a model can be right on average and wrong about you. Predictive analytics judges you by how people similar to you behaved, not by what you actually did — and when the data is wrong, recourse is nearly impossible."
+  - "Feedback loops make harm self-reinforcing: credit-score hiring turns misfortune into a downward spiral, and German fuel-pricing algorithms learned to collude without anyone intending it. Systems thinking — modeling people as part of the system — helps spot these loops early."
+  - "When advertising pays for a service, the advertiser is the customer and the user's interests come second. Tracking that serves someone other than the person being tracked has an honest name: surveillance."
+  - "Consent without understanding is not meaningful consent, and opting out of services that are effectively required for social participation is not a free choice. The GDPR's bar — freely given, specific, informed, withdrawable without detriment — is rarely met."
+  - "Privacy is not secrecy; it is the right to decide what to reveal to whom. Surveillance doesn't erase that right — it transfers it to the company, which exercises it to maximize profit."
+  - "Data is a hazardous asset: it attracts criminals, governments, and bankruptcy auctions, and it outlives today's good intentions. Minimize what you collect and purge what you no longer need — data you don't have can't be leaked, stolen, or compelled."
+references:
+  - title: "The era of blind faith in big data must end"
+    url: "https://www.ted.com/talks/cathy_o_neil_the_era_of_blind_faith_in_big_data_must_end"
+    type: video
+    author: "Cathy O'Neil"
+    note: "The 'Weapons of Math Destruction' author's TED talk on how secret, important, and harmful algorithms encode bias into lending, hiring, and insurance decisions."
+  - title: "Machine Bias"
+    url: "https://www.propublica.org/article/machine-bias-risk-assessments-in-criminal-sentencing"
+    type: article
+    author: "Julia Angwin et al. (ProPublica)"
+    note: "The landmark 2016 investigation of the COMPAS recidivism algorithm, which falsely labeled Black defendants as future criminals at nearly twice the rate of white defendants."
+  - title: "Shoshana Zuboff on Surveillance Capitalism"
+    url: "https://www.youtube.com/watch?v=hIXhnWUmMvw"
+    type: video
+    author: "Shoshana Zuboff / VPRO"
+    note: "Free 50-minute documentary in which Zuboff explains how tech companies turn behavioral data into prediction products — the full argument behind this chapter's 'data as power' section."
+  - title: "Fairness and Machine Learning: Limitations and Opportunities"
+    url: "https://fairmlbook.org/"
+    type: course
+    author: "Barocas, Hardt, Narayanan"
+    note: "Free textbook with course materials covering formal fairness criteria, causality, and anti-discrimination law — the rigorous follow-up to this chapter's bias discussion."
+  - title: "What is GDPR, the EU's new data protection law?"
+    url: "https://gdpr.eu/what-is-gdpr/"
+    type: article
+    author: "GDPR.eu"
+    note: "A readable tour of the GDPR's principles, lawful bases, consent rules, and data-subject rights — much gentler than the legal text, with the substance intact."
+  - title: "Haunted by Data"
+    url: "https://idlewords.com/talks/haunted_by_data.htm"
+    type: article
+    author: "Maciej Ceglowski"
+    note: "The Strata talk that compares stored behavioral data to nuclear waste and makes the sharpest case you'll read for minimization and retention limits."
+  - title: "The Moral Character of Cryptographic Work"
+    url: "https://web.cs.ucdavis.edu/~rogaway/papers/moral-fn.pdf"
+    type: paper
+    author: "Phillip Rogaway"
+    note: "A post-Snowden essay arguing that technical work rearranges power, and that engineers bear moral responsibility for enabling or resisting mass surveillance."
+---
+
+import Callout from '../../components/mdx/Callout.astro';
+import PredictiveFeedbackLoop from '../../components/diagrams/ch14/PredictiveFeedbackLoop.astro';
+import SurveillanceEconomy from '../../components/diagrams/ch14/SurveillanceEconomy.astro';
+import ConsentAsymmetry from '../../components/diagrams/ch14/ConsentAsymmetry.astro';
+import PurposeLimitation from '../../components/diagrams/ch14/PurposeLimitation.astro';
+
+Thirteen chapters of this book have asked *how*: how to make reads fast, how to keep replicas agreeing, how to process a billion events without losing one. This final chapter asks what these systems do to the people whose lives they touch. Every system is built for a purpose, and every purpose has consequences beyond the intended ones. We talk about data as an abstract substance — rows, streams, shards — but a large fraction of the world's datasets are about people: their behavior, their interests, who they are. Data like that deserves humanity and respect, because the users behind it are humans, and their dignity matters.
+
+There is a professional code for this — the ACM Code of Ethics and Professional Conduct — but it is rarely discussed, applied, or enforced, and the result is that engineers and product managers sometimes treat privacy and downstream harm with a shrug. A technology is not good or bad in itself; what matters is how it is used and how it affects people, and that is as true of a search engine as it is of a gun. The responsibility sits with us. One warning before we start: unlike most of computing, ethics has no precise, fixed definitions. What counts as "good" requires interpretation, and reasonable people disagree — which makes the reasoning hard, not optional. Ethics is not a checklist you run through to confirm compliance; it's a participatory, iterative process of reflection, in dialog with the people involved, with accountability for the results. This chapter walks through the two places where data systems and ethics collide hardest: using data to make automated decisions about people, and collecting that data in the first place.
+
+## Predictive Analytics
+
+Using data to predict the weather, or the spread of a disease, is one thing. Predicting whether a convict will reoffend, whether a loan applicant will default, or whether an insurance customer will file expensive claims is something else — those predictions land directly on individual lives.
+
+The economics of these decisions push in one consistent direction. For a bank, a payment network, or an employer, a missed opportunity is cheap — decline one good borrower and another will come along — while a bad loan, a fraudulent transaction, or a problematic hire is expensive. So a rational organization, when in doubt, says no. One "no" is survivable. The trouble starts when algorithmic decision making scales the no's: a person labeled risky by an algorithm — accurately or not — can find themselves refused jobs, flights, insurance, apartments, and bank accounts, everywhere at once, by systems trained on similar data. Being systematically shut out of that many parts of society is such a severe constraint on a person's freedom that it has been called an **algorithmic prison**. Notice the inversion: a justice system that respects human rights presumes innocence until proven guilty, while an automated system can exclude someone from social participation with no proof of guilt and little chance of appeal.
+
+### Bias and Discrimination
+
+A decision made by an algorithm isn't automatically worse than one made by a human. People carry biases even when they actively try not to, and discriminatory practices can become culturally institutionalized. There is genuine hope that decisions grounded in data could be *fairer* than gut feel — giving a real chance to people the traditional system overlooks.
+
+But be clear about what we're actually building. A predictive system is not a human's decision procedure transcribed into code; the rules themselves are inferred from data, and the patterns the system learns are opaque — the data may show a correlation without anyone knowing why it holds. If the input carries a systematic bias, and historical data about humans usually does, the system will most likely learn that bias and reproduce it at scale in its output.
+
+Anti-discrimination law in many countries prohibits treating people differently based on **protected traits**: ethnicity, age, gender, sexuality, disability, beliefs. The uncomfortable part: an algorithm doesn't need the protected column to discriminate by it. In a racially segregated city, a person's postal code is a strong predictor of their race; so, often, is their IP address. The model finds the proxy, uses it, and the discrimination arrives wearing a different name tag. Stated plainly, the idea that biased data can go into an algorithm and fair, impartial output come out is absurd — yet proponents of data-driven decision making often seem to assume exactly that.
+
+<Callout type="warning" title="Money laundering for bias">
+The satirical version of this point has stuck because it's accurate: machine learning can act like money laundering for bias. Prejudiced historical decisions go in as training data; predictions come out stamped with mathematical neutrality; nobody along the way appears to have discriminated. A predictive system can only extrapolate from the past — if the past was discriminatory, the system codifies and amplifies that discrimination. Making the future *better* than the past takes moral imagination, and that is something only humans can supply. Data and models should be our tools, not our masters.
+</Callout>
+
+### Responsibility and Accountability
+
+When a human makes a bad decision, there is someone to hold accountable, and the affected person can appeal. Algorithms make mistakes too — so who answers? When a self-driving car causes a crash, who is responsible? If a credit scoring model systematically penalizes people of a particular religion, where does a rejected applicant turn? If your model's decision ends up under judicial review, can you explain to the judge how it was reached? "The algorithm decided" must never become a way for people to evade their own responsibility.
+
+Credit rating agencies make a useful contrast here. A bad credit score makes life genuinely difficult — but at least a traditional score is based on relevant facts about *your* actual borrowing history, and errors in the record can be corrected (even if the agencies don't make it easy). Machine-learning scoring systems use a far wider range of inputs and are far more opaque, which makes it much harder to see how a decision came about or whether someone was treated unfairly.
+
+There's a deeper shift hiding in that contrast. A credit score answers "how did you behave in the past?" Predictive analytics answers a different question: "who is similar to you, and how did people *like you* behave?" That is stereotyping by construction — judging you by your resemblance to others, often via where you live, which doubles as a proxy for race and class. What happens to the people sorted into the wrong bucket? And if the decision was wrong because the underlying data was wrong, getting it fixed is close to impossible.
+
+Remember also that most of this data is statistical. If the average life expectancy in your country is 80, you are not scheduled to die on your 80th birthday — a distribution can be exactly right in aggregate and say almost nothing about one person. Every prediction carries the same caveat: probably right on average, possibly wrong about you. Blind faith in data-driven decisions is not just naive; it's dangerous. As these systems spread, we need ways to keep them from reinforcing existing biases, to make them accountable and transparent, and to fix them when they inevitably misfire.
+
+The same analytical power cuts both ways, which is what makes this hard. Analytics that reveal the financial and social texture of people's lives could direct aid to those who need it most — or, in the hands of predatory businesses, identify exactly which vulnerable people to target with high-cost loans and worthless degrees. The capability is identical; only the intent differs.
+
+### Feedback Loops
+
+Even predictive systems with gentler stakes — recommendation engines, say — raise hard problems. A service that gets very good at predicting what you want to see ends up showing you mostly opinions you already hold: **echo chambers**, where stereotypes, misinformation, and polarization breed. Their effect on election campaigns is no longer hypothetical.
+
+The truly pernicious cases arise when a prediction feeds back into the data that drives future predictions. Consider employers screening job applicants by credit score. You're a good worker until a misfortune you didn't choose — an illness, a layoff — makes you miss some payments. Your score drops. Now employers screen you out, so you can't get hired, so your income falls, so more bills go unpaid, so your score drops further. Each turn of the loop confirms the original label: a downward spiral built from poisonous assumptions, hidden behind a camouflage of mathematical rigor.
+
+<PredictiveFeedbackLoop />
+
+<Callout type="example" title="When the algorithms started colluding">
+Feedback loops don't require anyone to be a victim of bias — they can emerge between machines. When gas stations in Germany adopted algorithmic pricing, economists found that competition *fell* and consumer prices *rose*: the algorithms, each independently optimizing its own station's revenue, effectively learned to collude. No human conspired; no single algorithm misbehaved by its own lights. The harm was a property of the loop — invisible if you analyze each piece in isolation.
+</Callout>
+
+We can't always predict where such loops will appear. But many consequences *can* be anticipated by reasoning about the entire system — not just the computerized parts, but the people interacting with it too — an approach known as **systems thinking**. Ask of any data-driven product: does it amplify existing differences between people, making the rich richer and the poor poorer? Or does it push the other way? Even with the best intentions, unintended consequences are the default, not the exception.
+
+## Privacy and Tracking
+
+Predictive analytics is about the ethics of *using* data. There's a prior question: the ethics of *collecting* it. What, exactly, is the relationship between the organization gathering the data and the person it describes?
+
+When a system stores only what a user deliberately typed in, because the user wants it stored and processed in a particular way, the answer is easy: the system performs a service, and the user is the customer. But when a user's activity is tracked and logged as a side effect of other things they were doing, the relationship gets murkier. The service is no longer just doing what the user asked — it has acquired interests of its own, which may conflict with the user's.
+
+To be fair, some tracking genuinely serves users. Logging which search results get clicked improves ranking; "people who liked X also liked Y" helps discovery; A/B tests show how to fix a confusing interface. All of it requires some behavioral data, and users benefit.
+
+What decides where the tracking stops is the business model. If the service is funded by advertising, the advertisers are the actual customers, and the users' interests come second. Now the tracking gets more detailed, the analyses reach further, and data is retained for years to build a marketing profile of each person. The user gets a free service and is coaxed into engaging with it as much as possible — but the tracking no longer primarily serves them; it serves the advertisers paying the bills. There's a word for collecting detailed data about people to serve the interests of someone else, and it isn't "analytics." It's **surveillance**.
+
+<SurveillanceEconomy />
+
+### Surveillance
+
+Try a thought experiment: replace the word *data* with *surveillance* in the familiar industry phrases. "In our surveillance-driven organization, we collect real-time surveillance streams and store them in our surveillance warehouse. Our surveillance scientists use advanced analytics to derive new insights." The sentences still parse; they just stop sounding flattering. By that substitution, this book would be called *Designing Surveillance-Intensive Applications* — deliberately polemic, but some points need words at full strength.
+
+In the rush to have software eat the world, we have built the most extensive mass-surveillance infrastructure in history. We are close to a world where every inhabited room contains at least one internet-connected microphone — smartphones, smart TVs, voice assistants, baby monitors, even children's toys that ship audio to cloud speech-recognition services, many with appalling security. What's genuinely new is not the desire to watch people but the cost of doing it: digitization has made it cheap to record where we go, who we talk to, what we buy, and how our bodies are doing — so cheap it's nearly unavoidable. An organization holding that data may know more about a person than the person knows about themselves, sometimes spotting an illness or a looming financial crisis before the individual does.
+
+The most repressive regimes of the past could only dream of a microphone in every room and a tracking device in every pocket. We carry both voluntarily, because the benefits of digital technology are real and large. The difference is just who's collecting: corporations offering services, rather than agencies seeking control. Not all data collection deserves the word surveillance — but examining it *as* surveillance is clarifying. Why do we accept it so easily? Perhaps because you feel you have nothing to hide — which is another way of saying you're comfortably aligned with existing power structures, not a member of a marginalized group, and unafraid of persecution. Not everyone is so fortunate. Or perhaps because the purpose seems benign: only recommendations and marketing, not coercion. But the line blurs fast. Cars have shared driving-behavior data without their drivers' consent, and it has affected insurance premiums; some health coverage is conditioned on wearing a fitness tracker. When surveillance feeds decisions about insurance and employment, "benign" is no longer the obvious word. And data reveals more than it appears to collect: the motion sensor in a smartwatch can be used to reconstruct what you're typing — including passwords — with fair accuracy. Sensors and inference algorithms only get better.
+
+### Consent and Freedom of Choice
+
+The standard defense is that users agreed to all this. They accepted the terms of service; they receive a valuable product in exchange; the tracking is necessary to provide it. Free search engines and social networks really are valuable — but the argument has three holes.
+
+First: necessary for *what*? Some tracking feeds directly into features — click-through rates improve search ranking, purchase patterns power "customers also bought." But building advertising profiles is necessary only in the sense that ads pay for the service. That's a fact about the business model, not about the product.
+
+Second, consent requires understanding, and understanding is not on offer. Most privacy policies do more to obscure than to illuminate, and users have little idea what data they're emitting or how it's retained and processed. Without that, consent is a ritual, not a decision. It gets worse: data from one user routinely describes *other people* — the contacts in an uploaded address book, the friends in a photo — who never agreed to anything. And the derived datasets we built in Chapters 11 to 13, combining the whole user base's data with behavioral tracking and external sources, are precisely the kind of thing no user can meaningfully understand, let alone consent to.
+
+Third, there is no negotiation. Data extraction is one-way: no dialog, no dial that trades less data for less service, no reciprocity. The service writes the terms; the user's complete set of options is "accept all" or "leave."
+
+<ConsentAsymmetry />
+
+The EU's **General Data Protection Regulation (GDPR)** sets out what consent would have to look like to count: "freely given, specific, informed, and unambiguous," withdrawable "without detriment," requested in "clear and plain language" — and silence, inactivity, and pre-ticked boxes explicitly do not qualify. (Consent isn't the GDPR's only lawful basis for processing personal data: there are others, including compliance with law, protecting someone's life, and **legitimate interest** — which covers things like fraud prevention, since fraudsters would presumably decline to consent. But consent is the workhorse basis for internet services.)
+
+"If you don't like the tracking, don't use the service" sounds like an answer but isn't. When a service is regarded by most people as essential for basic social participation, opting out is not a real option — its use is effectively mandatory. In most Western communities it is simply the norm to carry a smartphone, socialize on social networks, and search with Google; network effects attach a social cost to refusing. The platforms are also engineered to be hard to leave, borrowing game mechanics from gambling to keep people coming back. Declining is available only to people privileged enough to parse a privacy policy and absorb the missed social and professional opportunities. For everyone else, surveillance is not a choice. It's the water.
+
+### Privacy and Use of Data
+
+"Privacy is dead anyway — look at what people post." This claim rests on a misunderstanding of the word. **Privacy** does not mean keeping everything secret. It means having the freedom to choose what to reveal to whom, what to publish, and what to withhold — a *decision right*, exercised situation by situation, and a core piece of personal freedom and autonomy.
+
+A person with a rare disease might gladly hand their full medical history to researchers working on a treatment — and fiercely refuse the same data to anyone who could use it to deny them insurance or a job. Same data, opposite decisions. The choice is the whole point.
+
+Here's the subtle move surveillance makes: it doesn't erase privacy rights so much as *transfer* them. When a company extracts data through tracking infrastructure, the right to decide what gets revealed and to whom passes from the individual to the company — "trust us with your data" means exactly that. The company then exercises its new right the way you'd expect: mostly by keeping the results secret, since revealing how much it knows would look creepy and erode the advantage of knowing more about people than rivals do. What it knows surfaces only obliquely — say, as a tool that lets advertisers target "people suffering from condition X." Even if nobody in that targeting bucket can be re-identified, every one of them has lost agency over the disclosure of something intimate. The decision of what to reveal, to whom, is still being made — but by the company, optimizing for profit, not by the person, following their preferences.
+
+Most companies respond by managing *perceptions* of creepiness rather than reducing the intrusion itself, and even that is done badly. A resurfaced memory can be factually accurate and still cause real pain — an algorithm has no concept of "true, but the user does not want to be reminded" unless we explicitly build for human needs. With any data, expect that some of it is wrong, unwelcome, or inappropriate, and engineer for those failures with some humility.
+
+A note on privacy settings: they control what *other users* see. The service itself sees everything regardless, and even when "we never sell your data" is true, the policy usually grants unlimited internal processing and analysis far beyond what users can observe. This wholesale transfer of privacy rights from individuals to corporations has no historical precedent. Surveillance always existed, but it used to be expensive and manual. Trust-based data relationships existed too — patient and doctor, defendant and attorney — but those are bound by ethics, law, and regulation. Internet services have accumulated comparable intimacy at industrial scale, without meaningful consent and largely without equivalent constraints.
+
+### Data as Assets and Power
+
+Behavioral data is sometimes called "data exhaust" — a waste byproduct of using the service, which analytics merely recycles. The metaphor points the wrong way. If targeted advertising is what funds the service, then the activity generating behavioral data is not exhaust; it's the input the business actually runs on, and economists have argued it should be treated as a form of *labor*. The harsher framing: the delightful app is the lure, and the human creativity and social connection expressed through it are raw material for a data-extraction machine.
+
+However you frame it, personal data is a valuable asset. An entire industry of **data brokers** operates in relative secrecy, buying, aggregating, analyzing, and reselling personal data, mostly for marketing. Startups are valued by their user counts — by their surveillance capability, if you like. And valuable things attract claimants. Governments can get the data through quiet deals, coercion, legal compulsion, or theft. When a company goes bankrupt, its accumulated personal data is sold off with the office chairs. And because data is hard to secure, breaches happen with depressing regularity.
+
+This is why critics have called personal data a *toxic asset*, or *hazardous material* — perhaps not the new gold or the new oil, but the new uranium. Every collection decision should weigh the benefit against the chance of the data ending up in the wrong hands: criminals, hostile intelligence services, an insider with a grudge, new management with different values — or a future government. There is no guarantee that every government your data will outlive respects civil liberties. As Bruce Schneier put it, it is poor civic hygiene to install technologies that could someday facilitate a police state.
+
+Knowledge is power, and being able to scrutinize others while escaping scrutiny yourself is one of the most important forms of power there is. That's exactly why totalitarian states want surveillance. Today's technology companies aren't overtly seeking political power — but the knowledge they've accumulated, much of it gathered outside any public oversight, gives them enormous power over our lives all the same.
+
+### Remembering the Industrial Revolution
+
+Data is the defining feature of the information age, the way the factory defined the industrial one — and the comparison is instructive. The Industrial Revolution delivered sustained economic growth and, eventually, vastly better living standards. It also delivered choking air pollution, rivers full of industrial and human waste, factory owners in mansions beside workers in unsanitary slums, brutal hours, and children doing dangerous work in mines. The safeguards — environmental regulation, workplace safety law, the abolition of child labor, food inspections — took generations to arrive. They raised the cost of doing business, society came out enormously ahead, and almost nobody today would trade them back.
+
+Our transition to the information age has its own dark side, and the collection and use of data is a central piece of it.
+
+<Callout type="note" title="The pollution problem of the information age">
+Bruce Schneier draws the parallel directly: "Data is the pollution problem of the information age, and protecting privacy is the environmental challenge." Just as we look back and wonder how our ancestors ignored pollution in their rush to industrialize, our grandchildren will look back at these decades and judge us on how we handled data collection and misuse. We should try to make them proud.
+</Callout>
+
+### Legislation and Self-Regulation
+
+Data protection law offers real tools here, and the GDPR's two least famous principles may matter more than its consent rules. **Purpose limitation** says personal data must be collected for specified, explicit, legitimate purposes and not processed in ways incompatible with them. **Data minimization** says the data held must be adequate, relevant, and limited to what those purposes actually require.
+
+Notice that this is a direct philosophical collision with big data. The big-data playbook is to maximize collection, join everything with everything, and explore in the hope of unforeseen insights — and "unforeseen" is precisely the opposite of "specified and explicit." In practice, the GDPR has measurably affected the online advertising industry but has been weakly enforced, and it hasn't produced much cultural change across the wider tech industry.
+
+Companies that collect personal data broadly oppose regulation as a burden on innovation, and the objection isn't entirely empty. Sharing medical data carries clear privacy risks *and* clear potential benefits — how many deaths might better diagnostics prevent, if analysis across patient data were easier? Overregulation could foreclose those breakthroughs. The balance is genuinely hard.
+
+But waiting for perfect legislation misses the point. What's needed is a culture shift: users are not metrics to be optimized but humans entitled to respect, dignity, and agency. Self-regulation means earning and keeping the trust of the people who depend on our software, and educating users about how their data is used instead of keeping them in the dark. Think of individual control over personal data as a commons, like the environment of a national park: if it isn't deliberately protected, it gets destroyed, and everyone ends up worse off. Ubiquitous surveillance is not inevitable. It can still be stopped.
+
+And there is a first step that requires no legislature, just engineering discipline: don't keep data forever. Purge it as soon as it's no longer needed, and minimize what you collect in the first place. Data you don't have can't be leaked, stolen, or handed to a government under compulsion.
+
+<PurposeLimitation />
+
+As people working in technology, if we don't consider the societal impact of what we build, we aren't doing our jobs.
+
+<Callout type="insight" title="Where the book leaves you">
+The first thirteen chapters handed you the machinery: percentiles and fault models, replicas and shards, logs and stream processors. This one hands you the question to carry alongside them — not "can we build it?" but "what does it do to the people inside the dataset?" It belongs in the same design reviews: schema design (what *not* to collect), retention policy (when to purge), model reviews (who gets misclassified, and what their recourse is). The whole book has been about making trade-offs deliberately instead of by accident. This is the last and largest one: between what data makes possible and what it does to people.
+</Callout>

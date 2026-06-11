@@ -1,0 +1,102 @@
+---
+import Diagram from '../Diagram.astro';
+---
+
+<Diagram wide caption="Key-range sharding keeps adjacent keys together, so range scans hit one shard; hash sharding scatters adjacent keys evenly, so hot sequences spread out but range scans touch every shard.">
+  <svg viewBox="0 0 880 330" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="krvh-title">
+    <title id="krvh-title">Comparison of key-range sharding and hash sharding for the same three keys</title>
+
+    <!-- Panel titles -->
+    <text x="220" y="26" text-anchor="middle" font-size="15" font-weight="600" fill="var(--diagram-stroke)">Key-range sharding</text>
+    <text x="660" y="26" text-anchor="middle" font-size="15" font-weight="600" fill="var(--diagram-stroke)">Hash sharding</text>
+
+    <!-- divider -->
+    <line x1="440" y1="20" x2="440" y2="310" stroke="var(--diagram-muted)" stroke-width="1.5" stroke-dasharray="4 5"/>
+
+    <!-- LEFT: keys -->
+    <g font-size="12">
+      <rect x="20" y="50" width="130" height="30" rx="5" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+      <text x="85" y="70" text-anchor="middle" fill="var(--diagram-stroke)">sensor17:09:00</text>
+      <rect x="20" y="92" width="130" height="30" rx="5" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+      <text x="85" y="112" text-anchor="middle" fill="var(--diagram-stroke)">sensor17:09:01</text>
+      <rect x="20" y="134" width="130" height="30" rx="5" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+      <text x="85" y="154" text-anchor="middle" fill="var(--diagram-stroke)">sensor17:09:02</text>
+    </g>
+
+    <!-- LEFT: shards -->
+    <g font-size="12">
+      <rect x="270" y="50" width="150" height="48" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+      <text x="345" y="70" text-anchor="middle" font-weight="600" fill="var(--diagram-stroke)">Shard A</text>
+      <text x="345" y="88" text-anchor="middle" fill="var(--diagram-muted)">keys a &#8211; m</text>
+
+      <rect x="270" y="118" width="150" height="48" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+      <text x="345" y="138" text-anchor="middle" font-weight="600" fill="var(--diagram-stroke)">Shard B</text>
+      <text x="345" y="156" text-anchor="middle" fill="var(--diagram-muted)">keys n &#8211; s</text>
+
+      <rect x="270" y="186" width="150" height="48" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+      <text x="345" y="206" text-anchor="middle" font-weight="600" fill="var(--diagram-stroke)">Shard C</text>
+      <text x="345" y="224" text-anchor="middle" fill="var(--diagram-muted)">keys t &#8211; z</text>
+    </g>
+
+    <!-- LEFT arrows: all three keys to shard A -->
+    <line x1="150" y1="65" x2="262" y2="63" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <polygon points="262,58 272,63 262,68" fill="var(--diagram-accent)"/>
+    <line x1="150" y1="107" x2="262" y2="73" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <polygon points="259,69 271,69 263,79" fill="var(--diagram-accent)"/>
+    <line x1="150" y1="149" x2="262" y2="84" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <polygon points="258,81 270,79 263,91" fill="var(--diagram-accent)"/>
+
+    <text x="220" y="270" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">Adjacent keys land together:</text>
+    <text x="220" y="288" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">range scans are cheap,</text>
+    <text x="220" y="306" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">but sequential writes pile onto one shard</text>
+
+    <!-- RIGHT: keys -->
+    <g font-size="12">
+      <rect x="460" y="50" width="130" height="30" rx="5" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+      <text x="525" y="70" text-anchor="middle" fill="var(--diagram-stroke)">sensor17:09:00</text>
+      <rect x="460" y="92" width="130" height="30" rx="5" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+      <text x="525" y="112" text-anchor="middle" fill="var(--diagram-stroke)">sensor17:09:01</text>
+      <rect x="460" y="134" width="130" height="30" rx="5" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+      <text x="525" y="154" text-anchor="middle" fill="var(--diagram-stroke)">sensor17:09:02</text>
+    </g>
+
+    <!-- hash function box -->
+    <rect x="615" y="85" width="80" height="46" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <text x="655" y="105" text-anchor="middle" font-size="12" font-weight="600" fill="var(--diagram-stroke)">hash()</text>
+    <text x="655" y="122" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">0 &#8211; 65,535</text>
+
+    <line x1="590" y1="65" x2="608" y2="97" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <polygon points="603,95 612,103 611,91" fill="var(--diagram-stroke)"/>
+    <line x1="590" y1="107" x2="608" y2="107" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <polygon points="606,102 616,107 606,112" fill="var(--diagram-stroke)"/>
+    <line x1="590" y1="149" x2="608" y2="118" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <polygon points="604,123 612,113 611,125" fill="var(--diagram-stroke)"/>
+
+    <!-- RIGHT: shards by hash range -->
+    <g font-size="12">
+      <rect x="720" y="50" width="145" height="48" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+      <text x="792" y="70" text-anchor="middle" font-weight="600" fill="var(--diagram-stroke)">Shard 0</text>
+      <text x="792" y="88" text-anchor="middle" fill="var(--diagram-muted)">hash 0 &#8211; 16,383</text>
+
+      <rect x="720" y="118" width="145" height="48" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+      <text x="792" y="138" text-anchor="middle" font-weight="600" fill="var(--diagram-stroke)">Shard 1</text>
+      <text x="792" y="156" text-anchor="middle" fill="var(--diagram-muted)">hash 16,384 &#8211; 32,767</text>
+
+      <rect x="720" y="186" width="145" height="48" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+      <text x="792" y="206" text-anchor="middle" font-weight="600" fill="var(--diagram-stroke)">Shard 2</text>
+      <text x="792" y="224" text-anchor="middle" fill="var(--diagram-muted)">hash 32,768 &#8211; 49,151</text>
+    </g>
+
+    <!-- arrows from hash to different shards -->
+    <line x1="695" y1="95" x2="712" y2="76" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <polygon points="707,73 719,70 713,83" fill="var(--diagram-accent)"/>
+    <line x1="695" y1="108" x2="712" y2="140" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <polygon points="706,139 717,147 715,135" fill="var(--diagram-accent)"/>
+    <line x1="695" y1="120" x2="712" y2="206" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <polygon points="705,204 715,213 715,201" fill="var(--diagram-accent)"/>
+
+    <text x="660" y="270" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">Similar keys get unrelated hashes:</text>
+    <text x="660" y="288" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">writes spread evenly,</text>
+    <text x="660" y="306" text-anchor="middle" font-size="12" fill="var(--diagram-muted)">but a range scan must visit every shard</text>
+  </svg>
+</Diagram>

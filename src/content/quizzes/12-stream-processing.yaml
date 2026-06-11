@@ -1,0 +1,109 @@
+questions:
+  - id: ch12-q01
+    prompt: "Your team replaces a daily batch ETL with consumers polling the database every 200 ms for new rows. Latency improves, but database load explodes. What is the fundamental issue?"
+    options:
+      - "Polling cannot detect deleted rows, only inserts"
+      - "Frequent polling means most requests return nothing, so per-event overhead soars; you want notification, not polling"
+      - "Databases cannot serve more than a few hundred queries per second"
+      - "The poll interval must always exceed the replication lag"
+    answerIndex: 1
+    explanation: "As poll frequency rises, the fraction of polls that find new events shrinks, so overhead grows without bound — the datastore isn't designed for this access pattern. Messaging systems exist precisely to push notifications to consumers instead. Databases handle far more than hundreds of queries per second; that's not the bottleneck here."
+  - id: ch12-q02
+    prompt: "A topic has 4 partitions and your consumer group has 8 nodes, yet only 4 do any work. Why?"
+    options:
+      - "Log-based brokers assign whole partitions, not messages, to consumers — parallelism is capped at the partition count"
+      - "The broker is misconfigured; consumer groups should round-robin individual messages"
+      - "Four nodes are fenced off as hot standbys by default"
+      - "Offsets can only be tracked for as many consumers as partitions exist in the cluster"
+    answerIndex: 0
+    explanation: "Load balancing in a log-based broker is coarse-grained: each partition is read sequentially by one node in the group, preserving partition order. Eight nodes on four partitions leaves four idle. Round-robining individual messages is the AMQP/JMS model — it parallelizes better but sacrifices ordering."
+  - id: ch12-q03
+    prompt: "An ad-tech pipeline must process each user's events in the order they occurred. With a partitioned log broker, how do you guarantee that?"
+    options:
+      - "Enable global ordering mode on the topic"
+      - "Use a single consumer for the whole topic"
+      - "Partition events by user ID, so each user's events land in one partition"
+      - "Attach a vector clock to every event and reorder at the consumer"
+    answerIndex: 2
+    explanation: "Ordering is guaranteed only within a partition, so events that must stay ordered need the same partition key — user ID here. There is no global ordering mode across partitions, and a single consumer sacrifices all parallelism rather than fixing the model."
+  - id: ch12-q04
+    prompt: "A consumer processed messages up to offset 4,107, but the broker's last recorded offset for it was 4,100 when the consumer crashed. What happens on recovery?"
+    options:
+      - "Messages 4,101–4,107 are lost"
+      - "Messages 4,101–4,107 are processed a second time"
+      - "The broker replays the entire partition from offset 0"
+      - "The consumer resumes exactly at 4,108 because the broker tracks per-message acks"
+    answerIndex: 1
+    explanation: "Offsets are recorded periodically, not per message. The replacement resumes from the last recorded offset (4,100) and reprocesses 4,101–4,107 — at-least-once delivery. Nothing is lost, but you need idempotence or transactions if double-processing matters."
+  - id: ch12-q05
+    prompt: "Your checkout service writes orders to PostgreSQL and then to Elasticsearch from application code. Months later, some products show stale data in search but correct data in the database, with no errors logged. What most likely happened?"
+    options:
+      - "Elasticsearch silently rejected documents over its size limit"
+      - "Concurrent updates arrived at the two systems in different orders, or one of the dual writes failed — classic dual-write inconsistency"
+      - "PostgreSQL vacuumed away rows before Elasticsearch could index them"
+      - "The search index needs a nightly REFRESH to stay consistent"
+    answerIndex: 1
+    explanation: "Dual writes have no ordering guarantee across systems and no atomicity between them: interleaved concurrent writes or a half-failed pair leave the copies permanently divergent, silently. CDC fixes this by making the database the single leader whose changelog the index follows in order."
+  - id: ch12-q06
+    prompt: "You need to build a brand-new search index from a CDC pipeline whose Kafka topic is log-compacted, with every change event carrying the record's full new value. What's required?"
+    options:
+      - "A consistent database snapshot first, then the changelog from the snapshot's position"
+      - "Nothing extra — consume the compacted topic from offset 0; it contains the latest value of every key"
+      - "A full table dump, because compaction discards keys that were never updated"
+      - "Replaying the database's WAL from the beginning of time"
+    answerIndex: 1
+    explanation: "Compaction keeps the most recent event per key, so the topic is a complete (if slightly historical in places) copy of the database — scan it from offset 0 and you have everything. Snapshots are only needed when the log is truncated by time-based retention. Compaction never discards a key that still exists; it discards superseded values."
+  - id: ch12-q07
+    prompt: "A microservices team wires Debezium to a service's main tables. Two quarters later, renaming a column takes down a downstream recommendation service. What pattern would have prevented this?"
+    options:
+      - "Running CDC against a read replica instead of the primary"
+      - "Switching from Debezium to a polling-based ETL job"
+      - "The outbox pattern: CDC reads a dedicated, stable-schema outbox table written in the same transaction as internal tables"
+      - "Versioning the Kafka topic name on every deploy"
+    answerIndex: 2
+    explanation: "CDC on internal tables silently turns the private schema into a public API. An outbox decouples them: the service writes events to an outbox table with a deliberately managed schema, atomically with its normal writes (one database, one transaction — the safe kind of dual write). A read replica has the identical schema, so it solves nothing."
+  - id: ch12-q08
+    prompt: "After redeploying your requests-per-second monitor (down for 90 seconds), the dashboard shows a huge traffic spike right after restart. Actual traffic was flat. The cause?"
+    options:
+      - "Windowing by processing time: the backlog replay was counted as if it occurred at processing time"
+      - "Straggler events from mobile clients arriving days late"
+      - "The broker redelivered unacknowledged messages, double-counting them"
+      - "Clock skew between the broker and the monitoring host"
+    answerIndex: 0
+    explanation: "The processor chewed through 90 seconds of backlog quickly; windows defined by the processor's own clock attributed those events to the moment of processing, fabricating a spike. Windowing by the events' embedded timestamps (event time) removes the artifact. Redelivery would add a few duplicates, not a clean burst the size of the backlog."
+  - id: ch12-q09
+    prompt: "A fitness app buffers workout events offline and uploads them later. Device clocks can't be trusted, but you want accurate event times. The chapter's recommended approach?"
+    options:
+      - "Use the server's receive time; it's the only trustworthy clock"
+      - "Log event-occurred and event-sent times by the device clock plus received time by the server clock, and use the send/receive gap to correct the device clock's offset"
+      - "Reject any event whose device timestamp deviates from server time"
+      - "Require NTP synchronization on the device before accepting uploads"
+    answerIndex: 1
+    explanation: "Server receive time is trustworthy but describes the upload, not the workout. Subtracting device-sent from server-received estimates the device clock's offset (assuming small network delay); applying that offset to the occurrence timestamp recovers a good estimate of the true event time. Rejecting or requiring NTP throws away exactly the offline data the feature exists for."
+  - id: ch12-q10
+    prompt: "You're computing click-through rate by joining search events with click events on session ID. A colleague suggests skipping the join: just embed the search details inside each click event. What's wrong with that?"
+    options:
+      - "Click events would exceed broker message-size limits"
+      - "You lose the searches that received no click — the denominator CTR needs"
+      - "Session IDs are not unique enough to embed safely"
+      - "Embedding makes the join window infinitely large"
+    answerIndex: 1
+    explanation: "Embedding only captures search-click pairs that happened; CTR requires knowing how many searches got no click at all. The stream-stream join keeps both streams' recent events indexed by session ID and emits 'not clicked' when a search expires unmatched — absence of an event is itself data."
+  - id: ch12-q11
+    prompt: "Reprocessing a year of invoice events against your tax-rate table produces different totals than the original run, with no code changes. The likely cause?"
+    options:
+      - "The join is time-dependent: events now join against current tax rates instead of the rates in force at sale time"
+      - "Log compaction removed some invoice events"
+      - "Floating-point nondeterminism in the aggregation step"
+      - "The replay used a different number of partitions"
+    answerIndex: 0
+    explanation: "This is the slowly changing dimension problem: join state (tax rates) changed over time, and cross-stream ordering isn't guaranteed, so a rerun joins old sales with new rates. Fixes: version each rate change and record the version ID in the sale (sacrificing compaction), or denormalize the applicable rate into the event itself."
+  - id: ch12-q12
+    prompt: "A Flink job with checkpointing writes results to an external REST API. After a crash and recovery, the API received some calls twice. Why didn't checkpointing prevent this?"
+    options:
+      - "The checkpoint interval was longer than the API timeout"
+      - "Checkpointing only covers internal state and output — external side effects performed after the last checkpoint cannot be discarded on replay"
+      - "REST APIs are incompatible with exactly-once frameworks"
+      - "Flink checkpoints are asynchronous, so they sometimes miss events"
+    answerIndex: 1
+    explanation: "Checkpoint/microbatch recovery gives exactly-once semantics within the framework: on failure it rewinds state and discards internal output. But it can't un-call an external API — replayed events redo the side effect. You need idempotent requests (e.g., include the message offset or a dedup key) or transactional output kept inside one system."

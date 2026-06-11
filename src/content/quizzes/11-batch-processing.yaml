@@ -1,0 +1,109 @@
+questions:
+  - id: ch11-q01
+    prompt: "Your log-analysis Python script keeps a hash table of URL counts. It worked fine for months, but this week's 80 GB log file makes it crash with an out-of-memory error — while the equivalent awk | sort | uniq -c pipeline finishes without trouble. Why?"
+    options:
+      - "awk processes lines lazily, so it uses no memory at all"
+      - "GNU sort spills to disk with mergesort and parallelizes across cores, so the pipeline isn't limited by RAM"
+      - "Unix pipes compress data in transit, reducing memory pressure"
+      - "The hash table has O(n log n) memory overhead that sorting avoids"
+    answerIndex: 1
+    explanation: "The hash table's working set grew past memory (probably a flood of distinct URLs), and a hash table needs random access to all of it. Sorting degrades gracefully: GNU sort writes sorted segments to disk and merges them sequentially — the same mergesort pattern disks are good at. Pipes don't compress anything, and the hash table's problem is its size, not asymptotic overhead."
+  - id: ch11-q02
+    prompt: "Mapping the Unix pipeline awk '{print $7}' | sort | uniq -c onto MapReduce, which correspondence is correct?"
+    options:
+      - "awk is the mapper, sort is the shuffle, uniq -c is the reducer"
+      - "awk is the reducer, sort is the mapper, uniq -c is the shuffle"
+      - "awk is the input parser, sort is the reducer, uniq -c is the output format"
+      - "The whole pipeline corresponds to the map phase; reduce has no Unix analogue"
+    answerIndex: 0
+    explanation: "awk extracts a key from each record independently and statelessly — the mapper's contract. sort brings identical keys together, which is exactly what the shuffle does. uniq -c iterates over adjacent same-key records and aggregates them — the reducer's contract. The analogy is the chapter's backbone: MapReduce is this pipeline, distributed."
+  - id: ch11-q03
+    prompt: "Why does HDFS default to 128 MB blocks when ext4 uses 4 KB?"
+    options:
+      - "Replication requires blocks large enough to checksum efficiently"
+      - "Large blocks reduce the metadata the cluster must track and amortize seek cost — critical at petabyte scale"
+      - "Network packets are more reliable at larger sizes"
+      - "POSIX compliance requires distributed filesystems to use larger blocks"
+    answerIndex: 1
+    explanation: "Tracking billions of 4 KB blocks across a petabyte dataset would crush the metadata service (NameNode); 128 MB blocks cut that bookkeeping by orders of magnitude and make each seek buy a much larger read. Replication and networking work at any block size, and DFSs aren't required to be POSIX-compliant at all."
+  - id: ch11-q04
+    prompt: "Your team migrates a Hadoop pipeline from HDFS to S3. Jobs that 'commit' output by renaming a temporary directory to its final name start producing occasional half-visible results. What's the root cause?"
+    options:
+      - "S3's replication is asynchronous, so renamed files lag behind"
+      - "S3 caps directory sizes, truncating large outputs"
+      - "Object stores have no atomic rename — a 'rename' is a per-object copy then delete, so failures leave partial state"
+      - "S3 blocks are smaller than HDFS blocks, splitting files differently"
+    answerIndex: 2
+    explanation: "Object stores have no directories and no rename operation: the path is just part of the key, so 'renaming' means copying every object to a new key and deleting the old one — anything but atomic. A commit protocol built on HDFS's atomic directory rename silently loses its guarantee. The other options describe mechanisms S3 doesn't have."
+  - id: ch11-q05
+    prompt: "A cluster scheduler uses gang scheduling: it reserves cores until all 100 that a job requested are free simultaneously. What is the characteristic risk of this strategy?"
+    options:
+      - "Tasks run slower because cores are fragmented across nodes"
+      - "Reserved cores sit idle while waiting, dropping utilization — and two jobs reserving against each other can deadlock"
+      - "It guarantees starvation of all small jobs"
+      - "It requires preempting running tasks, wasting their work"
+    answerIndex: 1
+    explanation: "Gang scheduling trades utilization for all-at-once starts: cores held in reserve do nothing until the full gang is assembled, and if two jobs each hold partial reservations waiting for the other's cores, neither proceeds — deadlock. Starvation is the risk of the opposite strategy (waiting without reserving), and preemption is a separate tool with its own costs. Optimal allocation is NP-hard, hence heuristics."
+  - id: ch11-q06
+    prompt: "Mid-job, a Spark worker holding in-memory intermediate data dies. What happens?"
+    options:
+      - "The whole job restarts from the beginning"
+      - "The data is read back from the distributed filesystem, where Spark replicated it"
+      - "Spark recomputes the lost partitions using its record of how they were derived (lineage)"
+      - "The job fails and must be resubmitted by the workflow scheduler"
+    answerIndex: 2
+    explanation: "Spark deliberately does not replicate intermediate state to a DFS (that's MapReduce's expensive approach); instead it tracks the lineage of transformations that produced each partition and reruns just those steps on another node. Flink makes a different bet — periodic checkpoints — but both avoid restarting the job for one lost node."
+  - id: ch11-q07
+    prompt: "In a MapReduce shuffle, what ensures that two mappers on different machines emitting the same key have both records processed by the same reducer?"
+    options:
+      - "The resource manager routes records by key at runtime"
+      - "Each mapper writes one sorted output file per reducer, choosing the file by a hash of the key"
+      - "Reducers scan all mapper output and filter for their assigned keys"
+      - "Mappers coordinate through ZooKeeper to agree on key ownership"
+    answerIndex: 1
+    explanation: "Routing is decided locally and deterministically: hash(key) mod number-of-reducers picks the file, so the same key always lands in the file destined for the same reducer, no coordination needed — the same idea as hash sharding. Reducers then fetch only their own file from each mapper and merge-sort them; scanning everything would defeat the point."
+  - id: ch11-q08
+    prompt: "You must join 2 TB of clickstream events against a 40 MB table of campaign metadata. Which join strategy should the optimizer pick, and why?"
+    options:
+      - "Sort-merge join, because it is the most general strategy"
+      - "Partitioned hash join, because the tables share a key"
+      - "Broadcast hash join: copy the 40 MB table to every task so the 2 TB side is never shuffled"
+      - "A cartesian product followed by a filter on the join key"
+    answerIndex: 2
+    explanation: "When one side fits in memory, broadcasting it to every task means each task hash-joins its local shard of the big table — the 2 TB never crosses the network and never gets sorted. Sort-merge would work but pays a full shuffle of both sides; a partitioned hash join needs both sides pre-sharded identically, which isn't given; a cartesian product is absurd at this scale."
+  - id: ch11-q09
+    prompt: "A nightly join of activity events against user profiles finishes 19 of 20 reducers in 10 minutes, but one reducer runs for 4 hours. The job is for a social app with a few enormously popular accounts. What's happening?"
+    options:
+      - "The slow reducer's node has a failing disk"
+      - "Key skew: hot keys hash to one reducer, which receives millions of records while peers get hundreds"
+      - "The shuffle randomized the data, unevenly by chance"
+      - "Secondary sort is misconfigured, forcing a full re-sort on one node"
+    answerIndex: 1
+    explanation: "This is the celebrity problem in batch form: shuffling distributes work by key, so a hot key concentrates its entire record mountain on one reducer, and the job waits for its slowest task. Fixes include splitting hot keys across tasks (replicating the other side's rows), broadcasting hot keys, or Spark AQE's automatic skew splitting. Shuffles aren't random, and hardware would be a coincidence repeated nightly."
+  - id: ch11-q10
+    prompt: "Beyond saving developer effort, why does expressing a batch job in SQL often make it run faster than a handwritten equivalent?"
+    options:
+      - "SQL is compiled to native code while custom jobs run interpreted"
+      - "SQL queries skip the shuffle phase entirely"
+      - "Declarative queries let a cost-based optimizer choose join algorithms and reorder joins to minimize intermediate data"
+      - "SQL engines always cache results between runs"
+    answerIndex: 2
+    explanation: "A handwritten job hardcodes its execution strategy; a declarative query leaves the strategy to the engine, and optimizers in Hive, Trino, Spark, and Flink use input statistics to pick broadcast vs. sort-merge joins and the cheapest join order. SQL still shuffles when grouping or joining requires it, and compilation/caching aren't the structural advantage."
+  - id: ch11-q11
+    prompt: "A batch job computes product recommendations and writes them, one record at a time, from 400 parallel tasks directly into the production database. Which problem is NOT among the reasons this design is discouraged?"
+    options:
+      - "Per-record network round trips are far slower than batch throughput"
+      - "Concurrent writes from hundreds of tasks can overwhelm the database and degrade live queries"
+      - "Partial output from failed or retried tasks becomes externally visible, breaking the all-or-nothing guarantee"
+      - "The recommendations become stale because the database cannot store derived data"
+    answerIndex: 3
+    explanation: "Databases store derived data perfectly well — staleness is inherent to batch outputs regardless of delivery path. The real problems are the other three: throughput mismatch, a self-inflicted overload of your own serving tier, and leaked side effects from partial runs. The remedies are publishing to a stream (Kafka into Elasticsearch/Pinot/Venice) or building database files in the job and bulk-loading them."
+  - id: ch11-q12
+    prompt: "Which workload is the WEAKEST fit for a SQL-based cloud data warehouse, according to the chapter?"
+    options:
+      - "Rolling up sales data into pre-aggregated OLAP cubes"
+      - "An iterative graph algorithm like PageRank that repeats until convergence"
+      - "Ad hoc exploratory queries by business analysts"
+      - "Joining a fact table against dimension tables in a star schema"
+    answerIndex: 1
+    explanation: "Iterative algorithms — repeat a traversal step until a metric converges — fit SQL poorly; they're the home turf of BSP/Pregel-style graph frameworks (Giraph, GraphX, Gelly). Pre-aggregation, ad hoc analytics, and star-schema joins are exactly what warehouses are built for, which is why those workloads drove the batch/warehouse convergence."

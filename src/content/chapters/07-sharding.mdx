@@ -1,0 +1,193 @@
+---
+title: "Sharding"
+chapter: 7
+description: "How databases split data too big for one machine: key-range vs hash sharding, rebalancing without downtime, hot spots, request routing, and the two ways to shard a secondary index."
+readingMinutes: 21
+keyTakeaways:
+  - "Replication copies the same data to many nodes; sharding splits the data so each record lives in exactly one shard. The two combine: each shard is usually replicated, and a node can be leader for some shards and follower for others."
+  - "Shard only when data volume or write throughput outgrows one machine — read throughput alone is solved by replicas. Sharding buys horizontal scaling at the price of partition keys, awkward cross-shard queries, and a scheme that is hard to change later."
+  - "Key-range sharding keeps sorted keys together, making range scans cheap, but sequential keys like timestamps funnel every write into one hot shard. Prefixing the key (e.g., sensor ID before timestamp) spreads the load."
+  - "Hash sharding distributes skewed keys uniformly, but hash-mod-N moves most keys whenever N changes. The standard fixes: a fixed number of shards (move whole shards between nodes) or hash-range sharding (split shards on demand)."
+  - "Consistent hashing means two properties: keys spread roughly evenly across shards, and changing the shard count moves as few keys as possible. It has nothing to do with replica or ACID consistency."
+  - "Uniform key distribution does not mean uniform load — one celebrity key can overwhelm its shard. Relief options: isolate the hot key in its own shard, or salt it with random digits, splitting writes at the cost of fan-out reads."
+  - "Rebalancing moves data and reroutes requests, so it is itself a load. Fully automatic rebalancing plus automatic failure detection can cascade — a slow node gets declared dead, rebalancing adds load, more nodes look dead. A human in the loop is often wise."
+  - "Request routing needs an authoritative shard-to-node map. The three architectures — any-node forwarding, a routing tier, or shard-aware clients — usually lean on a consensus-backed coordination service like ZooKeeper or etcd to avoid split brain."
+  - "Local (document-partitioned) secondary indexes make writes cheap but force scatter/gather reads across every shard, with tail latency amplification. Adding shards then stops increasing query throughput."
+  - "Global (term-partitioned) secondary indexes serve a single-term query from one shard, but one write can touch many index shards, requiring distributed transactions or asynchronous (stale-readable) index updates as in DynamoDB."
+references:
+  - title: "Consistent Hashing and Random Trees: Distributed Caching Protocols for Relieving Hot Spots on the World Wide Web"
+    url: "https://www.cs.princeton.edu/courses/archive/fall09/cos518/papers/chash.pdf"
+    type: paper
+    author: "David Karger et al. (STOC 1997)"
+    note: "The original consistent-hashing paper, proving that adding or removing a node remaps only a small fraction of keys — the foundation under Cassandra, Dynamo, and most distributed caches."
+  - title: "Herding elephants: Lessons learned from sharding Postgres at Notion"
+    url: "https://www.notion.com/blog/sharding-postgres-at-notion"
+    type: article
+    author: "Garrett Fidalgo (Notion Engineering)"
+    note: "A real multitenant sharding migration: 480 logical shards (chosen for its many divisors) on 32 physical databases, keyed by workspace ID, with double-writes and verification during cutover."
+  - title: "How Figma's databases team lived to tell the scale"
+    url: "https://www.figma.com/blog/how-figmas-databases-team-lived-to-tell-the-scale/"
+    type: article
+    author: "Sammy Steele (Figma Engineering)"
+    note: "Shows the routing-tier approach in production — a custom DBProxy query router and logical-vs-physical shard separation that let Figma cut over with about ten seconds of unavailability."
+  - title: "How Discord Stores Trillions of Messages"
+    url: "https://discord.com/blog/how-discord-stores-trillions-of-messages"
+    type: article
+    author: "Bo Ingram (Discord Engineering)"
+    note: "Hot-shard pain in the wild: huge Discord servers skewed Cassandra partitions, and the fix combined request coalescing with consistent-hash-based routing during a migration to ScyllaDB."
+  - title: "Vitess Reference: Sharding"
+    url: "https://vitess.io/docs/22.0/reference/features/sharding/"
+    type: docs
+    author: "Vitess project (CNCF)"
+    note: "How a manual key-range sharding system actually operates: key ranges, pluggable sharding functions (Vindexes), and live resharding that keeps old shards serving while new ones catch up."
+  - title: "Best practices for designing and using partition keys effectively in DynamoDB"
+    url: "https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/bp-partition-key-design.html"
+    type: docs
+    author: "Amazon Web Services"
+    note: "Puts numbers on hot-spot limits (3,000 read units / 1,000 write units per partition) and prescribes high-cardinality keys, write sharding with random suffixes, and adaptive capacity."
+  - title: "CMU 15-445/645 Lecture 23: Introduction to Distributed Databases"
+    url: "https://15445.courses.cs.cmu.edu/fall2025/notes/23-distributed1.pdf"
+    type: course
+    author: "Andy Pavlo (Carnegie Mellon University)"
+    note: "Lecture notes covering hash, range, and consistent-hash partitioning in a shared-nothing architecture — an academic framing to check your understanding against."
+---
+
+import Callout from '../../components/mdx/Callout.astro';
+import Term from '../../components/mdx/Term.astro';
+import KeyRangeVsHash from '../../components/diagrams/ch07/KeyRangeVsHash.astro';
+import HotShardTimestamps from '../../components/diagrams/ch07/HotShardTimestamps.astro';
+import FixedShardRebalance from '../../components/diagrams/ch07/FixedShardRebalance.astro';
+import RequestRouting from '../../components/diagrams/ch07/RequestRouting.astro';
+import LocalVsGlobalIndex from '../../components/diagrams/ch07/LocalVsGlobalIndex.astro';
+
+Chapter 6 covered one way of spreading a database across machines: keep a full copy of the data on every node. <Term id="replication">Replication</Term> buys you fault tolerance and read scaling, but it never reduces the amount of data or writes any single node must handle — every replica still holds everything. When the dataset itself, or the firehose of writes into it, outgrows one machine, you need the other tool: split the data into pieces, called **shards** (or **partitions**), and put different pieces on different nodes.
+
+The rules of the game: every record belongs to exactly one shard, each shard behaves like a small database of its own, and the system as a whole has to answer two questions correctly and cheaply — *which shard does this record live in?* and *which node holds that shard right now?* This chapter is about the ways to answer those questions, what goes wrong (hot spots, expensive rebalancing, scatter/gather queries), and what it all means for secondary indexes.
+
+## Pros and Cons of Sharding
+
+Sharding and replication are complements, not rivals, and real systems use both. Each record belongs to one shard, but that shard is replicated to several nodes for fault tolerance. With single-leader replication, the usual arrangement is that each node leads for some shards and follows for others — node 1 might hold the leader for shard A and followers for shards B and C, while node 2 leads for B, and so on. Since the choice of sharding scheme is mostly independent of the choice of replication scheme, this chapter sets replication aside and pretends each shard has one copy.
+
+The reason to shard is scalability, specifically the <Term id="shared-nothing">shared-nothing</Term> kind: grow capacity by adding machines, not by buying a bigger one. If you can divide the workload so each shard takes a roughly equal slice, ten nodes should — in theory — handle ten times the data and ten times the read and write throughput of one. Note the qualifier baked into that sentence: if read throughput is your only problem, you don't need sharding at all. Replicas serve reads fine. Sharding earns its keep when *data volume* or *write throughput* exceeds a single node.
+
+And a single node can do a lot these days, which is why the book's advice is blunt: if one machine handles your load, stay on one machine. Sharding is heavyweight. You have to pick a **partition key** — the attribute that decides which shard a record lands in; all records sharing a partition key share a shard. Lookups by that key are fast; lookups by anything else degenerate into searching every shard. Cross-shard queries get awkward, joins get worse, and a write that updates related records in several shards needs a distributed transaction, which (as Chapter 8 will show) is far slower than the single-node kind and can bottleneck the whole system. Worst of all, the sharding scheme is hard to change once data is in it.
+
+One niche worth knowing: sharding isn't only for clusters. Redis, VoltDB, and FoundationDB run one single-threaded process per CPU core and shard the data *within a machine*, exploiting all the cores and playing nicely with NUMA architectures, where some banks of memory sit closer to one CPU than another.
+
+<Callout type="note" title="One concept, a dozen names">
+What this chapter calls a shard is a *partition* in Kafka, a *range* in CockroachDB, a *region* in HBase and TiDB, a *vBucket* in Couchbase, a *vnode* in Riak, a *token-range* in Cassandra, and a *tablet* in Bigtable, YugabyteDB, and ScyllaDB. PostgreSQL goes further and treats the words as different concepts: *partitioning* splits a big table into files on the same machine, *sharding* splits data across machines. The word "shard" itself may come from Ultima Online, where a shattered magic crystal's shards each held a copy of the game world — or from a 1980s system supposedly named "System for Highly Available Replicated Data." And despite the shared word, partitioning has nothing to do with *network partitions*, a class of network fault we meet in Chapter 9.
+</Callout>
+
+## Sharding for Multitenancy
+
+SaaS products are usually **multitenant**: each customer (tenant) — say, each business signed up to an email-marketing platform — has a self-contained dataset that should never mingle with anyone else's. That structure is a gift to a sharding scheme. Give each tenant its own shard (or pack several small tenants into one), either as physically separate databases or as separately manageable slices of a logical one, and several problems get easier at once:
+
+- **Resource isolation.** One tenant's expensive analytics job is less likely to slow down tenants on other shards.
+- **Permission isolation.** A bug in access-control logic is less likely to leak tenant A's data to tenant B when their data is physically separate.
+- **Cell-based architecture.** Take the idea past storage: group the services *and* storage for a set of tenants into a self-contained cell, and a fault in one cell can't reach tenants in another.
+- **Per-tenant backup and restore.** When a tenant fat-fingers a bulk delete, you can restore their shard from backup without touching anyone else.
+- **Regulatory compliance.** GDPR and CCPA grant individuals rights to export and delete their data; if a person's data is one shard, those become operations on a shard.
+- **Data residency.** A tenant whose data must legally live in a particular jurisdiction can have its shard pinned to that region.
+- **Gradual schema rollout.** Migrate the schema one tenant at a time and catch problems before they hit everyone — though doing this transactionally is tricky.
+
+The catches are the mirror images. The scheme assumes every tenant fits on one node — when a whale of a tenant outgrows a machine, you're back to sharding *within* the tenant. Thousands of tiny tenants may make per-tenant shards too costly, and grouping them raises the question of how to move a tenant that grows. And any feature that joins data *across* tenants now fights the shard boundaries you so carefully erected.
+
+## Sharding of Key-Value Data
+
+Strip the problem to its simplest form: a big pile of key-value data. Which records go on which nodes?
+
+The goal is to spread data and query load *evenly*. If the split is unfair — some shards carrying more data or traffic than others — we call it **skewed**. <Term id="skew">Skew</Term> can quietly defeat the entire point of sharding: in the worst case, all the load lands on one shard and nine of your ten expensive nodes sit idle while the tenth melts. A shard with disproportionate load is a **hot shard** (or hot spot); a single key with extreme traffic — a celebrity's user ID, say — is a **hot key**.
+
+So we need an algorithm: partition key in, shard out. (In a key-value store the partition key is usually the key or its first part; in a relational table it's some column, not necessarily the primary key.) And the algorithm must cooperate with **rebalancing** — shifting load when nodes join, leave, or overheat. There are two main families.
+
+### Sharding by Key Range
+
+The first family assigns each shard a contiguous range of keys, from some minimum to some maximum — exactly like the volumes of a paper encyclopedia. Volume 1 covers A–B, volume 12 covers T–Z, and if you know the title you want, you know which volume to pull off the shelf. Note the boundaries aren't evenly spaced: A–B fills a volume while T-through-Z shares one, because that's how the words are actually distributed. Shard boundaries must adapt to the data the same way, chosen either manually by an administrator (Vitess, the sharding layer for MySQL, works this way) or automatically by the database (Bigtable, HBase, MongoDB's range option, CockroachDB, RethinkDB, FoundationDB; YugabyteDB offers both).
+
+Within each shard, keys are kept in sorted order — in a B-tree or SSTables, as in Chapter 4 — which is the scheme's superpower: **range scans are cheap**. You can also treat the key as a concatenated index to grab related records in one query. A sensor network that keys measurements by timestamp can fetch "all of March" with a single scan of one or two shards.
+
+That same sensor database is also the scheme's classic failure. If the key is the timestamp, the shards are ranges of *time* — and every sensor writing the current moment hammers the shard for *this month* while all historical shards do nothing. The data is perfectly spread; the write load isn't.
+
+<HotShardTimestamps />
+
+The standard fix is to stop putting the timestamp first. Key by sensor ID, then timestamp, and concurrent writes from many sensors fan out across many shards. The bill arrives at read time: fetching a time range across many sensors is now one range query per sensor instead of one total. This trade — reshape the key to spread writes, pay with extra queries on read — recurs throughout sharded system design.
+
+**Rebalancing key-range shards.** A brand-new, empty database has no key ranges to speak of, so some systems (HBase, MongoDB) let you **pre-split**: configure initial shard boundaries up front, which requires guessing roughly what the key distribution will look like. From there, the shard count adapts to the data: when a shard grows past a threshold (HBase's default: 10 GB) — or in some systems when its write rate stays too high — it **splits** into two subranges that can move to different nodes, and shrunken neighbors can merge. If that sounds like what happens at the top of a B-tree, it's the same idea at datacenter scale. The unpleasant part: splitting rewrites all the shard's data into new files, much like a compaction — and the shard that needs splitting is, by definition, often the one already struggling under load. The cure arrives precisely when the patient can least afford the surgery.
+
+### Sharding by Hash of Key
+
+Key-range sharding is the right call when nearby keys *belong* together. When you don't care — tenant IDs in a SaaS app have no meaningful order — the second family applies: run the partition key through a <Term id="hash">hash function</Term> first. A good hash takes skewed input and produces uniformly distributed output: feed a 32-bit hash two nearly identical strings and you get two unrelated numbers somewhere in the 0 to 2³² − 1 range (the same input always hashing to the same output). For sharding, cryptographic strength is unnecessary — MongoDB uses MD5; Cassandra and ScyllaDB use Murmur3. But beware language built-ins: Java's `Object.hashCode()` and Ruby's `Object#hash` can return *different values for the same key in different processes*, which silently breaks everything.
+
+<KeyRangeVsHash />
+
+Hashing tells you *a number*; you still must map numbers to shards. The obvious move — `hash(key) % N` for N nodes — is a trap. Change N and almost every key's assignment changes: go from 3 nodes to 4 and the key with hash 3 moves to node 3, hash 6 moves to node 2, hash 9 moves to node 1... a near-total reshuffle of the dataset to add one machine. Rebalancing should move as little data as possible; mod-N moves nearly all of it.
+
+**Fixed number of shards.** The simple, widely used escape: create far more shards than nodes from day one, and assign many shards to each node. A 10-node cluster might be split into 1,000 shards, 100 per node, with keys assigned by `hash(key) % 1000` — a number that never changes. When a node joins, it steals a few *whole shards* from each existing node until things are fair again; when one leaves, the reverse. Keys never change shards; shards just change addresses. While a multi-gigabyte shard is in transit, the old assignment keeps serving reads and writes.
+
+<FixedShardRebalance />
+
+Practical wisdom: pick a shard count with many divisors (Notion chose 480) so the data splits evenly over many possible cluster sizes, and assign more shards to beefier machines if your hardware is mismatched. Citus, Riak, Elasticsearch, and Couchbase all work this way. The weakness is the word *fixed*. You can never have more nodes than shards, and if your original estimate proves wrong, resharding is an expensive, disk-hungry rewrite of everything — some systems can't even do it while accepting writes. There's a Goldilocks problem too: with a fixed count, each shard holds a fixed *fraction* of the data, so shards balloon as the dataset grows. Too-large shards make rebalancing and recovery slow; too-small shards are all overhead.
+
+**Sharding by hash range.** If you can't predict the shard count, combine the two families: each shard owns a contiguous range *of hash values* rather than of keys. With a 16-bit hash, shard 0 might own hashes 0–16,383, shard 1 owns 16,384–32,767, and so on. Similar keys scatter uniformly across the hash space, yet shards can still split when they get big or hot — so the shard count adapts to the data, as in key-range sharding, without the timestamp hot-spot risk. The price: range queries over the partition key are useless, since adjacent keys are deliberately scattered. The standard recovery is a compound key — partition by the first column's hash, sort by the rest — so range queries *within* one partition key still work (all of one sensor's March, say). YugabyteDB and DynamoDB shard this way; it's an option in MongoDB. Cassandra and ScyllaDB run a variant: the hash space is cut into several ranges *per node* (16 per node in Cassandra by default, 256 in ScyllaDB) with random boundaries, and the resulting imbalances average out across the many ranges. When a node joins, it takes slices of several existing ranges, gaining a fair share without excess data movement.
+
+**Consistent hashing.** The umbrella term for algorithms that map keys to a set of shards with two properties: keys spread roughly evenly, and when the number of shards changes, as few keys move as possible. ("Consistent" here has nothing to do with replica consistency or ACID consistency — it just means keys tend to stay put.) Cassandra's scheme is close to the original 1997 formulation; alternatives include *rendezvous hashing* (highest random weight) and *jump consistent hashing*, which differ in that a new node receives individual keys previously scattered everywhere, rather than a contiguous slice of an existing shard's range.
+
+<Callout type="note" title="The same idea in data warehouses">
+Analytics systems play the same game with different vocabulary. In BigQuery, a partition key picks the partition while "cluster columns" control sort order within it — the compound-key trick under another name. Snowflake assigns records to micro-partitions automatically and lets you define cluster keys; Delta Lake supports both manual and automatic assignment. Clustering helps more than range scans: sorted data also compresses and filters better.
+</Callout>
+
+### Skewed Workloads and Relieving Hot Spots
+
+A perfect hash function guarantees the *keys* spread evenly. It guarantees nothing about the *load*. If one partition key receives a million times the traffic of the others — a celebrity posts, and reads and writes storm the key for that post or that user ID — the shard holding it becomes a hot spot no hashing can prevent, because all that traffic hashes to the same place. (At one point, around 3% of Twitter's servers were reportedly dedicated to Justin Bieber.)
+
+Range-based schemes (over keys or hashes) at least allow surgical relief: carve the hot key into a shard of its own, possibly on a dedicated machine. Applications can also help themselves with **key salting**: append two random digits to a known-hot key and its writes split evenly across 100 sibling keys, which can land on 100 different shards. Nothing is free — every *read* must now query all 100 keys and combine the results, so you've reduced write pressure by amplifying reads. And the bookkeeping is real: salting every key would be absurd overhead, so you need to track which few keys are split, plus a process for promoting a key to "hot" status — and demoting it, since the post that went viral on Tuesday is usually cold by Friday. Read-hot and write-hot keys need different treatments entirely. Large cloud services increasingly automate all this; Amazon's names for it are *heat management* and *adaptive capacity*.
+
+### Operations: Automatic Versus Manual Rebalancing
+
+One operational question cuts across everything above: who decides when to split and move shards — software or humans? Fully automatic systems detect imbalance and fix it unaided, even autoscaling to load swings; DynamoDB advertises adding and removing shards within minutes. Fully manual systems wait for an administrator. Couchbase and Riak sit in the middle: the system *proposes* an assignment, a human commits it.
+
+Automation is convenient right up until it isn't. <Term id="rebalance">Rebalancing</Term> is expensive — it reroutes requests and ships bulk data across the network — and done carelessly it degrades the very performance it's trying to protect. A system near its maximum write throughput may find the shard-splitting process can't even keep up with incoming writes. The genuinely scary case is automation squared: automatic rebalancing *plus* automatic failure detection. A node gets overloaded and responds slowly; the cluster concludes it's dead and rebalances load away from it; the rebalancing loads other nodes and the network; they slow down too and get declared dead in turn — a cascading failure assembled entirely from safety mechanisms. A human in the loop is slower but harder to stampede. Humans are also better at calendars: rebalancing *preemptively*, before Cyber Monday or World Cup ticket sales, is something no reactive autoscaler can do.
+
+## Request Routing
+
+You've sharded the data and you can rebalance it. Now the mundane-sounding question that every client faces on every request: which IP address and port do I send this to?
+
+This is **request routing**, a cousin of service discovery — with one difference that changes everything. Stateless application servers are interchangeable, so a load balancer can pick any of them. Shards are not: a request for a key can only be served by a node holding that key's shard. The router must therefore know the key-to-shard mapping and the current shard-to-node assignment. Three architectures exist, differing in *where that knowledge lives*:
+
+1. **Ask any node.** Clients connect to whichever node (say via round-robin). If it owns the relevant shard, it answers; otherwise it forwards the request to the right node, gets the reply, and relays it back.
+2. **A routing tier.** All requests hit a shard-aware load balancer first, which forwards each to the right node. It handles no data itself — it's pure traffic direction. (MongoDB's `mongos` daemons, Figma's DBProxy.)
+3. **Shard-aware clients.** The client itself knows the sharding and the assignment, and dials the right node directly, no intermediary.
+
+<RequestRouting />
+
+Whichever you pick, three hard sub-problems lurk. *Who decides* which shard lives where? A single coordinator is simplest — but then it must survive its own node dying, and failover must not produce two coordinators issuing contradictory assignments (the <Term id="split-brain">split-brain</Term> problem). *How do routers learn* when assignments change? And *what happens mid-move*, during the cutover window when a new node has taken over a shard but requests are still in flight to the old one?
+
+The common answer to the first two is to outsource them to a dedicated **coordination service** — ZooKeeper or etcd — which uses consensus algorithms (Chapter 10) to stay fault-tolerant and split-brain-free. Every node registers itself; the service holds the authoritative shard-to-node map; routing tiers and smart clients subscribe and get notified whenever ownership changes. HBase and SolrCloud manage shard assignment through ZooKeeper; Kubernetes uses etcd to track which service instance runs where. MongoDB has the same shape with its own config servers and `mongos` routers. Kafka, YugabyteDB, TiDB, and ScyllaDB skip the external service and embed Raft consensus directly. Riak goes the other way entirely: a gossip protocol spreads cluster state between nodes with no central authority. That's weaker — split brain is possible, with different parts of the cluster disagreeing about who owns a shard — but leaderless databases shrug, since their consistency guarantees were modest to begin with. (For the slower-moving problem of finding node IP addresses at all, plain DNS usually suffices.)
+
+One scoping note: everything above is about finding the shard for *one key* — the OLTP shape. Analytical databases shard too, but a warehouse query typically wants to aggregate and join across *many* shards in parallel, a very different execution problem deferred to Chapter 11.
+
+## Sharding and Secondary Indexes
+
+Everything so far assumed the client knows the partition key of the record it wants. Key-value workloads usually do. But the moment you want a <Term id="secondary-index">secondary index</Term> — find all actions by user 123, all articles containing the word *hogwash*, all cars whose color is red — the assumption collapses. A secondary index doesn't identify one record; it describes a set of records that may be smeared across every shard. Secondary indexes are standard in relational databases, common in document databases, and the entire reason full-text search engines like Solr and Elasticsearch exist — and they don't map neatly to shards. There are two approaches.
+
+### Local Secondary Indexes
+
+The first approach: each shard indexes *only its own records* and ignores everyone else's. This is a **local index** (in information-retrieval jargon, a **document-partitioned index**). Picture a used-car marketplace sharded by listing ID — IDs 0–499 on shard 0, 500–999 on shard 1 — with secondary indexes on color and make. When a red car is added to shard 1, shard 1 alone appends its ID to its own `color:red` entry (the list of matching IDs is called a **postings list**). Writes are beautifully simple: adding, updating, or removing a record touches exactly one shard.
+
+Reads are where you pay. If you already know the partition key, fine — search that one shard. If you'd settle for *some* matches rather than all, ask any shard. But "show me all red cars" with no partition key means querying **every shard** and combining the results — the **scatter/gather** pattern. Even issued in parallel, scatter/gather is exposed to tail latency amplification (Chapter 2's curse: the slowest shard sets the response time), and it puts a ceiling on scaling — adding shards stores more data, but if every shard must process every query, query throughput stops growing. Despite all that, local indexes are the workhorse: MongoDB, Riak, Cassandra, Elasticsearch, SolrCloud, and VoltDB all use them.
+
+<LocalVsGlobalIndex />
+
+<Callout type="warning" title="Don't hand-roll a secondary index">
+If your store only speaks key-value, it's tempting to maintain your own value-to-IDs mapping in application code. Treat that as defusing ordnance: race conditions and partial write failures (some changes saved, others lost) will drift your index out of sync with the data, and you'll discover it at query time, much later, with no error message. Keeping an index truly consistent with its data is what multi-object transactions are for — Chapter 8's territory.
+</Callout>
+
+### Global Secondary Indexes
+
+The second approach: one **global index** covering all shards' data. Storing it on a single node would recreate the bottleneck sharding was meant to remove, so the index is itself sharded — *but by the indexed value, not by the record's partition key*. The IDs of red cars from every data shard appear under one `color:red` entry; that entry lives on whichever index shard owns terms starting a–r, while `silver` and `white` live on the s–z index shard. This is a **term-partitioned index** — "term" borrowed from full-text search, generalized to any searchable value — and terms can be assigned to index shards by range (enabling range queries over values) or by hash (evening out the load).
+
+Now the read/write economics flip. A single-condition query — color = red — reads exactly one index shard to fetch the complete postings list, no scatter/gather. (Fetching the actual records behind those IDs still touches whichever shards hold them.) Multi-condition queries are less tidy: *red AND Honda* likely involves two terms on two different index shards, and intersecting two postings lists means shipping one across the network — cheap for short lists, painful for long ones. The real tax falls on writes: one record's terms may live on several index shards, so a single insert fans out into multiple index updates. Keeping that atomic requires a distributed transaction (Chapter 8) — or you give up atomicity and update the index asynchronously, as DynamoDB does with its global secondary indexes, accepting that an index read may briefly miss a recent write, much like a lagging replica in Chapter 6. CockroachDB, TiDB, and YugabyteDB offer global indexes; DynamoDB offers both kinds. The rule of thumb: global indexes shine when reads dominate writes and postings lists stay short.
+
+<Callout type="insight" title="Where this chapter points">
+Every scheme here works by making shards independent — that independence *is* the scalability. The cracks all appear where independence fails: a write spanning shards (what if one shard's write succeeds and another's fails? — Chapter 8, transactions), nodes disagreeing about who owns what (Chapter 9's faults, Chapter 10's consensus, the machinery under ZooKeeper and etcd), and queries that need all shards at once (Chapter 11's parallel execution). Sharding decides where data lives; the next chapters decide what guarantees survive the split.
+</Callout>

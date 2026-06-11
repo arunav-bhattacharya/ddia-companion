@@ -1,0 +1,52 @@
+---
+import Diagram from '../Diagram.astro';
+---
+
+<Diagram caption="The lease bug: client 1 checks its lease, then pauses (a stop-the-world GC, say) past the expiry. Client 2 legitimately acquires the lease, but the woken zombie writes anyway — split brain." wide>
+  <svg viewBox="0 0 740 290" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="leasebug-title">
+    <title id="leasebug-title">Timeline showing client 1 pausing past its lease expiry while client 2 takes over, leading to two clients writing to the same file</title>
+
+    <!-- lane labels -->
+    <text x="20" y="76" font-size="12" font-weight="600" fill="var(--diagram-stroke)">client 1</text>
+    <text x="20" y="156" font-size="12" font-weight="600" fill="var(--diagram-stroke)">client 2</text>
+    <text x="20" y="236" font-size="12" font-weight="600" fill="var(--diagram-stroke)">storage</text>
+
+    <!-- lanes -->
+    <line x1="90" y1="72" x2="720" y2="72" stroke="var(--diagram-muted)" stroke-width="1.5"/>
+    <line x1="90" y1="152" x2="720" y2="152" stroke="var(--diagram-muted)" stroke-width="1.5"/>
+    <line x1="90" y1="232" x2="720" y2="232" stroke="var(--diagram-muted)" stroke-width="1.5"/>
+
+    <!-- client 1 holds lease -->
+    <rect x="100" y="58" width="180" height="28" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="190" y="76" text-anchor="middle" font-size="11" fill="var(--diagram-stroke)">holds lease &#183; checks: still valid</text>
+
+    <!-- GC pause block -->
+    <rect x="280" y="58" width="200" height="28" rx="6" fill="var(--diagram-accent)" opacity="0.3"/>
+    <text x="380" y="76" text-anchor="middle" font-size="11" font-weight="600" fill="var(--diagram-accent)">stop-the-world pause</text>
+
+    <!-- lease expiry marker -->
+    <line x1="360" y1="40" x2="360" y2="250" stroke="var(--diagram-accent)" stroke-width="1.5" stroke-dasharray="5 4"/>
+    <text x="360" y="32" text-anchor="middle" font-size="11" font-weight="600" fill="var(--diagram-accent)">lease expires</text>
+
+    <!-- client 2 acquires -->
+    <rect x="400" y="138" width="150" height="28" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <text x="475" y="156" text-anchor="middle" font-size="11" fill="var(--diagram-stroke)">acquires lease</text>
+
+    <!-- client 2 write -->
+    <line x1="520" y1="166" x2="560" y2="226" stroke="var(--diagram-stroke)" stroke-width="1.5"/>
+    <path d="M 560 226 l -8 -3 l 4 -7 z" fill="var(--diagram-stroke)"/>
+    <text x="565" y="196" font-size="11" fill="var(--diagram-muted)">write</text>
+
+    <!-- client 1 resumes and writes -->
+    <rect x="490" y="58" width="160" height="28" rx="6" fill="var(--diagram-fill)" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <text x="570" y="76" text-anchor="middle" font-size="11" fill="var(--diagram-accent)">resumes: thinks lease is valid</text>
+
+    <line x1="640" y1="86" x2="672" y2="226" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <path d="M 672 226 l -7 -5 l 5 -6 z" fill="var(--diagram-accent)"/>
+    <text x="678" y="170" font-size="11" fill="var(--diagram-accent)">zombie</text>
+    <text x="678" y="184" font-size="11" fill="var(--diagram-accent)">write</text>
+
+    <!-- corruption -->
+    <text x="615" y="262" text-anchor="middle" font-size="12" font-weight="600" fill="var(--diagram-accent)">two writers at once &#8594; corrupted data</text>
+  </svg>
+</Diagram>

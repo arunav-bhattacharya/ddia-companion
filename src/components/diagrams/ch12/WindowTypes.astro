@@ -1,0 +1,59 @@
+---
+import Diagram from '../Diagram.astro';
+
+// One shared event stream (x positions), reused under each window row
+const events = [100, 130, 152, 210, 252, 296, 318, 410, 444, 560, 586, 612];
+---
+
+<Diagram caption="Four ways to slice the same event stream: tumbling windows never overlap, hopping windows overlap by a fixed hop, sliding windows follow each event, and session windows end after a gap of inactivity.">
+  <svg viewBox="0 0 720 360" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="windows-title">
+    <title id="windows-title">Tumbling, hopping, sliding, and session windows over one event stream</title>
+
+    <!-- the event stream -->
+    <text x="20" y="30" font-size="12" font-weight="600" fill="var(--diagram-stroke)">events over time</text>
+    <line x1="90" y1="52" x2="690" y2="52" stroke="var(--diagram-stroke)" stroke-width="1.5" marker-end="url(#wt-arrow)"/>
+    {events.map((x) => <circle cx={x} cy={52} r="4.5" fill="var(--diagram-fill)" stroke="var(--diagram-stroke)" stroke-width="1.5"/>)}
+
+    <!-- tumbling -->
+    <text x="20" y="105" font-size="12" fill="var(--diagram-stroke)">tumbling</text>
+    <text x="20" y="119" font-size="11" fill="var(--diagram-muted)">fixed, no overlap</text>
+    <rect x="90" y="90" width="150" height="26" rx="5" fill="var(--diagram-fill)" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <rect x="240" y="90" width="150" height="26" rx="5" fill="none" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <rect x="390" y="90" width="150" height="26" rx="5" fill="var(--diagram-fill)" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <rect x="540" y="90" width="150" height="26" rx="5" fill="none" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+
+    <!-- hopping -->
+    <text x="20" y="170" font-size="12" fill="var(--diagram-stroke)">hopping</text>
+    <text x="20" y="184" font-size="11" fill="var(--diagram-muted)">fixed, overlapping</text>
+    <rect x="90" y="146" width="220" height="22" rx="5" fill="none" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <rect x="170" y="160" width="220" height="22" rx="5" fill="none" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <rect x="250" y="174" width="220" height="22" rx="5" fill="none" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+
+    <!-- sliding -->
+    <text x="20" y="240" font-size="12" fill="var(--diagram-stroke)">sliding</text>
+    <text x="20" y="254" font-size="11" fill="var(--diagram-muted)">any events within</text>
+    <text x="20" y="268" font-size="11" fill="var(--diagram-muted)">interval of each other</text>
+    <rect x="186" y="228" width="150" height="26" rx="5" fill="var(--diagram-fill)" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    {[210, 252, 296, 318].map((x) => <circle cx={x} cy={241} r="4.5" fill="var(--diagram-accent)" stroke="var(--diagram-accent)" stroke-width="1.5"/>)}
+    <line x1="186" y1="262" x2="240" y2="262" stroke="var(--diagram-muted)" stroke-width="1.5" stroke-dasharray="3 3" marker-end="url(#wt-arrow-muted)"/>
+    <text x="252" y="266" font-size="11" fill="var(--diagram-muted)">window slides with the events</text>
+
+    <!-- session -->
+    <text x="20" y="316" font-size="12" fill="var(--diagram-stroke)">session</text>
+    <text x="20" y="330" font-size="11" fill="var(--diagram-muted)">ends after inactivity gap</text>
+    <rect x="90" y="302" width="240" height="26" rx="5" fill="var(--diagram-fill)" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <rect x="398" y="302" width="60" height="26" rx="5" fill="var(--diagram-fill)" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <rect x="548" y="302" width="78" height="26" rx="5" fill="var(--diagram-fill)" stroke="var(--diagram-accent)" stroke-width="1.5"/>
+    <text x="364" y="319" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">gap</text>
+    <text x="503" y="319" text-anchor="middle" font-size="11" fill="var(--diagram-muted)">gap</text>
+
+    <defs>
+      <marker id="wt-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--diagram-stroke)"/>
+      </marker>
+      <marker id="wt-arrow-muted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--diagram-muted)"/>
+      </marker>
+    </defs>
+  </svg>
+</Diagram>
