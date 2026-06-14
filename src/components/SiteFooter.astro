@@ -1,4 +1,11 @@
-<footer class="ui">
+---
+import { withBase } from '../lib/url';
+
+const path = Astro.url.pathname.replace(/\/$/, '');
+const isHome = path === withBase('/').replace(/\/$/, '');
+---
+
+<footer class:list={['ui', { centered: isHome }]}>
   <div class="inner">
     <p>
       Independent study notes on <em>Designing Data-Intensive Applications</em>, 2nd edition, by
@@ -26,5 +33,13 @@
 
   p {
     max-width: 60ch;
+  }
+
+  footer.centered .inner {
+    text-align: center;
+  }
+
+  footer.centered p {
+    margin-inline: auto;
   }
 </style>

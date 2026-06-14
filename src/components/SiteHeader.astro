@@ -4,18 +4,26 @@ import SearchModal from './SearchModal.astro';
 import DisplaySettings from './DisplaySettings.astro';
 import ChapterSidebar from './ChapterSidebar.astro';
 import { withBase } from '../lib/url';
+
+// The homepage has the chapter grid already, so it doesn't need the sidebar.
+const path = Astro.url.pathname.replace(/\/$/, '');
+const isHome = path === withBase('/').replace(/\/$/, '');
 ---
 
 <header class="ui">
   <div class="inner">
-    <button id="sidebar-toggle" type="button" aria-label="Open chapter navigation" aria-expanded="false">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-        <path d="M3.5 6h17M3.5 12h17M3.5 18h17"></path>
-      </svg>
-    </button>
+    {
+      !isHome && (
+        <button id="sidebar-toggle" type="button" aria-label="Open chapter navigation" aria-expanded="false">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+            <path d="M3.5 6h17M3.5 12h17M3.5 18h17" />
+          </svg>
+        </button>
+      )
+    }
     <a class="wordmark" href={withBase('/')}>
       <img src={withBase('/favicon.svg')} alt="" width="26" height="26" />
-      <span class="name">DDIA Companion</span>
+      <span class="name">Designing Data-Intensive Applications</span>
     </a>
     <div class="actions">
       <button id="search-open" type="button" aria-label="Search (Cmd+K)">
@@ -42,7 +50,7 @@ import { withBase } from '../lib/url';
 </header>
 
 <SearchModal />
-<ChapterSidebar />
+{!isHome && <ChapterSidebar />}
 
 <style>
   header {
