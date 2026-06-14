@@ -125,9 +125,9 @@ pre {
   transform: none;
 }
 
-/* UI text helper — sans-serif for chrome, controls, labels */
+/* UI text helper — Google Sans for chrome, controls, labels */
 .ui {
-  font-family: var(--font-sans);
+  font-family: var(--font-google-sans);
 }
 
 /* Shiki dual-theme: follow data-theme, not media query */
