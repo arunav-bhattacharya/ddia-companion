@@ -6,9 +6,10 @@ import SiteFooter from '../components/SiteFooter.astro';
 interface Props {
   title: string;
   description: string;
+  flatBackground?: boolean;
 }
 
-const { title, description } = Astro.props;
+const { title, description, flatBackground = false } = Astro.props;
 ---
 
 <!doctype html>
@@ -16,7 +17,7 @@ const { title, description } = Astro.props;
   <head>
     <BaseHead title={title} description={description} />
   </head>
-  <body>
+  <body class={flatBackground ? 'flat-bg' : undefined}>
     <a class="skip-link ui" href="#main">Skip to content</a>
     <SiteHeader />
     <main id="main">

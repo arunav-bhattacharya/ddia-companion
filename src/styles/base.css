@@ -42,6 +42,11 @@ body::before {
   pointer-events: none;
 }
 
+/* Chapter pages opt out of the page-gradient wash for a calmer reading surface. */
+body.flat-bg::before {
+  display: none;
+}
+
 img,
 svg,
 video {

@@ -56,7 +56,7 @@ const {
 } = Astro.props;
 ---
 
-<BaseLayout title={`${title} · DDIA Companion`} description={description}>
+<BaseLayout title={`${title} · DDIA Companion`} description={description} flatBackground>
   <div class="page">
     <article
       data-pagefind-body
@@ -123,19 +123,7 @@ const {
   }
 
   .hero {
-    position: relative;
     margin-bottom: var(--space-7);
-  }
-
-  /* Soft accent bloom behind the chapter title — mirrors the homepage hero. */
-  .hero::before {
-    content: '';
-    position: absolute;
-    inset: -5rem -6rem auto -6rem;
-    height: 18rem;
-    background: var(--gradient-hero);
-    pointer-events: none;
-    z-index: -1;
   }
 
   .eyebrow {
