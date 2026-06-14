@@ -25,7 +25,8 @@ const availableCount = entries.length;
       <div class="hero-text">
         <h1>Designing Data&#8209;Intensive Applications, <em>the beginner-friendly way</em></h1>
         <p class="lede">
-          Kleppmann &amp; Riccomini's book is the closest thing our field has to a canon — and at
+          <span class="authors">Kleppmann &amp; Riccomini</span>'s book is the closest thing our field
+          has to a canon — and at
           600&nbsp;pages, it deserves better than skimming. Each chapter here is retold in plain
           language with analogies and diagrams, covering <strong>every section of the original</strong>,
           then capped with key takeaways, hand-picked further reading, flashcards, a quiz, and
@@ -133,6 +134,11 @@ const availableCount = entries.length;
     font-size: var(--text-md);
     color: var(--text-muted);
     text-wrap: pretty;
+  }
+
+  .authors {
+    color: var(--accent-text);
+    font-weight: 600;
   }
 
   .group {
