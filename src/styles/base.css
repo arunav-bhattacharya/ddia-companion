@@ -22,13 +22,24 @@ html {
 
 body {
   background: var(--bg);
-  background: var(--gradient-page) fixed;
   color: var(--text);
   font-family: var(--font-body);
   font-size: var(--text-base);
   line-height: 1.7;
   -webkit-font-smoothing: antialiased;
   min-height: 100dvh;
+}
+
+/* Page gradient as a fixed full-viewport layer behind all content. This avoids
+   `background-attachment: fixed`, whose subpixel rounding left a seam on the
+   right edge of tall (chapter) pages. */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background: var(--gradient-page);
+  pointer-events: none;
 }
 
 img,
