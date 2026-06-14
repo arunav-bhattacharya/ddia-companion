@@ -13,6 +13,11 @@
 html {
   -webkit-text-size-adjust: 100%;
   scroll-padding-top: calc(var(--header-height) + var(--space-4));
+  /* The decorative hero blooms intentionally bleed past the layout; clip the
+     off-screen overflow so it can't add a horizontal scroll strip (which made
+     the fixed page-gradient seam on the right edge). `clip` doesn't create a
+     scroll container, so the sticky chapter rail keeps working. */
+  overflow-x: clip;
 }
 
 body {
