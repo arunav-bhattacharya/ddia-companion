@@ -17,10 +17,6 @@ import { withBase } from '../lib/url';
       <img src={withBase('/favicon.svg')} alt="" width="26" height="26" />
       <span class="name">DDIA Companion</span>
     </a>
-    <nav aria-label="Primary">
-      <a href={withBase('/#chapters')}>Chapters</a>
-      <a href={withBase('/glossary/')}>Glossary</a>
-    </nav>
     <div class="actions">
       <button id="search-open" type="button" aria-label="Search (Cmd+K)">
         <svg
@@ -102,21 +98,6 @@ import { withBase } from '../lib/url';
     border-radius: 6px;
   }
 
-  nav {
-    display: flex;
-    gap: var(--space-4);
-  }
-
-  nav a {
-    color: var(--text-muted);
-    text-decoration: none;
-    font-size: var(--text-sm);
-  }
-
-  nav a:hover {
-    color: var(--text);
-  }
-
   .actions {
     display: flex;
     align-items: center;
@@ -153,8 +134,7 @@ import { withBase } from '../lib/url';
   @media (max-width: 720px) {
     .name,
     .search-hint,
-    kbd,
-    nav {
+    kbd {
       display: none;
     }
 

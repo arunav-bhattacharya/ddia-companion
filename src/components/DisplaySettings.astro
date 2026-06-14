@@ -13,8 +13,8 @@
     <fieldset>
       <legend>Font</legend>
       <div class="seg" role="group">
-        <button type="button" data-setting="font" data-value="serif">Serif</button>
         <button type="button" data-setting="font" data-value="sans">Google Sans</button>
+        <button type="button" data-setting="font" data-value="serif">Serif</button>
       </div>
     </fieldset>
   </div>
@@ -125,7 +125,7 @@
         this.querySelectorAll<HTMLButtonElement>('[data-setting]').forEach((b) => {
           const active =
             b.dataset.value ===
-            current(b.dataset.setting!, b.dataset.setting === 'font' ? 'serif' : 'wide');
+            current(b.dataset.setting!, b.dataset.setting === 'font' ? 'sans' : 'wide');
           b.setAttribute('aria-pressed', String(active));
         });
       };
@@ -156,7 +156,7 @@
           const value = b.dataset.value!;
           const isDefault =
             (setting === 'measure' && value === 'wide') ||
-            (setting === 'font' && value === 'serif');
+            (setting === 'font' && value === 'sans');
           if (isDefault) delete root.dataset[setting];
           else root.dataset[setting] = value;
           try {

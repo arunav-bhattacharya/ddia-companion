@@ -8,8 +8,9 @@
   --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
   --font-mono: ui-monospace, 'SF Mono', 'Cascadia Code', 'JetBrains Mono', Menlo, monospace;
 
-  /* Reader settings (data attributes set pre-paint in BaseHead) */
-  --font-body: var(--font-serif);
+  /* Reader settings (data attributes set pre-paint in BaseHead).
+     Default body font is Google Sans; serif is an opt-in via the Aa menu. */
+  --font-body: var(--font-google-sans);
 
   /* Type scale (1.25 ratio from 16px) */
   --text-xs: 0.75rem;
@@ -45,8 +46,8 @@
   --header-height: 3.5rem;
 }
 
-:root[data-font='sans'] {
-  --font-body: var(--font-google-sans);
+:root[data-font='serif'] {
+  --font-body: var(--font-serif);
 }
 
 :root[data-measure='compact'] {

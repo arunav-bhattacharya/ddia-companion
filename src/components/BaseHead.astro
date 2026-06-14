@@ -37,7 +37,7 @@ const canonical = new URL(Astro.url.pathname, Astro.site);
     root.dataset.theme = theme;
     // Reader display settings — applied pre-paint to avoid layout/font shift.
     try {
-      if (localStorage.getItem('ddia2:font') === 'sans') root.dataset.font = 'sans';
+      if (localStorage.getItem('ddia2:font') === 'serif') root.dataset.font = 'serif';
       if (localStorage.getItem('ddia2:measure') === 'compact') root.dataset.measure = 'compact';
     } catch {
       /* defaults: serif + wide */
